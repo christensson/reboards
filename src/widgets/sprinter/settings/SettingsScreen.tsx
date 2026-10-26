@@ -17,7 +17,7 @@ import {useBoardReference} from '../data/useBoardReference';
 import {CARD_COLOR_FIELD_KINDS, COLUMN_FIELD_KINDS, SPRINT_FIELD_KINDS, applyUniverseDefaults, defaultColumns} from '../model/fieldUniverse';
 import {ColumnsEditor} from './ColumnsEditor';
 import {ListEditor} from './ListEditor';
-import {RowsEditor} from './RowsEditor';
+import {SwimlanesSection} from './SwimlanesSection';
 
 type Props = {
   board: BoardConfig;
@@ -206,7 +206,7 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, 
       </Section>
 
       <Section title="Swimlanes (rows)">
-        <RowsEditor universe={reference.universe} row={draft.row} disabled={readOnly} onChange={row => patch({row})}/>
+        <SwimlanesSection universe={reference.universe} row={draft.row} innerRow={draft.innerRow} readOnly={readOnly} onChange={patch}/>
       </Section>
 
       <Section title="Cards">

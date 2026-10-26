@@ -11,8 +11,9 @@ import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
 import addIcon from '@jetbrains/icons/add';
 import searchIcon from '@jetbrains/icons/search';
 import settingsIcon from '@jetbrains/icons/settings';
+import swapIcon from '@jetbrains/icons/unsorted';
 import updateIcon from '@jetbrains/icons/update';
-import type {BoardConfig} from '@/common/model/board-config';
+import {type BoardConfig, isTwoLevel} from '@/common/model/board-config';
 import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
 import type {FieldUniverse} from '../model/fieldUniverse';
 
@@ -39,6 +40,8 @@ type Props = {
   status: string;
   onSelectBoard: (boardId: string) => void;
   onNewBoard: () => void;
+  swappedSwimlanes: boolean;
+  onToggleSwappedSwimlanes: () => void;
   onOpenSettings: () => void;
   onSelectSprint: (sprint: string | null) => void;
   onSearchChange: (term: string) => void;
@@ -62,6 +65,8 @@ export const Toolbar: React.FC<Props> = ({
   status,
   onSelectBoard,
   onNewBoard,
+  swappedSwimlanes,
+  onToggleSwappedSwimlanes,
   onOpenSettings,
   onSelectSprint,
   onSearchChange,
@@ -100,6 +105,14 @@ export const Toolbar: React.FC<Props> = ({
         />
         <Button icon={settingsIcon} title="Board settings" onClick={onOpenSettings}/>
         <Button icon={addIcon} title="New board" onClick={onNewBoard}/>
+        {isTwoLevel(board) && (
+          <Button
+            icon={swapIcon}
+            active={swappedSwimlanes}
+            title={swappedSwimlanes ? 'Swimlane levels are swapped. Click to restore' : 'Swap the two swimlane levels'}
+            onClick={onToggleSwappedSwimlanes}
+          />
+        )}
       </div>
       {board.sprints.enabled && (
         <div className="toolbar__group">

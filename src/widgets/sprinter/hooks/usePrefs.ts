@@ -36,6 +36,10 @@ export const toggleCollapsedColumn = (prefs: UserPrefs, boardId: string, columnI
   collapsedColumns: {...prefs.collapsedColumns, [boardId]: toggleInList(prefs.collapsedColumns[boardId] ?? [], columnId)}
 });
 
+export const toggleCollapsedOuterRow = (prefs: UserPrefs, boardId: string, outerKey: string): Partial<UserPrefs> => ({
+  collapsedOuterRows: {...prefs.collapsedOuterRows, [boardId]: toggleInList(prefs.collapsedOuterRows[boardId] ?? [], outerKey)}
+});
+
 export const toggleCollapsedGroup = (prefs: UserPrefs, boardId: string, groupKey: string): Partial<UserPrefs> => ({
   collapsedGroups: {...prefs.collapsedGroups, [boardId]: toggleInList(prefs.collapsedGroups[boardId] ?? [], groupKey)}
 });

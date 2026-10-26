@@ -109,6 +109,13 @@ body {
   border-bottom: 1px solid var(--ring-line-color);
 }
 
+.board-header__corner {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--ring-content-background-color);
+}
+
 .board-header__column {
   display: flex;
   align-items: center;
@@ -349,6 +356,106 @@ body {
 .board-cell:hover .board-cell__add .board-cell__add-label,
 .board-cell__add:focus-visible .board-cell__add-label {
   display: inline;
+}
+
+/* ---------- Picker rows (two-level boards) ---------- */
+
+.board-row_picker {
+  border-bottom: none;
+}
+
+.board-band_picker {
+  position: relative;
+}
+
+.board-band_picker .band-drop {
+  min-height: calc(var(--ring-unit) * 3);
+}
+
+.board-row__picker-label {
+  position: absolute;
+  top: calc(var(--ring-unit) / 2);
+  left: var(--ring-unit);
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* ---------- First-level swimlanes (two-level boards) ---------- */
+
+.outer-row {
+  display: grid;
+  grid-template-columns: var(--outer-w) 1fr;
+  border-bottom: 2px solid var(--ring-line-color);
+}
+
+.outer-row__header {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ring-unit);
+  padding: var(--ring-unit) calc(var(--ring-unit) / 2);
+  background-color: var(--ring-sidebar-background-color, var(--ring-content-background-color));
+  border-right: 1px solid var(--ring-line-color);
+}
+
+.outer-row__label {
+  flex: 0 1 auto;
+  max-height: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-weight: bold;
+  line-height: calc(var(--ring-unit) * 2.5);
+}
+
+.value-pill.outer-row__label {
+  padding: calc(var(--ring-unit) * 0.75) 0;
+}
+
+.outer-row__label_uncategorized {
+  color: var(--ring-secondary-color);
+  font-style: italic;
+}
+
+.outer-row__count {
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+  line-height: calc(var(--ring-unit) * 2);
+}
+
+.outer-row__body {
+  min-width: 0;
+}
+
+.outer-row_collapsed {
+  grid-template-columns: 1fr;
+  background-color: var(--ring-sidebar-background-color, var(--ring-content-background-color));
+}
+
+.outer-row__collapsed-header {
+  display: flex;
+  align-items: center;
+  gap: var(--ring-unit);
+  min-height: calc(var(--ring-unit) * 4);
+  padding: calc(var(--ring-unit) / 2) var(--ring-unit);
+}
+
+.outer-row__collapsed-header .outer-row__label {
+  writing-mode: horizontal-tb;
+  transform: none;
+  max-height: none;
+}
+
+/* Inner title bands sit right of the outer column; keep their sticky title clear of it. */
+.board-screen_two-level .board-row__title {
+  left: calc(var(--outer-w) + var(--ring-unit));
 }
 
 /* ---------- Cards ---------- */

@@ -2,7 +2,7 @@ import React, {memo} from 'react';
 import {ValuePill} from '@/common/components/ValuePill';
 import type {FieldUniverse} from '../model/fieldUniverse';
 import type {LayoutColumn} from '../model/layout';
-import {bandTemplate} from './tracks';
+import {headerTemplate} from './tracks';
 
 type Props = {
   columns: LayoutColumn[];
@@ -10,12 +10,14 @@ type Props = {
   universe: FieldUniverse;
   collapsedColumns: Set<string>;
   onToggleColumn: (columnId: string) => void;
+  twoLevel: boolean;
 };
 
-const ColumnHeadersComponent: React.FC<Props> = ({columns, columnFieldName, universe, collapsedColumns, onToggleColumn}) => {
+const ColumnHeadersComponent: React.FC<Props> = ({columns, columnFieldName, universe, collapsedColumns, onToggleColumn, twoLevel}) => {
   const field = universe.byName.get(columnFieldName);
   return (
-    <div className="board-header" style={{gridTemplateColumns: bandTemplate(columns, collapsedColumns)}}>
+    <div className="board-header" style={{gridTemplateColumns: headerTemplate(columns, collapsedColumns, twoLevel)}}>
+      {twoLevel && <div className="board-header__corner"/>}
       {columns.map(column => {
         const isCollapsed = collapsedColumns.has(column.id);
         return (

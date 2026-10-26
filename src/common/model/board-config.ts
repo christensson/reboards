@@ -74,7 +74,10 @@ export type BoardConfig = {
   columnField: FieldRef;
   columns: ColumnConfig[];
   ignoredValues: string[];
+  /** First swimlane field; shown as a left column when a second field is configured. */
   row: RowConfig;
+  /** Optional second swimlane field, rendered as swimlane bands inside each first-level group. */
+  innerRow: RowConfig | null;
   /** Field names shown at the bottom of each card in "normal" size. */
   cardFields: string[];
   /** Issue link type names drawn as connectors. */
@@ -107,6 +110,7 @@ export const createEmptyBoard = (owner: string): BoardConfig => ({
   columns: [],
   ignoredValues: [],
   row: {field: {name: 'Priority', kind: 'enum'}, sort: 'custom', customOrder: []},
+  innerRow: null,
   cardFields: [...DEFAULT_CARD_FIELDS],
   linkTypes: [...DEFAULT_LINK_TYPES],
   cardColorField: {name: 'Type', kind: 'enum'},
@@ -187,6 +191,7 @@ export const normalizeBoardConfig = (raw: unknown, fallbackOwner = ''): BoardCon
     columns: normalizeColumns(input.columns),
     ignoredValues: stringArray(input.ignoredValues),
     row: normalizeRow(input.row, base.row),
+    innerRow: isRecord(input.innerRow) ? normalizeRow(input.innerRow, {field: null, sort: 'custom', customOrder: []}) : null,
     cardFields: 'cardFields' in input ? stringArray(input.cardFields) : base.cardFields,
     linkTypes: 'linkTypes' in input ? stringArray(input.linkTypes) : base.linkTypes,
     cardColorField: 'cardColorField' in input ? fieldRef(input.cardColorField) : base.cardColorField,
@@ -233,8 +238,22 @@ export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
   if (config.sprints.enabled && !config.sprints.field) {
     issues.push({field: 'sprints', message: 'Select a sprint field or disable sprints'});
   }
+  if (config.innerRow?.field) {
+    if (!config.row.field) {
+      issues.push({field: 'innerRow', message: 'Set the first swimlane field before the second'});
+    } else if (config.innerRow.field.name === config.row.field.name) {
+      issues.push({field: 'innerRow', message: 'The two swimlane fields must be different'});
+    }
+  }
   return issues;
 };
+
+/** The same board with its two swimlane levels exchanged; unchanged unless both are configured. */
+export const swapSwimlanes = (config: BoardConfig): BoardConfig =>
+  config.row.field && config.innerRow?.field ? {...config, row: config.innerRow, innerRow: config.row} : config;
+
+/** True when both swimlane fields are configured. */
+export const isTwoLevel = (config: BoardConfig): boolean => Boolean(config.row.field && config.innerRow?.field);
 
 export const columnLabel = (column: ColumnConfig): string =>
   column.name?.trim() || column.values.join(' / ');

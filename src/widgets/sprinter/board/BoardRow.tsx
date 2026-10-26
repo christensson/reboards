@@ -23,6 +23,18 @@ const BoardRowComponent: React.FC<Props> = ({row, columns, collapsed, collapsedG
   const ctx = useBoardContext();
   const bandStyle: React.CSSProperties = {gridTemplateColumns: bandTemplate(columns, ctx.collapsedColumns)};
   const bands = packGroups(row.groups);
+  if (row.kind === 'picker') {
+    return (
+      <div className="board-row board-row_picker" data-row-key={row.key}>
+        <div className="board-band board-band_picker" style={bandStyle}>
+          {columns.map(column => (
+            <BandDropCell key={column.id} rowKey={row.key} columnId={column.id} columnIndex={column.index} bandKey="picker"/>
+          ))}
+          <span className="board-row__picker-label" title="Drop an issue here to choose its swimlane">{row.label}</span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`board-row${collapsed ? ' board-row_collapsed' : ''}`} data-row-key={row.key}>
       <div className="board-row__header">

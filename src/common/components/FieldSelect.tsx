@@ -13,6 +13,8 @@ type Props = {
   noneLabel?: string;
   label?: string;
   disabled?: boolean;
+  /** Field names left out of the list (e.g. a field already used elsewhere). */
+  excludeNames?: string[];
 };
 
 const NONE_KEY = '__none__';
@@ -38,10 +40,12 @@ export const FieldSelect: React.FC<Props> = ({
   allowNone,
   noneLabel = 'None',
   label,
-  disabled
+  disabled,
+  excludeNames
 }) => {
   const data = useMemo<SelectItem[]>(() => {
-    const items: SelectItem[] = fieldsMatching(universe, {kinds, singleOnly}).map(field => ({
+    const excluded = new Set(excludeNames ?? []);
+    const items: SelectItem[] = fieldsMatching(universe, {kinds, singleOnly}).filter(field => !excluded.has(field.name)).map(field => ({
       key: field.name,
       label: field.name,
       description: describe(field, universe.projectCount)
@@ -50,7 +54,7 @@ export const FieldSelect: React.FC<Props> = ({
       items.unshift({key: NONE_KEY, label: noneLabel});
     }
     return items;
-  }, [universe, kinds, singleOnly, allowNone, noneLabel]);
+  }, [universe, kinds, singleOnly, allowNone, noneLabel, excludeNames]);
 
   const selected = useMemo<SelectItem | null>(() => {
     if (!value) {

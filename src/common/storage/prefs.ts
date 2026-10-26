@@ -14,6 +14,10 @@ export type UserPrefs = {
   collapsedRows: Record<string, string[]>;
   /** Collapsed column ids per board id. */
   collapsedColumns: Record<string, string[]>;
+  /** Collapsed first-level swimlane keys per board id (two-level boards). */
+  collapsedOuterRows: Record<string, string[]>;
+  /** Boards whose two swimlane levels are shown swapped for this user. */
+  swappedSwimlanes: Record<string, boolean>;
   /** Collapsed subtask group keys per board id. */
   collapsedGroups: Record<string, string[]>;
 };
@@ -26,6 +30,8 @@ export const defaultPrefs = (): UserPrefs => ({
   connectorsMode: 'selected',
   collapsedRows: {},
   collapsedColumns: {},
+  collapsedOuterRows: {},
+  swappedSwimlanes: {},
   collapsedGroups: {}
 });
 

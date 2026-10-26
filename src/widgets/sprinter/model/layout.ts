@@ -1,4 +1,4 @@
-import {type BoardConfig, UNCATEGORIZED_ROW_KEY, columnLabel} from '@/common/model/board-config';
+import {type BoardConfig, type RowConfig, UNCATEGORIZED_ROW_KEY, columnLabel, isTwoLevel} from '@/common/model/board-config';
 import type {YtColor} from '@/common/youtrack/types';
 import type {FieldUniverse} from './fieldUniverse';
 import {type BoardIssue, compareIssues} from './issue';
@@ -66,13 +66,35 @@ export type LayoutGroup = {
 
 export type LayoutRow = {
   key: string;
+  /** 'picker' rows are the "Assign other swimlane…" drop targets of two-level boards. */
+  kind: 'normal' | 'picker';
+  label: string;
+  /** "Outer / Inner" on two-level boards, else the label. */
+  fullLabel: string;
+  isUncategorized: boolean;
+  color?: YtColor;
+  avatarUrl?: string;
+  /** Key of the enclosing first-level swimlane on two-level boards. */
+  outerKey: string | null;
+  /** Value key of the first swimlane field (null = uncategorized). */
+  outerValue: string | null;
+  /** Value key of the second swimlane field (null = uncategorized or not applicable). */
+  innerValue: string | null;
+  looseByColumn: Record<string, string[]>;
+  /** Top-level boxes of the row. */
+  groups: LayoutGroup[];
+  issueCount: number;
+};
+
+/** First-level swimlane of a two-level board, enclosing its inner rows. */
+export type LayoutOuterRow = {
+  key: string;
   label: string;
   isUncategorized: boolean;
   color?: YtColor;
   avatarUrl?: string;
-  looseByColumn: Record<string, string[]>;
-  /** Top-level boxes of the row. */
-  groups: LayoutGroup[];
+  /** Keys of the inner rows (including the picker row) in display order. */
+  rowKeys: string[];
   issueCount: number;
 };
 
@@ -85,7 +107,12 @@ export type Placement = {
 
 export type BoardLayout = {
   columns: LayoutColumn[];
+  /** All rows in display order (inner rows of every outer group on two-level boards). */
   rows: LayoutRow[];
+  rowsByKey: Record<string, LayoutRow>;
+  twoLevel: boolean;
+  /** First-level swimlanes; empty on single-level boards. */
+  outerRows: LayoutOuterRow[];
   placement: Record<string, Placement>;
   /** Enclosing box keys per box key, outermost first. */
   groupAncestors: Record<string, string[]>;
@@ -101,35 +128,55 @@ export type LayoutInput = {
 
 export const groupKey = (parentId: string, rowKey: string): string => `${parentId}::${rowKey}`;
 
+/** Separates the first- and second-level keys inside a composite row key. */
+export const ROW_KEY_SEPARATOR = '\u0000';
+/** Second-level part of the key of a picker row. */
+export const PICKER_ROW_SUFFIX = '__pick__';
+export const PICKER_ROW_LABEL = 'Assign other swimlane…';
+
+export const compositeRowKey = (outerKey: string, innerKey: string): string => `${outerKey}${ROW_KEY_SEPARATOR}${innerKey}`;
+
 const ROW_UNIVERSE_KINDS = new Set(['enum', 'state', 'version']);
 
 const compareReadable = (a: string, b: string): number => a.localeCompare(b, undefined, {numeric: true});
 
 type RowMeta = {key: string; label: string; ordinal?: number; color?: YtColor; avatarUrl?: string};
 
-const collectRowMetas = (config: BoardConfig, universe: FieldUniverse, placedIssues: BoardIssue[]): RowMeta[] => {
-  const rowField = config.row.field;
+/** Value key of a swimlane field for an issue; Uncategorized when unset or when no field is configured. */
+const rowValueKey = (issue: BoardIssue, rowConfig: RowConfig | null): string =>
+  rowConfig?.field ? (issue.fields[rowConfig.field.name]?.key ?? UNCATEGORIZED_ROW_KEY) : UNCATEGORIZED_ROW_KEY;
+
+/**
+ * Swimlane values for one level: the field's bundle values (when requested) plus the
+ * values observed on the given issues, ordered per the row config; Uncategorized first.
+ */
+const buildMetasFor = (
+  rowConfig: RowConfig | null,
+  universe: FieldUniverse,
+  issues: BoardIssue[],
+  includeUniverse: boolean,
+  uncategorizedLabel: string
+): RowMeta[] => {
+  const field = rowConfig?.field ?? null;
   const metas = new Map<string, RowMeta>();
-  if (rowField) {
-    const resolved = universe.byName.get(rowField.name);
-    if (resolved && ROW_UNIVERSE_KINDS.has(resolved.kind)) {
+  let hasUncategorized = !field;
+  if (field) {
+    const resolved = universe.byName.get(field.name);
+    if (includeUniverse && resolved && ROW_UNIVERSE_KINDS.has(resolved.kind)) {
       resolved.values.forEach(v => metas.set(v.key, {key: v.key, label: v.label, ordinal: v.ordinal, color: v.color}));
     }
     const ordinalByKey = new Map((resolved?.values ?? []).map(v => [v.key, v.ordinal]));
-    placedIssues.forEach(issue => {
-      const value = issue.fields[rowField.name];
-      if (value && !metas.has(value.key)) {
-        metas.set(value.key, {
-          key: value.key,
-          label: value.label,
-          ordinal: ordinalByKey.get(value.key),
-          color: value.color,
-          avatarUrl: value.avatarUrl
-        });
+    issues.forEach(issue => {
+      const value = issue.fields[field.name];
+      if (!value) {
+        hasUncategorized = true;
+      } else if (!metas.has(value.key)) {
+        metas.set(value.key, {key: value.key, label: value.label, ordinal: ordinalByKey.get(value.key), color: value.color, avatarUrl: value.avatarUrl});
       }
     });
   }
-  return Array.from(metas.values());
+  const ordered = rowConfig ? orderValues(Array.from(metas.values()), rowConfig.sort, rowConfig.customOrder) : [];
+  return [...(hasUncategorized ? [{key: UNCATEGORIZED_ROW_KEY, label: uncategorizedLabel}] : []), ...ordered];
 };
 
 type PlacementResult = {
@@ -149,7 +196,7 @@ const placeIssues = (issues: BoardIssue[], config: BoardConfig): PlacementResult
   const placed = new Map<string, Placement>();
   const hiddenIssueIds: string[] = [];
   const placedIssues: BoardIssue[] = [];
-  const rowField = config.row.field;
+  const twoLevel = isTwoLevel(config);
   [...issues].sort(compareIssues).forEach(issue => {
     const columnValue = issue.fields[config.columnField.name]?.key;
     const columnId = columnValue === undefined ? undefined : valueToColumn.get(columnValue);
@@ -157,21 +204,89 @@ const placeIssues = (issues: BoardIssue[], config: BoardConfig): PlacementResult
       hiddenIssueIds.push(issue.id);
       return;
     }
-    const rowKey = rowField ? (issue.fields[rowField.name]?.key ?? UNCATEGORIZED_ROW_KEY) : UNCATEGORIZED_ROW_KEY;
+    const outerKey = rowValueKey(issue, config.row);
+    const rowKey = twoLevel ? compositeRowKey(outerKey, rowValueKey(issue, config.innerRow)) : outerKey;
     placed.set(issue.id, {rowKey, columnId});
     placedIssues.push(issue);
   });
   return {placed, placedIssues, hiddenIssueIds};
 };
 
-const buildRowMetas = (config: BoardConfig, universe: FieldUniverse, placedIssues: BoardIssue[], placed: Map<string, Placement>): RowMeta[] => {
-  const rowField = config.row.field;
-  const ordered = orderValues(collectRowMetas(config, universe, placedIssues), config.row.sort, config.row.customOrder);
-  const hasUncategorized = !rowField || placedIssues.some(i => placed.get(i.id)?.rowKey === UNCATEGORIZED_ROW_KEY);
-  return [
-    ...(hasUncategorized ? [{key: UNCATEGORIZED_ROW_KEY, label: rowField ? 'Uncategorized' : 'All issues'}] : []),
-    ...ordered
-  ];
+type RowSkeleton = Omit<LayoutRow, 'looseByColumn' | 'groups' | 'issueCount'>;
+
+type RowsResult = {
+  rows: RowSkeleton[];
+  outerRows: LayoutOuterRow[];
+};
+
+const valueOrNull = (key: string): string | null => (key === UNCATEGORIZED_ROW_KEY ? null : key);
+
+const singleLevelRows = (config: BoardConfig, universe: FieldUniverse, placedIssues: BoardIssue[]): RowsResult => {
+  const metas = buildMetasFor(config.row, universe, placedIssues, true, config.row.field ? 'Uncategorized' : 'All issues');
+  return {
+    rows: metas.map(meta => ({
+      key: meta.key,
+      kind: 'normal',
+      label: meta.label,
+      fullLabel: meta.label,
+      isUncategorized: meta.key === UNCATEGORIZED_ROW_KEY,
+      ...(meta.color ? {color: meta.color} : {}),
+      ...(meta.avatarUrl ? {avatarUrl: meta.avatarUrl} : {}),
+      outerKey: null,
+      outerValue: valueOrNull(meta.key),
+      innerValue: null
+    })),
+    outerRows: []
+  };
+};
+
+const twoLevelRows = (config: BoardConfig, universe: FieldUniverse, placedIssues: BoardIssue[]): RowsResult => {
+  const rows: RowSkeleton[] = [];
+  const outerRows: LayoutOuterRow[] = [];
+  const outerMetas = buildMetasFor(config.row, universe, placedIssues, true, 'Uncategorized');
+  outerMetas.forEach(outer => {
+    const issuesInOuter = placedIssues.filter(issue => rowValueKey(issue, config.row) === outer.key);
+    const innerMetas = buildMetasFor(config.innerRow, universe, issuesInOuter, false, 'Uncategorized');
+    const rowKeys: string[] = [];
+    innerMetas.forEach(inner => {
+      const key = compositeRowKey(outer.key, inner.key);
+      rowKeys.push(key);
+      rows.push({
+        key,
+        kind: 'normal',
+        label: inner.label,
+        fullLabel: `${outer.label} / ${inner.label}`,
+        isUncategorized: inner.key === UNCATEGORIZED_ROW_KEY,
+        ...(inner.color ? {color: inner.color} : {}),
+        ...(inner.avatarUrl ? {avatarUrl: inner.avatarUrl} : {}),
+        outerKey: outer.key,
+        outerValue: valueOrNull(outer.key),
+        innerValue: valueOrNull(inner.key)
+      });
+    });
+    const pickerKey = compositeRowKey(outer.key, PICKER_ROW_SUFFIX);
+    rowKeys.push(pickerKey);
+    rows.push({
+      key: pickerKey,
+      kind: 'picker',
+      label: PICKER_ROW_LABEL,
+      fullLabel: `${outer.label} / …`,
+      isUncategorized: false,
+      outerKey: outer.key,
+      outerValue: valueOrNull(outer.key),
+      innerValue: null
+    });
+    outerRows.push({
+      key: outer.key,
+      label: outer.label,
+      isUncategorized: outer.key === UNCATEGORIZED_ROW_KEY,
+      ...(outer.color ? {color: outer.color} : {}),
+      ...(outer.avatarUrl ? {avatarUrl: outer.avatarUrl} : {}),
+      rowKeys,
+      issueCount: issuesInOuter.length
+    });
+  });
+  return {rows, outerRows};
 };
 
 /* ---------- Subtask groups ---------- */
@@ -389,19 +504,16 @@ export const computeLayout = ({issues, config, universe, parents}: LayoutInput):
   const columnIndex = new Map(columns.map(c => [c.id, c.index]));
   const issuesById = new Map(issues.map(i => [i.id, i]));
   const {placed, placedIssues, hiddenIssueIds} = placeIssues(issues, config);
-  const rowMetas = buildRowMetas(config, universe, placedIssues, placed);
-  const rowOrder = new Map(rowMetas.map((m, index) => [m.key, index]));
-  const rowLabels = new Map(rowMetas.map(m => [m.key, m.label]));
+  const twoLevel = isTwoLevel(config);
+  const skeleton = twoLevel ? twoLevelRows(config, universe, placedIssues) : singleLevelRows(config, universe, placedIssues);
+  const rowOrder = new Map(skeleton.rows.map((r, index) => [r.key, index]));
+  const rowLabels = new Map(skeleton.rows.map(r => [r.key, r.fullLabel]));
   const {groupsByRow, ancestors} = buildGroups(placedIssues, {placed, issuesById, parents, columnIndex, rowOrder, rowLabels});
 
-  const rows: LayoutRow[] = rowMetas.map(meta => ({
-    key: meta.key,
-    label: meta.label,
-    isUncategorized: meta.key === UNCATEGORIZED_ROW_KEY,
-    ...(meta.color ? {color: meta.color} : {}),
-    ...(meta.avatarUrl ? {avatarUrl: meta.avatarUrl} : {}),
+  const rows: LayoutRow[] = skeleton.rows.map(row => ({
+    ...row,
     looseByColumn: Object.fromEntries(columns.map(c => [c.id, [] as string[]])),
-    groups: groupsByRow.get(meta.key) ?? [],
+    groups: groupsByRow.get(row.key) ?? [],
     issueCount: 0
   }));
   const rowByKey = new Map(rows.map(r => [r.key, r]));
@@ -421,7 +533,16 @@ export const computeLayout = ({issues, config, universe, parents}: LayoutInput):
     }
   });
 
-  return {columns, rows, placement: Object.fromEntries(placed), groupAncestors: ancestors, hiddenIssueIds};
+  return {
+    columns,
+    rows,
+    rowsByKey: Object.fromEntries(rowByKey),
+    twoLevel,
+    outerRows: skeleton.outerRows,
+    placement: Object.fromEntries(placed),
+    groupAncestors: ancestors,
+    hiddenIssueIds
+  };
 };
 
 /**

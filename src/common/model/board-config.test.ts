@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {columnLabel, createEmptyBoard, normalizeBoardConfig, validateBoardConfig} from './board-config';
+import {columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, swapSwimlanes, validateBoardConfig} from './board-config';
 
 describe('normalizeBoardConfig', () => {
   it('fills defaults for an empty document', () => {
@@ -10,6 +10,16 @@ describe('normalizeBoardConfig', () => {
     expect(config.linkTypes).toEqual(['Subtask']);
     expect(config.shared).toBe(true);
     expect(config.cardColorField).toEqual({name: 'Type', kind: 'enum'});
+    expect(config.innerRow).toBeNull();
+  });
+
+  it('normalizes the optional second swimlane field', () => {
+    expect(normalizeBoardConfig({innerRow: {field: {name: 'Type', kind: 'enum'}, sort: 'alphabetical', customOrder: []}}).innerRow)
+      .toEqual({field: {name: 'Type', kind: 'enum'}, sort: 'alphabetical', customOrder: []});
+    expect(normalizeBoardConfig({innerRow: 'nope'}).innerRow).toBeNull();
+    expect(isTwoLevel(normalizeBoardConfig({innerRow: {field: {name: 'Type', kind: 'enum'}}}))).toBe(true);
+    expect(isTwoLevel(normalizeBoardConfig({innerRow: {field: null}}))).toBe(false);
+    expect(isTwoLevel(normalizeBoardConfig({}))).toBe(false);
   });
 
   it('drops unknown keys and malformed entries', () => {
@@ -64,9 +74,28 @@ describe('validateBoardConfig', () => {
     expect(messages).toContain('Value "Review" is both in a column and ignored');
   });
 
+  it('validates the second swimlane field', () => {
+    const inner = {field: {name: 'Priority', kind: 'enum' as const}, sort: 'custom' as const, customOrder: []};
+    expect(validateBoardConfig({...valid(), innerRow: inner}).map(i => i.message)).toEqual(['The two swimlane fields must be different']);
+    expect(validateBoardConfig({...valid(), row: {field: null, sort: 'custom', customOrder: []}, innerRow: inner}).map(i => i.message))
+      .toEqual(['Set the first swimlane field before the second']);
+    expect(validateBoardConfig({...valid(), innerRow: {...inner, field: {name: 'Type', kind: 'enum'}}})).toEqual([]);
+  });
+
   it('requires a sprint field when sprints are enabled', () => {
     const config = {...valid(), sprints: {enabled: true, field: null}};
     expect(validateBoardConfig(config).map(i => i.field)).toEqual(['sprints']);
+  });
+});
+
+describe('swapSwimlanes', () => {
+  it('exchanges the two levels only when both are set', () => {
+    const inner = {field: {name: 'Type', kind: 'enum' as const}, sort: 'alphabetical' as const, customOrder: []};
+    const board = {...createEmptyBoard('me'), innerRow: inner};
+    const swapped = swapSwimlanes(board);
+    expect(swapped.row).toEqual(inner);
+    expect(swapped.innerRow).toEqual(board.row);
+    expect(swapSwimlanes(createEmptyBoard('me'))).toEqual(createEmptyBoard('me'));
   });
 });
 

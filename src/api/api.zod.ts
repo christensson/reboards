@@ -69,6 +69,7 @@ export const boardConfigSchema = z.object({
   columns: z.array(columnConfigSchema),
   ignoredValues: z.array(z.string()),
   row: rowConfigSchema,
+  innerRow: rowConfigSchema.nullable(),
   cardFields: z.array(z.string()),
   linkTypes: z.array(z.string()),
   cardColorField: fieldRefSchema.nullable(),

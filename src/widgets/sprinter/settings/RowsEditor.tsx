@@ -12,6 +12,11 @@ type Props = {
   row: RowConfig;
   onChange: (row: RowConfig) => void;
   disabled?: boolean;
+  /** Label of the field selector; defaults to "Swimlane field". */
+  fieldLabel?: string;
+  noneLabel?: string;
+  /** Field names that cannot be chosen (the other swimlane level). */
+  excludeNames?: string[];
 };
 
 const SORT_ITEMS: SelectItem[] = [
@@ -22,7 +27,7 @@ const SORT_ITEMS: SelectItem[] = [
   {key: 'numerical-desc', label: 'Numerical, descending'}
 ];
 
-export const RowsEditor: React.FC<Props> = ({universe, row, onChange, disabled}) => {
+export const RowsEditor: React.FC<Props> = ({universe, row, onChange, disabled, fieldLabel = 'Swimlane field', noneLabel = 'No swimlanes', excludeNames}) => {
   const field = row.field ? universe.byName.get(row.field.name) : undefined;
   const orderedValues = useMemo(() => {
     const values = field?.values ?? [];
@@ -32,13 +37,14 @@ export const RowsEditor: React.FC<Props> = ({universe, row, onChange, disabled})
   return (
     <div className="rows-editor">
       <div className="settings-field">
-        <span className="settings-field__label">Swimlane field</span>
+        <span className="settings-field__label">{fieldLabel}</span>
         <FieldSelect
           universe={universe}
           kinds={ROW_FIELD_KINDS}
           singleOnly
           allowNone
-          noneLabel="No swimlanes"
+          noneLabel={noneLabel}
+          excludeNames={excludeNames}
           value={row.field}
           disabled={disabled}
           onChange={fieldRef => {

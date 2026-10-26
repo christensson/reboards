@@ -7,9 +7,16 @@ export const BOX_INSET = 5;
 export const trackWidth = (column: LayoutColumn, collapsed: Set<string>): string =>
   collapsed.has(column.id) ? 'var(--col-c)' : 'var(--col-w)';
 
-/** grid-template-columns for a band or the header: one track per column. */
+/** Width of the first-level swimlane column on two-level boards, in px. */
+export const OUTER_WIDTH = 48;
+
+/** grid-template-columns for a band: one track per column. */
 export const bandTemplate = (columns: LayoutColumn[], collapsed: Set<string>): string =>
   columns.map(column => trackWidth(column, collapsed)).join(' ');
+
+/** grid-template-columns for the column header; two-level boards get a corner track first. */
+export const headerTemplate = (columns: LayoutColumn[], collapsed: Set<string>, twoLevel: boolean): string =>
+  `${twoLevel ? 'var(--outer-w) ' : ''}${bandTemplate(columns, collapsed)}`;
 
 /** Number of box insets already taken from each column track (by column index) in the containing grid. */
 export type TrackInsets = Record<number, number>;

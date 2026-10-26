@@ -3,7 +3,7 @@ import {type BoardConfig, UNCATEGORIZED_ROW_KEY, createEmptyBoard} from '@/commo
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
-import {type BoardLayout, type LayoutGroup, computeLayout, groupKey, packGroups} from './layout';
+import {type BoardLayout, type LayoutGroup, compositeRowKey, computeLayout, groupKey, packGroups} from './layout';
 
 const rowOf = (layout: BoardLayout, key: string) => {
   const row = layout.rows.find(r => r.key === key);
@@ -56,6 +56,55 @@ describe('packGroups', () => {
   it('keeps a single box per band when every box overlaps', () => {
     const bands = packGroups([box('SP-1', 0, 2), box('SP-2', 1, 1)]);
     expect(bands.map(band => band.map(g => g.key))).toEqual([['SP-1'], ['SP-2']]);
+  });
+});
+
+describe('computeLayout with two swimlane fields', () => {
+  const twoLevelUniverse = buildFieldUniverse([[
+    pf('State', 'state[1]', ['Open', 'Done'], 'StateBundle'),
+    pf('Priority', 'enum[1]', ['Critical', 'Major']),
+    pf('Type', 'enum[1]', ['Bug', 'Task', 'Epic'])
+  ]]);
+  const twoLevelConfig = (): BoardConfig => ({
+    ...config(),
+    columns: [{id: 'open', values: ['Open']}, {id: 'done', values: ['Done']}],
+    ignoredValues: [],
+    row: {field: {name: 'Priority', kind: 'enum'}, sort: 'custom', customOrder: ['Critical', 'Major']},
+    innerRow: {field: {name: 'Type', kind: 'enum'}, sort: 'custom', customOrder: ['Bug', 'Task', 'Epic']}
+  });
+  const typed = (spec: Spec & {type?: string}): BoardIssue => {
+    const base = issue(spec);
+    return {...base, fields: {...base.fields, Type: spec.type ? {$type: 'SingleEnumIssueCustomField', key: spec.type, label: spec.type, labels: [spec.type]} : null}};
+  };
+
+  it('nests inner swimlanes with issues under every outer value and adds picker rows', () => {
+    const layout = computeLayout({
+      issues: [typed({id: '1', state: 'Open', priority: 'Major', type: 'Task'}), typed({id: '2', state: 'Done', priority: 'Major', type: 'Bug'}),
+        typed({id: '3', state: 'Open', priority: 'Major'}), typed({id: '4', state: 'Open', type: 'Bug'})],
+      config: twoLevelConfig(), universe: twoLevelUniverse, parents: {}
+    });
+    expect(layout.twoLevel).toBe(true);
+    expect(layout.outerRows.map(o => [o.key, o.issueCount])).toEqual([[UNCATEGORIZED_ROW_KEY, 1], ['Critical', 0], ['Major', 3]]);
+    const majorRows = layout.outerRows[2].rowKeys.map(k => layout.rowsByKey[k]);
+    expect(majorRows.map(r => [r.kind, r.label, r.innerValue])).toEqual([
+      ['normal', 'Uncategorized', null], ['normal', 'Bug', 'Bug'], ['normal', 'Task', 'Task'], ['picker', 'Assign other swimlane…', null]
+    ]);
+    expect(majorRows[1].fullLabel).toBe('Major / Bug');
+    expect(majorRows[1].outerValue).toBe('Major');
+    expect(layout.outerRows[1].rowKeys.map(k => layout.rowsByKey[k].kind)).toEqual(['picker']);
+    expect(layout.placement['2'].rowKey).toBe(compositeRowKey('Major', 'Bug'));
+    expect(layout.rowsByKey[compositeRowKey('Major', 'Task')].looseByColumn.open).toEqual(['1']);
+    expect(layout.rowsByKey[compositeRowKey(UNCATEGORIZED_ROW_KEY, 'Bug')].looseByColumn.open).toEqual(['4']);
+    expect(layout.rows.filter(r => r.kind === 'picker')).toHaveLength(3);
+  });
+
+  it('keeps single-level boards without outer rows or picker rows', () => {
+    const layout = computeLayout({issues: [issue({id: '1', state: 'Open', priority: 'Major'})], config: config(), universe, parents: {}});
+    expect(layout.twoLevel).toBe(false);
+    expect(layout.outerRows).toEqual([]);
+    expect(layout.rows.every(r => r.kind === 'normal' && r.outerKey === null)).toBe(true);
+    expect(layout.rowsByKey.Major.outerValue).toBe('Major');
+    expect(layout.rowsByKey.Major.fullLabel).toBe('Major');
   });
 });
 

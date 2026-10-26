@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {type CollisionDetection, DndContext, type DragEndEvent, type DragOverEvent, type DragStartEvent, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors} from '@dnd-kit/core';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
-import {type BoardConfig, UNCATEGORIZED_ROW_KEY} from '@/common/model/board-config';
+import {type BoardConfig, isTwoLevel, swapSwimlanes} from '@/common/model/board-config';
 import type {UserPrefs} from '@/common/storage/prefs';
 import {buildFieldUpdate} from '@/common/youtrack/fields';
 import {errorMessage} from '@/common/youtrack/rest';
@@ -10,19 +10,23 @@ import {youtrack} from '../data/api';
 import {useBaseUrl} from '../data/useBaseUrl';
 import {useBoardIssues} from '../data/useBoardIssues';
 import {useBoardReference} from '../data/useBoardReference';
-import {toggleCollapsedColumn, toggleCollapsedGroup, toggleCollapsedRow} from '../hooks/usePrefs';
+import {toggleCollapsedColumn, toggleCollapsedGroup, toggleCollapsedOuterRow, toggleCollapsedRow} from '../hooks/usePrefs';
 import {computeEdges} from '../model/connectors';
+import type {FieldUniverse} from '../model/fieldUniverse';
 import type {BoardIssue} from '../model/issue';
-import {type LayoutGroup, computeLayout, walkGroups} from '../model/layout';
-import {type FieldChange, type MoveTarget, applyChanges, planMove} from '../model/mutations';
+import {type BoardLayout, type LayoutGroup, computeLayout, walkGroups} from '../model/layout';
+import {type FieldChange, type MoveTarget, applyChanges, planMove, planRowChanges} from '../model/mutations';
 import {groupDragHint, issueDragHint} from '../model/dragHint';
 import {computeMatchIds} from '../model/search';
+import {visibleIssueIds} from '../model/visibility';
 import {BoardContext, type BoardContextValue, type CardRegistry, type DragHighlight} from './BoardContext';
-import {BoardRow} from './BoardRow';
+import {BoardRows} from './BoardRows';
 import {ColumnHeaders} from './ColumnHeaders';
 import {GROUP_DRAG_PREFIX} from './GroupBox';
 import {ConnectorsOverlay} from './ConnectorsOverlay';
 import {IssueCardView} from './IssueCard';
+import {SwimlanePickerDialog} from './SwimlanePickerDialog';
+import {OUTER_WIDTH} from './tracks';
 import {Toolbar} from './Toolbar';
 import {ValuePickerDialog} from './ValuePickerDialog';
 
@@ -38,12 +42,13 @@ type Props = {
   onOpenSettings: () => void;
 };
 
+/** A drop that still needs one or two choices from the user before it is applied. */
 type PendingMove = {
-  issue: BoardIssue;
-  from: MoveTarget;
-  to: MoveTarget;
+  issues: BoardIssue[];
   changes: FieldChange[];
-  pickColumnId: string;
+  pickColumnId?: string;
+  pickInner?: boolean;
+  label: string;
 };
 
 const DRAG_ACTIVATION_DISTANCE = 6;
@@ -72,9 +77,67 @@ const describeActiveDrag = (
 };
 
 const pickedColumn = (pending: PendingMove | null, columnById: Map<string, BoardConfig['columns'][number]>) =>
-  pending ? (columnById.get(pending.pickColumnId) ?? null) : null;
+  pending?.pickColumnId ? (columnById.get(pending.pickColumnId) ?? null) : null;
+
+const showInnerPicker = (pending: PendingMove | null): boolean => Boolean(pending?.pickInner && !pending.pickColumnId);
 
 const DragHint: React.FC<{text: string}> = ({text}) => <div className="drag-hint">{text}</div>;
+
+type DragPreviewProps = {
+  active: ActiveDrag;
+  hint: string;
+  cardSize: UserPrefs['cardSize'];
+  board: BoardConfig;
+};
+
+/** Content of the drag overlay: the dragged card (if any) plus the hint. */
+const DragPreview: React.FC<DragPreviewProps> = ({active, hint, cardSize, board}) => {
+  if (!active.issue && !active.group) {
+    return null;
+  }
+  return (
+    <div className="drag-overlay">
+      {active.issue && <IssueCardView issue={active.issue} size={cardSize} cardFields={board.cardFields} cardColorField={board.cardColorField?.name} dragging/>}
+      <DragHint text={hint}/>
+    </div>
+  );
+};
+
+type PendingMoveDialogsProps = {
+  pending: PendingMove | null;
+  board: BoardConfig;
+  universe: FieldUniverse;
+  issues: BoardIssue[];
+  onPickValue: (value: string) => void;
+  onPickInner: (valueKey: string | null) => void;
+  onCancel: () => void;
+};
+
+/** The choices a drop may still need: a column value, then a second-level swimlane value. */
+const PendingMoveDialogs: React.FC<PendingMoveDialogsProps> = ({pending, board, universe, issues, onPickValue, onPickInner, onCancel}) => {
+  const columnById = new Map(board.columns.map(c => [c.id, c]));
+  return (
+    <>
+      <ValuePickerDialog
+        column={pickedColumn(pending, columnById)}
+        fieldName={board.columnField.name}
+        universe={universe}
+        issueLabel={pending?.label ?? ''}
+        onPick={onPickValue}
+        onCancel={onCancel}
+      />
+      <SwimlanePickerDialog
+        show={showInnerPicker(pending)}
+        field={board.innerRow?.field ?? null}
+        universe={universe}
+        issues={issues}
+        subjectLabel={pending?.label ?? ''}
+        onPick={onPickInner}
+        onCancel={onCancel}
+      />
+    </>
+  );
+};
 
 type StatusInput = {loading: boolean; loadedCount: number; truncated: boolean};
 
@@ -104,8 +167,36 @@ const columnWidth = (cardSize: string, availableWidth: number, visibleColumns: n
   return Math.max(base, Math.floor((availableWidth - collapsedColumns * COLLAPSED_COLUMN_WIDTH - 1) / visibleColumns));
 };
 
+/** Width left for columns once the first-level swimlane column is accounted for. */
+const availableWidth = (scrollWidth: number, twoLevel: boolean): number => Math.max(0, scrollWidth - (twoLevel ? OUTER_WIDTH : 0));
+
+/** Highlight only applicable targets: the destination cell for a card, a different swimlane for a group. */
+const computeDragHighlight = (active: ActiveDrag, target: MoveTarget | null): DragHighlight | null => {
+  if (!target) {
+    return null;
+  }
+  if (active.issue) {
+    return {rowKey: target.rowKey, columnId: target.columnId};
+  }
+  if (active.group && target.rowKey !== active.group.rowKey) {
+    return {rowKey: target.rowKey, columnId: null};
+  }
+  return null;
+};
+
+const describeDragHint = (active: ActiveDrag, layout: BoardLayout, board: BoardConfig, universe: FieldUniverse, target: MoveTarget | null): string => {
+  if (active.issue) {
+    const from = layout.placement[active.issue.id];
+    return from ? issueDragHint(board, universe, active.issue, from, target, layout.rowsByKey) : '';
+  }
+  if (active.group) {
+    return groupDragHint(active.group, subtaskIdsOf(active.group).length, layout.rows, target, board.innerRow?.field?.name ?? null);
+  }
+  return '';
+};
+
 const screenStyle = (colWidth: number): React.CSSProperties =>
-  ({'--col-w': `${colWidth}px`, '--col-c': `${COLLAPSED_COLUMN_WIDTH}px`} as React.CSSProperties);
+  ({'--col-w': `${colWidth}px`, '--col-c': `${COLLAPSED_COLUMN_WIDTH}px`, '--outer-w': `${OUTER_WIDTH}px`} as React.CSSProperties);
 
 /** Tracks the inner width of the scroll container. */
 const useElementWidth = (ref: React.RefObject<HTMLElement | null>): number => {
@@ -151,7 +242,7 @@ const useCardRegistry = (): CardRegistry => {
 };
 
 export const BoardScreen: React.FC<Props> = ({
-  board,
+  board: configuredBoard,
   boards,
   sprint,
   prefs,
@@ -161,6 +252,9 @@ export const BoardScreen: React.FC<Props> = ({
   onNewBoard,
   onOpenSettings
 }) => {
+  const swapped = Boolean(prefs.swappedSwimlanes[configuredBoard.id]);
+  // The board as displayed: the two swimlane levels may be swapped per user.
+  const board = useMemo(() => (swapped ? swapSwimlanes(configuredBoard) : configuredBoard), [configuredBoard, swapped]);
   const reference = useBoardReference(board.projects);
   const data = useBoardIssues(board, sprint);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -183,23 +277,14 @@ export const BoardScreen: React.FC<Props> = ({
   const collapsedRows = useMemo(() => new Set(prefs.collapsedRows[board.id] ?? []), [prefs.collapsedRows, board.id]);
   const collapsedGroups = useMemo(() => new Set(prefs.collapsedGroups[board.id] ?? []), [prefs.collapsedGroups, board.id]);
   const collapsedColumns = useMemo(() => new Set(prefs.collapsedColumns[board.id] ?? []), [prefs.collapsedColumns, board.id]);
+  const collapsedOuterRows = useMemo(() => new Set(prefs.collapsedOuterRows[board.id] ?? []), [prefs.collapsedOuterRows, board.id]);
+  const twoLevel = isTwoLevel(board);
   const matchIds = useMemo(() => computeMatchIds(data.issues, searchTerm, quickFilter), [data.issues, searchTerm, quickFilter]);
 
-  const isGroupHidden = useCallback(
-    (groupKey: string | undefined): boolean =>
-      Boolean(groupKey) && [...(layout.groupAncestors[groupKey ?? ''] ?? []), groupKey ?? ''].some(key => collapsedGroups.has(key)),
-    [layout.groupAncestors, collapsedGroups]
+  const visibleIds = useMemo(
+    () => visibleIssueIds(layout, {rows: collapsedRows, outerRows: collapsedOuterRows, columns: collapsedColumns, groups: collapsedGroups}),
+    [layout, collapsedRows, collapsedOuterRows, collapsedColumns, collapsedGroups]
   );
-
-  const visibleIds = useMemo(() => {
-    const ids = new Set<string>();
-    Object.entries(layout.placement).forEach(([id, p]) => {
-      if (!collapsedRows.has(p.rowKey) && !collapsedColumns.has(p.columnId) && !isGroupHidden(p.groupKey)) {
-        ids.add(id);
-      }
-    });
-    return ids;
-  }, [layout.placement, collapsedRows, collapsedColumns, isGroupHidden]);
   const edges = useMemo(() => computeEdges(data.issues, visibleIds, board.linkTypes), [data.issues, visibleIds, board.linkTypes]);
 
   useEffect(() => {
@@ -243,12 +328,16 @@ export const BoardScreen: React.FC<Props> = ({
         return null;
       }
       const presets = [{field: board.columnField.name, value: column.values[0]}];
-      if (board.row.field && rowKey !== UNCATEGORIZED_ROW_KEY) {
-        presets.unshift({field: board.row.field.name, value: rowKey});
+      const row = layout.rowsByKey[rowKey];
+      if (board.innerRow?.field && row?.innerValue) {
+        presets.unshift({field: board.innerRow.field.name, value: row.innerValue});
+      }
+      if (board.row.field && row?.outerValue) {
+        presets.unshift({field: board.row.field.name, value: row.outerValue});
       }
       return newIssueUrl(baseUrl, project.shortName, presets);
     },
-    [board, columnById, baseUrl]
+    [board, columnById, baseUrl, layout.rowsByKey]
   );
 
   const expandFor = useCallback(
@@ -258,18 +347,21 @@ export const BoardScreen: React.FC<Props> = ({
         return;
       }
       const toExpand = new Set([...(layout.groupAncestors[p.groupKey ?? ''] ?? []), p.groupKey ?? '']);
+      const outerKey = layout.rowsByKey[p.rowKey]?.outerKey;
       updatePrefs(prev => {
         const rows = (prev.collapsedRows[board.id] ?? []).filter(k => k !== p.rowKey);
         const groups = (prev.collapsedGroups[board.id] ?? []).filter(k => !toExpand.has(k));
         const columns = (prev.collapsedColumns[board.id] ?? []).filter(k => k !== p.columnId);
+        const outer = (prev.collapsedOuterRows[board.id] ?? []).filter(k => k !== outerKey);
         return {
           collapsedRows: {...prev.collapsedRows, [board.id]: rows},
           collapsedGroups: {...prev.collapsedGroups, [board.id]: groups},
-          collapsedColumns: {...prev.collapsedColumns, [board.id]: columns}
+          collapsedColumns: {...prev.collapsedColumns, [board.id]: columns},
+          collapsedOuterRows: {...prev.collapsedOuterRows, [board.id]: outer}
         };
       });
     },
-    [layout.placement, layout.groupAncestors, updatePrefs, board.id]
+    [layout.placement, layout.groupAncestors, layout.rowsByKey, updatePrefs, board.id]
   );
 
   const onSearchSubmit = useCallback(() => {
@@ -326,22 +418,34 @@ export const BoardScreen: React.FC<Props> = ({
     [layout.rows]
   );
 
+  /** Applies a pending move to every issue in it, or asks for the next missing choice. */
+  const settlePending = useCallback(
+    (pending: PendingMove) => {
+      if (pending.pickColumnId || pending.pickInner) {
+        setPendingMove(pending);
+        return;
+      }
+      setPendingMove(null);
+      pending.issues.forEach(issue => applyMove(issue, pending.changes));
+    },
+    [applyMove]
+  );
+
   /** Moves every subtask inside a box to another swimlane; the column never changes. */
   const moveGroup = useCallback(
     (groupKey: string, target: MoveTarget) => {
       const group = findGroup(groupKey);
-      if (!group || !board.row.field || target.rowKey === group.rowKey) {
+      if (!group || target.rowKey === group.rowKey) {
         return;
       }
-      const change: FieldChange = {field: board.row.field, valueKey: target.rowKey === UNCATEGORIZED_ROW_KEY ? null : target.rowKey};
-      movedIdsOf(group).forEach(id => {
-        const issue = issuesById.get(id);
-        if (issue) {
-          applyMove(issue, [change]);
-        }
-      });
+      const rowPlan = planRowChanges(board, group.rowKey, target.rowKey, layout.rowsByKey);
+      if (rowPlan.changes.length === 0 && !rowPlan.pickInnerValue) {
+        return;
+      }
+      const issues = movedIdsOf(group).map(id => issuesById.get(id)).filter((i): i is BoardIssue => Boolean(i));
+      settlePending({issues, changes: rowPlan.changes, pickInner: rowPlan.pickInnerValue, label: `subtasks of ${group.parentIdReadable}`});
     },
-    [findGroup, board.row.field, issuesById, applyMove]
+    [findGroup, board, layout.rowsByKey, issuesById, settlePending]
   );
 
   const onDragEnd = useCallback(
@@ -362,14 +466,10 @@ export const BoardScreen: React.FC<Props> = ({
       if (!issue || !from || !target) {
         return;
       }
-      const plan = planMove(board, from, target);
-      if (plan.pickColumn) {
-        setPendingMove({issue, from, to: target, changes: plan.changes, pickColumnId: plan.pickColumn.id});
-        return;
-      }
-      applyMove(issue, plan.changes);
+      const plan = planMove(board, from, target, layout.rowsByKey);
+      settlePending({issues: [issue], changes: plan.changes, pickColumnId: plan.pickColumn?.id, pickInner: plan.pickInnerValue, label: issue.idReadable});
     },
-    [issuesById, layout.placement, board, applyMove, moveGroup]
+    [issuesById, layout.placement, layout.rowsByKey, board, settlePending, moveGroup]
   );
 
   const onPickValue = useCallback(
@@ -377,29 +477,25 @@ export const BoardScreen: React.FC<Props> = ({
       if (!pendingMove) {
         return;
       }
-      const changes = [...pendingMove.changes, {field: board.columnField, valueKey: value}];
-      setPendingMove(null);
-      applyMove(pendingMove.issue, changes);
+      settlePending({...pendingMove, changes: [...pendingMove.changes, {field: board.columnField, valueKey: value}], pickColumnId: undefined});
     },
-    [pendingMove, board.columnField, applyMove]
+    [pendingMove, board.columnField, settlePending]
+  );
+
+  const onPickInner = useCallback(
+    (valueKey: string | null) => {
+      if (!pendingMove || !board.innerRow?.field) {
+        return;
+      }
+      settlePending({...pendingMove, changes: [...pendingMove.changes, {field: board.innerRow.field, valueKey}], pickInner: false});
+    },
+    [pendingMove, board.innerRow, settlePending]
   );
 
   const columnLabelOf = useCallback((columnId: string) => layout.columns.find(c => c.id === columnId)?.label ?? '', [layout.columns]);
 
-  const activeDrag = describeActiveDrag(activeDragId, issuesById, findGroup);
-  // Highlight only applicable targets: the destination cell for a card, a different swimlane for a group.
-  const dragHighlight = useMemo<DragHighlight | null>(() => {
-    if (!dragTarget) {
-      return null;
-    }
-    if (activeDrag.issue) {
-      return {rowKey: dragTarget.rowKey, columnId: dragTarget.columnId};
-    }
-    if (activeDrag.group && dragTarget.rowKey !== activeDrag.group.rowKey) {
-      return {rowKey: dragTarget.rowKey, columnId: null};
-    }
-    return null;
-  }, [dragTarget, activeDrag.issue, activeDrag.group]);
+  const activeDrag = useMemo(() => describeActiveDrag(activeDragId, issuesById, findGroup), [activeDragId, issuesById, findGroup]);
+  const dragHighlight = useMemo(() => computeDragHighlight(activeDrag, dragTarget), [activeDrag, dragTarget]);
 
   const contextValue = useMemo<BoardContextValue>(
     () => ({
@@ -426,25 +522,19 @@ export const BoardScreen: React.FC<Props> = ({
     [data, layout]
   );
 
-  const dragHint = useMemo(() => {
-    if (activeDrag.issue) {
-      const from = layout.placement[activeDrag.issue.id];
-      return from ? issueDragHint(board, reference.universe, activeDrag.issue, from, dragTarget) : '';
-    }
-    if (activeDrag.group) {
-      return groupDragHint(activeDrag.group, subtaskIdsOf(activeDrag.group).length, layout.rows, dragTarget);
-    }
-    return '';
-  }, [activeDrag.issue, activeDrag.group, layout.placement, layout.rows, board, reference.universe, dragTarget]);
+  const dragHint = useMemo(() => describeDragHint(activeDrag, layout, board, reference.universe, dragTarget), [activeDrag, layout, board, reference.universe, dragTarget]);
   const error = reference.error ?? data.error;
-  const colWidth = columnWidth(prefs.cardSize, scrollWidth, layout.columns.length - collapsedColumns.size, collapsedColumns.size);
+  const colWidth = columnWidth(prefs.cardSize, availableWidth(scrollWidth, twoLevel), layout.columns.length - collapsedColumns.size, collapsedColumns.size);
   const layoutVersion = useMemo(
-    () => [layout, prefs.cardSize, collapsedRows, collapsedGroups, collapsedColumns, colWidth, data.loading],
-    [layout, prefs.cardSize, collapsedRows, collapsedGroups, collapsedColumns, colWidth, data.loading]
+    () => [layout, prefs.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading],
+    [layout, prefs.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading]
   );
+  const onToggleRow = useCallback((rowKey: string) => updatePrefs(prev => toggleCollapsedRow(prev, board.id, rowKey)), [updatePrefs, board.id]);
+  const onToggleGroup = useCallback((groupKey: string) => updatePrefs(prev => toggleCollapsedGroup(prev, board.id, groupKey)), [updatePrefs, board.id]);
+  const onToggleOuter = useCallback((outerKey: string) => updatePrefs(prev => toggleCollapsedOuterRow(prev, board.id, outerKey)), [updatePrefs, board.id]);
 
   return (
-    <div className="board-screen" style={screenStyle(colWidth)}>
+    <div className={`board-screen${twoLevel ? ' board-screen_two-level' : ''}`} style={screenStyle(colWidth)}>
       <Toolbar
         boards={boards}
         board={board}
@@ -459,6 +549,8 @@ export const BoardScreen: React.FC<Props> = ({
         status={status}
         onSelectBoard={onSelectBoard}
         onNewBoard={onNewBoard}
+        swappedSwimlanes={swapped}
+        onToggleSwappedSwimlanes={() => updatePrefs(prev => ({swappedSwimlanes: {...prev.swappedSwimlanes, [board.id]: !swapped}}))}
         onOpenSettings={onOpenSettings}
         onSelectSprint={onSelectSprint}
         onSearchChange={setSearchTerm}
@@ -494,18 +586,17 @@ export const BoardScreen: React.FC<Props> = ({
                 universe={reference.universe}
                 collapsedColumns={collapsedColumns}
                 onToggleColumn={columnId => updatePrefs(prev => toggleCollapsedColumn(prev, board.id, columnId))}
+                twoLevel={twoLevel}
               />
-              {layout.rows.map(row => (
-                <BoardRow
-                  key={row.key}
-                  row={row}
-                  columns={layout.columns}
-                  collapsed={collapsedRows.has(row.key)}
-                  collapsedGroups={collapsedGroups}
-                  onToggleRow={rowKey => updatePrefs(prev => toggleCollapsedRow(prev, board.id, rowKey))}
-                  onToggleGroup={groupKey => updatePrefs(prev => toggleCollapsedGroup(prev, board.id, groupKey))}
-                />
-              ))}
+              <BoardRows
+                layout={layout}
+                collapsedRows={collapsedRows}
+                collapsedOuterRows={collapsedOuterRows}
+                collapsedGroups={collapsedGroups}
+                onToggleRow={onToggleRow}
+                onToggleOuter={onToggleOuter}
+                onToggleGroup={onToggleGroup}
+              />
               <ConnectorsOverlay
                 edges={edges}
                 selectedIds={selectedIds}
@@ -517,21 +608,17 @@ export const BoardScreen: React.FC<Props> = ({
             </div>
           </div>
           <DragOverlay dropAnimation={null}>
-            {(activeDrag.issue || activeDrag.group) && (
-              <div className="drag-overlay">
-                {activeDrag.issue && <IssueCardView issue={activeDrag.issue} size={prefs.cardSize} cardFields={board.cardFields} cardColorField={board.cardColorField?.name} dragging/>}
-                <DragHint text={dragHint}/>
-              </div>
-            )}
+            <DragPreview active={activeDrag} hint={dragHint} cardSize={prefs.cardSize} board={board}/>
           </DragOverlay>
         </DndContext>
       </BoardContext.Provider>
-      <ValuePickerDialog
-        column={pickedColumn(pendingMove, columnById)}
-        fieldName={board.columnField.name}
+      <PendingMoveDialogs
+        pending={pendingMove}
+        board={board}
         universe={reference.universe}
-        issueLabel={pendingMove?.issue.idReadable ?? ''}
-        onPick={onPickValue}
+        issues={data.issues}
+        onPickValue={onPickValue}
+        onPickInner={onPickInner}
         onCancel={() => setPendingMove(null)}
       />
     </div>

@@ -2,7 +2,11 @@ import {describe, expect, it} from 'vitest';
 import {type BoardConfig, UNCATEGORIZED_ROW_KEY, createEmptyBoard} from '@/common/model/board-config';
 import {buildFieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
+import type {LayoutRow} from './layout';
 import {applyChanges, planMove} from './mutations';
+
+const row = (key: string, outerValue: string | null, innerValue: string | null, kind: LayoutRow['kind'] = 'normal'): LayoutRow =>
+  ({key, kind, outerValue, innerValue} as LayoutRow);
 
 const config: BoardConfig = {
   ...createEmptyBoard('me'),
@@ -27,6 +31,35 @@ describe('planMove', () => {
     expect(planMove(config, {rowKey: 'Major', columnId: 'open'}, {rowKey: UNCATEGORIZED_ROW_KEY, columnId: 'open'}).changes)
       .toEqual([{field: {name: 'Priority', kind: 'enum'}, valueKey: null}]);
     expect(planMove(config, {rowKey: 'Major', columnId: 'open'}, {rowKey: 'Major', columnId: 'open'})).toEqual({changes: []});
+  });
+});
+
+describe('planMove on two-level boards', () => {
+  const twoLevel: BoardConfig = {...config, innerRow: {field: {name: 'Type', kind: 'enum'}, sort: 'custom', customOrder: []}};
+  const rowsByKey = {
+    'Major\u0000Bug': row('Major\u0000Bug', 'Major', 'Bug'),
+    'Major\u0000Task': row('Major\u0000Task', 'Major', 'Task'),
+    'Minor\u0000Bug': row('Minor\u0000Bug', 'Minor', 'Bug'),
+    'Minor\u0000__uncategorized__': row('Minor\u0000__uncategorized__', 'Minor', null),
+    'Minor\u0000__pick__': row('Minor\u0000__pick__', 'Minor', null, 'picker')
+  };
+
+  it('changes only the level that differs', () => {
+    expect(planMove(twoLevel, {rowKey: 'Major\u0000Bug', columnId: 'open'}, {rowKey: 'Major\u0000Task', columnId: 'open'}, rowsByKey).changes)
+      .toEqual([{field: {name: 'Type', kind: 'enum'}, valueKey: 'Task'}]);
+    expect(planMove(twoLevel, {rowKey: 'Major\u0000Bug', columnId: 'open'}, {rowKey: 'Minor\u0000Bug', columnId: 'open'}, rowsByKey).changes)
+      .toEqual([{field: {name: 'Priority', kind: 'enum'}, valueKey: 'Minor'}]);
+  });
+
+  it('changes both levels and clears an uncategorized inner value', () => {
+    expect(planMove(twoLevel, {rowKey: 'Major\u0000Bug', columnId: 'open'}, {rowKey: 'Minor\u0000__uncategorized__', columnId: 'open'}, rowsByKey).changes)
+      .toEqual([{field: {name: 'Priority', kind: 'enum'}, valueKey: 'Minor'}, {field: {name: 'Type', kind: 'enum'}, valueKey: null}]);
+  });
+
+  it('asks for the inner value on a picker row and keeps the outer change', () => {
+    const plan = planMove(twoLevel, {rowKey: 'Major\u0000Bug', columnId: 'open'}, {rowKey: 'Minor\u0000__pick__', columnId: 'open'}, rowsByKey);
+    expect(plan.pickInnerValue).toBe(true);
+    expect(plan.changes).toEqual([{field: {name: 'Priority', kind: 'enum'}, valueKey: 'Minor'}]);
   });
 });
 

@@ -26,6 +26,16 @@ describe('issueDragHint', () => {
     expect(issueDragHint(board, universe, issue, {rowKey: 'Major', columnId: 'open'}, {rowKey: UNCATEGORIZED_ROW_KEY, columnId: 'open'})).toBe('Set SP-1 Priority to empty.');
   });
 
+  it('describes two-level moves including picker rows', () => {
+    const twoLevel: BoardConfig = {...board, innerRow: {field: {name: 'Type', kind: 'enum'}, sort: 'custom', customOrder: []}};
+    const rowsByKey = {
+      'Major\u0000Bug': {key: 'Major\u0000Bug', kind: 'normal', outerValue: 'Major', innerValue: 'Bug'} as LayoutRow,
+      'Minor\u0000__pick__': {key: 'Minor\u0000__pick__', kind: 'picker', outerValue: 'Minor', innerValue: null} as LayoutRow
+    };
+    expect(issueDragHint(twoLevel, universe, issue, {rowKey: 'Major\u0000Bug', columnId: 'open'}, {rowKey: 'Minor\u0000__pick__', columnId: 'open'}, rowsByKey))
+      .toBe('Set SP-1 Priority to Minor and Type to a value you choose on drop.');
+  });
+
   it('mentions the choice for combined columns and the no-change case', () => {
     expect(issueDragHint(board, universe, issue, {rowKey: 'Major', columnId: 'open'}, {rowKey: 'Major', columnId: 'wip'})).toBe('Set SP-1 State to one of In Progress / Review (choose on drop).');
     expect(issueDragHint(board, universe, issue, {rowKey: 'Major', columnId: 'open'}, {rowKey: 'Major', columnId: 'open'})).toBe('SP-1: no change');
@@ -34,7 +44,11 @@ describe('issueDragHint', () => {
 });
 
 describe('groupDragHint', () => {
-  const rows = [{key: 'Major', label: 'Major'}, {key: 'Minor', label: 'Minor'}] as LayoutRow[];
+  const rows = [
+    {key: 'Major', label: 'Major', fullLabel: 'Major', kind: 'normal'},
+    {key: 'Minor', label: 'Minor', fullLabel: 'Minor', kind: 'normal'},
+    {key: 'Minor\u0000__pick__', label: 'Assign other swimlane…', fullLabel: 'Minor / …', kind: 'picker'}
+  ] as LayoutRow[];
   const group = {rowKey: 'Major', parentIdReadable: 'SP-9', parentInThisRow: true} as LayoutGroup;
 
   it('names the target swimlane', () => {
@@ -42,5 +56,6 @@ describe('groupDragHint', () => {
     expect(groupDragHint({...group, parentInThisRow: false}, 2, rows, {rowKey: 'Minor', columnId: 'x'})).toBe('Move 2 subtasks of SP-9 to Minor swimlane');
     expect(groupDragHint(group, 3, rows, {rowKey: 'Major', columnId: 'x'})).toBe('Drop on another swimlane to move SP-9 and its 3 subtasks');
     expect(groupDragHint(group, 3, rows, null)).toBe('Drop on another swimlane to move SP-9 and its 3 subtasks');
+    expect(groupDragHint(group, 3, rows, {rowKey: 'Minor\u0000__pick__', columnId: 'x'}, 'Type')).toBe('Move SP-9 and its 3 subtasks to Minor, choosing the Type on drop');
   });
 });
