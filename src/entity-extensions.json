@@ -1,0 +1,13 @@
+{
+  "entityTypeExtensions": [
+    {
+      "entityType": "AppGlobalStorage",
+      "properties": {
+        "boards": {
+          "type": "string",
+          "description": "JSON document holding all Sprinter board configurations"
+        }
+      }
+    }
+  ]
+}

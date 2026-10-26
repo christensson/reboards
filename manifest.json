@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/youtrack-app.json",
+  "name": "sprinter",
+  "title": "Sprinter",
+  "description": "Kanban and scrum sprint boards with subtask grouping and relation connectors",
+  "version": "0.1.0",
+  "minYouTrackVersion": "2025.3.0",
+  "vendor": {
+    "name": "Marcus Christensson",
+    "url": "https://github.com/marcuschristensson"
+  },
+  "icon": "icon.svg",
+  "iconDark": "icon-dark.svg",
+  "widgets": [
+    {
+      "key": "sprinter",
+      "name": "Sprinter",
+      "description": "Agile boards with subtask grouping and relation connectors",
+      "indexPath": "sprinter/index.html",
+      "extensionPoint": "MAIN_MENU_ITEM",
+      "iconPath": "sprinter/widget-icon.svg",
+      "permissions": ["READ_ISSUE"]
+    }
+  ]
+}

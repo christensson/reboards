@@ -1,0 +1,14 @@
+.value-pill {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 calc(var(--ring-unit) * 0.75);
+  border-radius: var(--ring-border-radius);
+  background-color: var(--ring-tag-background-color);
+  color: var(--ring-text-color);
+  font-size: var(--ring-font-size-smaller);
+  line-height: var(--ring-line-height-lowest);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}

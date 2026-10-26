@@ -1,0 +1,128 @@
+/** Minimal YouTrack REST DTOs used by Sprinter (shapes verified against YouTrack 2026.2). */
+
+export type YtColor = {
+  background: string;
+  foreground: string;
+};
+
+export type YtProject = {
+  id: string;
+  shortName: string;
+  name: string;
+};
+
+export type YtFieldType = {
+  id: string;
+  valueType: string;
+};
+
+export type YtBundleValue = {
+  id: string;
+  name: string;
+  ordinal?: number;
+  isResolved?: boolean;
+  color?: YtColor | null;
+};
+
+export type YtUser = {
+  id: string;
+  login: string;
+  fullName: string;
+  avatarUrl?: string;
+};
+
+export type YtBundle = {
+  id: string;
+  $type: string;
+  values?: YtBundleValue[];
+  aggregatedUsers?: YtUser[];
+};
+
+export type YtProjectCustomField = {
+  id: string;
+  $type: string;
+  field: {id: string; name: string; fieldType: YtFieldType};
+  bundle?: YtBundle | null;
+  /** False when the field always has a value in this project. */
+  canBeEmpty?: boolean;
+};
+
+export type YtIssueLinkType = {
+  id: string;
+  name: string;
+  sourceToTarget: string;
+  targetToSource: string;
+  directed: boolean;
+  aggregation: boolean;
+};
+
+export type YtLinkDirection = 'OUTWARD' | 'INWARD' | 'BOTH';
+
+export type YtIssueLink = {
+  id: string;
+  direction: YtLinkDirection;
+  linkType: YtIssueLinkType;
+  issues: {id: string; idReadable: string}[];
+};
+
+export type YtFieldValueObject = {
+  $type?: string;
+  id?: string;
+  name?: string;
+  login?: string;
+  fullName?: string;
+  avatarUrl?: string;
+  presentation?: string;
+  color?: YtColor | null;
+  isResolved?: boolean;
+};
+
+export type YtIssueCustomField = {
+  id: string;
+  name: string;
+  $type: string;
+  value: YtFieldValueObject | YtFieldValueObject[] | number | string | null;
+};
+
+export type YtTag = {
+  id: string;
+  name: string;
+  color?: YtColor | null;
+};
+
+export type YtIssue = {
+  id: string;
+  idReadable: string;
+  summary: string;
+  project: {id: string; shortName: string};
+  tags: YtTag[];
+  customFields: YtIssueCustomField[];
+  links: YtIssueLink[];
+};
+
+export type YtStyleRange = {
+  start: number;
+  length: number;
+  style: string;
+};
+
+export type YtSuggestion = {
+  prefix: string | null;
+  option: string;
+  suffix: string | null;
+  description: string | null;
+  matchingStart: number;
+  matchingEnd: number;
+  caret: number;
+  completionStart: number;
+  completionEnd: number;
+  group: string | null;
+  icon: string | null;
+};
+
+export type YtSearchAssist = {
+  query: string;
+  caret: number;
+  styleRanges: YtStyleRange[];
+  suggestions: YtSuggestion[];
+};

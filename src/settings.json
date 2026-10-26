@@ -1,0 +1,7 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Sprinter settings",
+  "description": "Sprinter has no global settings. Boards are configured inside the Sprinter page.",
+  "properties": {}
+}
