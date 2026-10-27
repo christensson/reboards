@@ -598,6 +598,7 @@ export const BoardScreen: React.FC<Props> = ({
         universe={reference.universe}
         sprint={sprint}
         searchTerm={searchTerm}
+        selectedCount={selectedIds.size}
         matchCount={searchTerm.trim() || quickFilter ? matchIds.size : null}
         quickFilter={quickFilter}
         onQuickFilter={setQuickFilter}

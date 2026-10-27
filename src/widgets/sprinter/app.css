@@ -1138,3 +1138,12 @@ body {
   font-size: var(--ring-font-size-smaller);
   white-space: nowrap;
 }
+
+/* Right end of the search group, i.e. just left of the card size control. */
+.toolbar__selected-count {
+  flex: none;
+  margin-left: auto;
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+  white-space: nowrap;
+}

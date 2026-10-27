@@ -99,6 +99,7 @@ type Props = {
   starredBoards: string[];
   /** Issues matching the search or quick filter; null when neither is active. */
   matchCount: number | null;
+  selectedCount: number;
   showNewIssue: boolean;
   onShowNewIssue: (show: boolean) => void;
   onToggleStar: (boardId: string) => void;
@@ -174,6 +175,7 @@ export const Toolbar: React.FC<Props> = ({
   onRefresh,
   starredBoards,
   matchCount,
+  selectedCount,
   showNewIssue,
   onShowNewIssue,
   onToggleStar
@@ -267,6 +269,7 @@ export const Toolbar: React.FC<Props> = ({
         {matchCount !== null && (
           <span className="toolbar__match-count" title="Issues on the board that match the search">{`${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`}</span>
         )}
+        {selectedCount > 0 && <span className="toolbar__selected-count">{`${selectedCount} selected`}</span>}
       </div>
       <div className="toolbar__group">
         <ButtonGroup>
