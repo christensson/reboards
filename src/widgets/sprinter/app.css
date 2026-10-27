@@ -334,6 +334,11 @@ body {
   border-left: none;
 }
 
+/* Empty group cells hold at most the "New subtask…" link; a row of only those stays one line high. */
+.board-cell_group-empty {
+  min-height: 0;
+}
+
 .board-cell__add {
   display: inline-flex;
   align-items: center;

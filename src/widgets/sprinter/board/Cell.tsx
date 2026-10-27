@@ -26,6 +26,17 @@ export const AddIssueLink: React.FC<{href: string; label?: string; title?: strin
   </a>
 );
 
+const cellClasses = (isOver: boolean, groupKey: string | undefined, empty: boolean): string =>
+  [
+    'board-cell',
+    isOver ? 'board-cell_over' : '',
+    groupKey ? 'board-cell_group' : '',
+    // Empty group cells hold at most the "New subtask…" link and need no minimum height.
+    groupKey && empty ? 'board-cell_group-empty' : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+
 const CellComponent: React.FC<Props> = ({rowKey, columnId, issueIds, groupKey, parentId, showAdd = true, addSubtaskOf}) => {
   const ctx = useBoardContext();
   const {setNodeRef} = useDroppable({id: cellDroppableId(rowKey, columnId, groupKey), data: {rowKey, columnId}});
@@ -41,7 +52,10 @@ const CellComponent: React.FC<Props> = ({rowKey, columnId, issueIds, groupKey, p
     );
   }
   return (
-    <div ref={setNodeRef} className={`board-cell${isOver ? ' board-cell_over' : ''}${groupKey ? ' board-cell_group' : ''}`}>
+    <div
+      ref={setNodeRef}
+      className={cellClasses(isOver, groupKey, issueIds.length === 0 && !parentId)}
+    >
       {parentId && <IssueCard issueId={parentId} isParent/>}
       {issueIds.map(id => <IssueCard key={id} issueId={id}/>)}
       {href && (addSubtaskOf ? <AddIssueLink href={href} label="New subtask…" title={`New subtask of ${addSubtaskOf}…`}/> : <AddIssueLink href={href}/>)}
