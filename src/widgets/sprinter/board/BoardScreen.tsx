@@ -341,7 +341,7 @@ export const BoardScreen: React.FC<Props> = ({
 
   const columnById = useMemo(() => new Map(board.columns.map(c => [c.id, c])), [board.columns]);
   const newIssueHref = useCallback(
-    (rowKey: string, columnId: string): string | null => {
+    (rowKey: string, columnId: string, parentIdReadable?: string): string | null => {
       const project = board.projects[0];
       const column = columnById.get(columnId);
       if (!view.showNewIssue || !project || !column || column.values.length === 0) {
@@ -355,7 +355,7 @@ export const BoardScreen: React.FC<Props> = ({
       if (board.row.field && row?.outerValue) {
         presets.unshift({field: board.row.field.name, value: row.outerValue});
       }
-      return newIssueUrl(baseUrl, project.shortName, presets);
+      return newIssueUrl(baseUrl, project.shortName, presets, parentIdReadable ? [`subtask of ${parentIdReadable}`] : []);
     },
     [board, columnById, baseUrl, layout.rowsByKey, view.showNewIssue]
   );

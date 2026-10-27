@@ -32,7 +32,8 @@ export type BoardContextValue = {
   searchTerm: string;
   onSelect: (issueId: string, additive: boolean) => void;
   onOpen: (issueId: string) => void;
-  newIssueHref: (rowKey: string, columnId: string) => string | null;
+  /** New-issue page for a cell; with a parent ID the new issue becomes its subtask. */
+  newIssueHref: (rowKey: string, columnId: string, parentIdReadable?: string) => string | null;
   registry: CardRegistry;
   columnLabel: (columnId: string) => string;
 };

@@ -16,6 +16,12 @@ describe('urls', () => {
     expect(url).toBe('https://yt.example.com/youtrack/newIssue?project=SP&c=Priority+Major&c=State2+In%20Progress');
   });
 
+  it('appends raw commands with words joined by plus', () => {
+    expect(newIssueUrl('b', 'SP', [{field: 'State', value: 'Open'}], ['subtask of SP-12'])).toBe(
+      'b/newIssue?project=SP&c=State+Open&c=subtask+of+SP-12'
+    );
+  });
+
   it('keeps a literal plus inside values encoded', () => {
     expect(newIssueUrl('b', 'P', [{field: 'A+B', value: 'C+D'}])).toBe('b/newIssue?project=P&c=A%2BB+C%2BD');
   });

@@ -4,7 +4,7 @@ import Button from '@jetbrains/ring-ui-built/components/button/button';
 import chevronDownIcon from '@jetbrains/icons/chevron-down';
 import chevronRightIcon from '@jetbrains/icons/chevron-right';
 import type {LayoutColumn, LayoutGroup} from '../model/layout';
-import {useBoardContext} from './BoardContext';
+import {type BoardContextValue, useBoardContext} from './BoardContext';
 import {Cell} from './Cell';
 import {IssueDot} from './IssueDot';
 import {type TrackInsets, boxTracks} from './tracks';
@@ -116,12 +116,19 @@ const GroupMemberRow: React.FC<{group: LayoutGroup; span: LayoutColumn[]}> = ({g
             groupKey={group.key}
             parentId={isParentColumn ? group.parentId : undefined}
             showAdd={false}
+            addSubtaskOf={group.parentIdReadable}
           />
         </div>
       );
     })}
   </>
 );
+
+/** Boxes holding only nested boxes still get a member row when it carries the "New subtask…" links. */
+const needsMemberRow = (group: LayoutGroup, span: LayoutColumn[], newIssueHref: BoardContextValue['newIssueHref']): boolean =>
+  group.memberIds.length > 0 ||
+  group.parentInThisRow ||
+  (span.length > 0 && newIssueHref(group.rowKey, span[0].id, group.parentIdReadable) !== null);
 
 function GroupBoxComponent({group, columns, collapsedGroups, onToggle, containerStart = 0, containerInsets}: Props): React.JSX.Element {
   const ctx = useBoardContext();
@@ -148,7 +155,7 @@ function GroupBoxComponent({group, columns, collapsedGroups, onToggle, container
   ]
     .filter(Boolean)
     .join(' ');
-  const hasMemberRow = group.memberIds.length > 0 || group.parentInThisRow;
+  const hasMemberRow = needsMemberRow(group, span, ctx.newIssueHref);
   // A box that lies entirely in collapsed columns shows only its dots: no title, toggle or counts.
   const withinCollapsed = span.every(column => ctx.collapsedColumns.has(column.id));
 
