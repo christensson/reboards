@@ -11,6 +11,7 @@ import {Directions} from '@jetbrains/ring-ui-built/components/popup/popup.consts
 import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/select/select';
 import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
 import addIcon from '@jetbrains/icons/add';
+import chevronDownIcon from '@jetbrains/icons/chevron-down';
 import searchIcon from '@jetbrains/icons/search';
 import settingsIcon from '@jetbrains/icons/settings';
 import starEmptyIcon from '@jetbrains/icons/star-empty';
@@ -23,11 +24,54 @@ import type {FieldUniverse} from '../model/fieldUniverse';
 
 export const ALL_SPRINTS = '';
 
-const CONNECTOR_ITEMS: SelectItem[] = [
-  {key: 'none', label: 'Relations not shown'},
-  {key: 'all', label: 'Show relations'},
-  {key: 'selected', label: 'Show relations for selected'}
+const RELATION_OPTIONS: {mode: ConnectorsMode; label: string}[] = [
+  {mode: 'none', label: 'None'},
+  {mode: 'selected', label: 'For selected issues'},
+  {mode: 'all', label: 'All'}
 ];
+
+const NEW_ISSUE_KEY = 'new-issue';
+
+type ShowMenuProps = {
+  connectorsMode: ConnectorsMode;
+  showNewIssue: boolean;
+  onConnectorsMode: (mode: ConnectorsMode) => void;
+  onShowNewIssue: (show: boolean) => void;
+};
+
+/** "Show" menu: which relation connectors to draw, and whether cells offer "New issue…". */
+const ShowMenu: React.FC<ShowMenuProps> = ({connectorsMode, showNewIssue, onConnectorsMode, onShowNewIssue}) => {
+  const items: SelectItem[] = [
+    {key: 'relations-title', label: 'Relations', rgItemType: List.ListProps.Type.TITLE},
+    ...RELATION_OPTIONS.map(option => ({key: option.mode, label: option.label, checkbox: connectorsMode === option.mode})),
+    {key: 'separator', rgItemType: List.ListProps.Type.SEPARATOR},
+    {key: NEW_ISSUE_KEY, label: 'New issue controls', checkbox: showNewIssue}
+  ];
+  const relationLabel = RELATION_OPTIONS.find(option => option.mode === connectorsMode)?.label.toLowerCase() ?? '';
+  return (
+    <Dropdown
+      anchor={(
+        <Button title={`Relations: ${relationLabel} · New issue controls: ${showNewIssue ? 'shown' : 'hidden'}`}>
+          {'Show '}
+          <Icon glyph={chevronDownIcon}/>
+        </Button>
+      )}
+    >
+      <PopupMenu
+        directions={[Directions.BOTTOM_LEFT, Directions.TOP_LEFT]}
+        closeOnSelect={false}
+        data={items}
+        onSelect={(item: SelectItem) => {
+          if (item.key === NEW_ISSUE_KEY) {
+            onShowNewIssue(!showNewIssue);
+          } else if (RELATION_OPTIONS.some(option => option.mode === item.key)) {
+            onConnectorsMode(item.key as ConnectorsMode);
+          }
+        }}
+      />
+    </Dropdown>
+  );
+};
 
 type Props = {
   boards: BoardConfig[];
@@ -52,6 +96,8 @@ type Props = {
   onConnectorsMode: (mode: ConnectorsMode) => void;
   onRefresh: () => void;
   starredBoards: string[];
+  showNewIssue: boolean;
+  onShowNewIssue: (show: boolean) => void;
   onToggleStar: (boardId: string) => void;
 };
 
@@ -124,6 +170,8 @@ export const Toolbar: React.FC<Props> = ({
   onConnectorsMode,
   onRefresh,
   starredBoards,
+  showNewIssue,
+  onShowNewIssue,
   onToggleStar
 }) => {
   const boardItems = useMemo(() => buildBoardItems(boards, starredBoards, onToggleStar), [boards, starredBoards, onToggleStar]);
@@ -214,11 +262,11 @@ export const Toolbar: React.FC<Props> = ({
         </ButtonGroup>
       </div>
       <div className="toolbar__group">
-        <Select
-          type={Select.Type.BUTTON}
-          data={CONNECTOR_ITEMS}
-          selected={CONNECTOR_ITEMS.find(item => item.key === connectorsMode) ?? CONNECTOR_ITEMS[2]}
-          onChange={(item: SelectItem | null) => item && onConnectorsMode(item.key as ConnectorsMode)}
+        <ShowMenu
+          connectorsMode={connectorsMode}
+          showNewIssue={showNewIssue}
+          onConnectorsMode={onConnectorsMode}
+          onShowNewIssue={onShowNewIssue}
         />
       </div>
       <div className="toolbar__group toolbar__group_status">

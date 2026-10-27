@@ -9,6 +9,8 @@ export type ConnectorsMode = 'none' | 'selected' | 'all';
 export type BoardView = {
   cardSize: CardSize;
   connectorsMode: ConnectorsMode;
+  /** Show the "+" / "New issue…" links in cells. */
+  showNewIssue: boolean;
 };
 
 export type UserPrefs = {
@@ -18,6 +20,7 @@ export type UserPrefs = {
   /** Last used view settings, the default for boards without a stored view. */
   cardSize: CardSize;
   connectorsMode: ConnectorsMode;
+  showNewIssue: boolean;
   viewByBoard: Record<string, Partial<BoardView>>;
   /** Board ids the user has starred. */
   starredBoards: string[];
@@ -39,6 +42,7 @@ export const defaultPrefs = (): UserPrefs => ({
   lastSprintByBoard: {},
   cardSize: 'normal',
   connectorsMode: 'selected',
+  showNewIssue: true,
   viewByBoard: {},
   starredBoards: [],
   collapsedRows: {},
@@ -92,7 +96,8 @@ export const savePrefs = (host: HostAPI, prefs: UserPrefs): Promise<void> => wri
 
 export const boardView = (prefs: UserPrefs, boardId: string): BoardView => ({
   cardSize: prefs.viewByBoard[boardId]?.cardSize ?? prefs.cardSize,
-  connectorsMode: prefs.viewByBoard[boardId]?.connectorsMode ?? prefs.connectorsMode
+  connectorsMode: prefs.viewByBoard[boardId]?.connectorsMode ?? prefs.connectorsMode,
+  showNewIssue: prefs.viewByBoard[boardId]?.showNewIssue ?? prefs.showNewIssue
 });
 
 /** Stores view settings for one board and makes them the default for boards without a stored view. */

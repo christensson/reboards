@@ -344,7 +344,7 @@ export const BoardScreen: React.FC<Props> = ({
     (rowKey: string, columnId: string): string | null => {
       const project = board.projects[0];
       const column = columnById.get(columnId);
-      if (!project || !column || column.values.length === 0) {
+      if (!view.showNewIssue || !project || !column || column.values.length === 0) {
         return null;
       }
       const presets = [{field: board.columnField.name, value: column.values[0]}];
@@ -357,7 +357,7 @@ export const BoardScreen: React.FC<Props> = ({
       }
       return newIssueUrl(baseUrl, project.shortName, presets);
     },
-    [board, columnById, baseUrl, layout.rowsByKey]
+    [board, columnById, baseUrl, layout.rowsByKey, view.showNewIssue]
   );
 
   const expandFor = useCallback(
@@ -602,6 +602,8 @@ export const BoardScreen: React.FC<Props> = ({
         onSearchSubmit={onSearchSubmit}
         onCardSize={size => updatePrefs(prev => setBoardView(prev, board.id, {cardSize: size}))}
         onConnectorsMode={mode => updatePrefs(prev => setBoardView(prev, board.id, {connectorsMode: mode}))}
+        showNewIssue={view.showNewIssue}
+        onShowNewIssue={show => updatePrefs(prev => setBoardView(prev, board.id, {showNewIssue: show}))}
         starredBoards={prefs.starredBoards}
         onToggleStar={boardId => updatePrefs(prev => toggleStar(prev, boardId))}
         onRefresh={() => {
