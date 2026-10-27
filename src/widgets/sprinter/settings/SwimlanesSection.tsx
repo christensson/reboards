@@ -1,6 +1,6 @@
 import React from 'react';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
-import swapIcon from '@jetbrains/icons/unsorted';
+import swapIcon from '@jetbrains/icons/changes';
 import type {BoardConfig, RowConfig} from '@/common/model/board-config';
 import type {FieldUniverse} from '../model/fieldUniverse';
 import {RowsEditor} from './RowsEditor';

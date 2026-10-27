@@ -1,6 +1,6 @@
 import React, {memo} from 'react';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
-import swapIcon from '@jetbrains/icons/unsorted';
+import swapIcon from '@jetbrains/icons/changes';
 import {ValuePill} from '@/common/components/ValuePill';
 import type {FieldUniverse} from '../model/fieldUniverse';
 import type {LayoutColumn} from '../model/layout';
