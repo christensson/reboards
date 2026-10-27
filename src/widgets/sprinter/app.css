@@ -68,14 +68,20 @@ body {
   min-width: 200px;
 }
 
-.toolbar__search-wrap {
-  /* Keep the box its own width so the match count sits right next to it. */
-  flex: 0 1 auto;
-  min-width: 0;
+.toolbar__find-hint {
+  flex: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ring-secondary-color);
+  font: inherit;
+  font-size: var(--ring-font-size-smaller);
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.toolbar__search {
-  width: 100%;
+.toolbar__find-hint:hover {
+  text-decoration: underline;
 }
 
 .toolbar__filter-tag {
@@ -1195,4 +1201,22 @@ body {
   color: var(--ring-secondary-color);
   font-size: var(--ring-font-size-smaller);
   white-space: nowrap;
+}
+
+/* Radio-style indicator in single-choice menus. */
+.option-indicator {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  margin-right: var(--ring-unit);
+  vertical-align: -2px;
+  border: 1px solid var(--ring-borders-color);
+  border-radius: 50%;
+  background-color: var(--ring-content-background-color);
+}
+
+.option-indicator_selected {
+  border-color: var(--ring-main-color);
+  background-image: radial-gradient(circle, var(--ring-main-color) 0 3px, transparent 3.5px);
 }

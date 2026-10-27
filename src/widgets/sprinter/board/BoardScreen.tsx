@@ -280,7 +280,6 @@ export const BoardScreen: React.FC<Props> = ({
   const view = boardView(prefs, board.id);
   useAutoSprint(board, sprint, board.id in prefs.lastSprintByBoard, reference, onAutoSelectSprint);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [searchTerm, setSearchTerm] = useState('');
   const [quickFilter, setQuickFilter] = useState<string | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [dragTarget, setDragTarget] = useState<MoveTarget | null>(null);
@@ -301,13 +300,14 @@ export const BoardScreen: React.FC<Props> = ({
   const collapsedColumns = useMemo(() => new Set(prefs.collapsedColumns[board.id] ?? []), [prefs.collapsedColumns, board.id]);
   const collapsedOuterRows = useMemo(() => new Set(prefs.collapsedOuterRows[board.id] ?? []), [prefs.collapsedOuterRows, board.id]);
   const twoLevel = isTwoLevel(board);
-  const toolbarMatchIds = useMemo(() => computeMatchIds(data.issues, searchTerm, quickFilter), [data.issues, searchTerm, quickFilter]);
+  // Toolbar count: issues highlighted by the "No <field>" quick filter alone.
+  const highlightIds = useMemo(() => computeMatchIds(data.issues, '', quickFilter), [data.issues, quickFilter]);
   // While the "/" find box is open, its text drives matching and highlighting instead of the toolbar's.
   const [quickFindTerm, setQuickFindTerm] = useState<string | null>(null);
-  const activeTerm = quickFindTerm ?? searchTerm;
+  const activeTerm = quickFindTerm ?? '';
   const matchIds = useMemo(
-    () => (quickFindTerm === null ? toolbarMatchIds : computeMatchIds(data.issues, quickFindTerm, quickFilter)),
-    [quickFindTerm, toolbarMatchIds, data.issues, quickFilter]
+    () => (quickFindTerm === null ? highlightIds : computeMatchIds(data.issues, quickFindTerm, quickFilter)),
+    [quickFindTerm, highlightIds, data.issues, quickFilter]
   );
 
   const visibleIds = useMemo(
@@ -408,14 +408,10 @@ export const BoardScreen: React.FC<Props> = ({
     return true;
   }, [matchIds, expandFor, registry]);
 
-  const onSearchSubmit = useCallback((): boolean => {
-    const selected = selectMatches();
-    if (selected) {
-      // The matches are now selected; the search has done its job.
-      setSearchTerm('');
-    }
-    return selected;
-  }, [selectMatches]);
+  // Opened from the toolbar menu: wait a tick so the closing menu's focus change can't blur the new box.
+  const onOpenQuickFind = useCallback(() => {
+    window.setTimeout(() => setQuickFindTerm(''), 0);
+  }, []);
 
 
   const applyMove = useCallback(
@@ -615,9 +611,8 @@ export const BoardScreen: React.FC<Props> = ({
         board={board}
         universe={reference.universe}
         sprint={sprint}
-        searchTerm={searchTerm}
         selectedCount={selectedIds.size}
-        matchCount={searchTerm.trim() || quickFilter ? toolbarMatchIds.size : null}
+        matchCount={quickFilter ? highlightIds.size : null}
         quickFilter={quickFilter}
         onQuickFilter={setQuickFilter}
         cardSize={view.cardSize}
@@ -628,8 +623,7 @@ export const BoardScreen: React.FC<Props> = ({
         onNewBoard={onNewBoard}
         onOpenSettings={onOpenSettings}
         onSelectSprint={onSelectSprint}
-        onSearchChange={setSearchTerm}
-        onSearchSubmit={onSearchSubmit}
+        onOpenQuickFind={onOpenQuickFind}
         onCardSize={size => updatePrefs(prev => setBoardView(prev, board.id, {cardSize: size}))}
         onConnectorsMode={mode => updatePrefs(prev => setBoardView(prev, board.id, {connectorsMode: mode}))}
         showNewIssue={view.showNewIssue}

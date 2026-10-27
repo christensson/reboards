@@ -1,7 +1,6 @@
-import React, {useMemo, useRef} from 'react';
+import React, {useMemo} from 'react';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import ButtonGroup from '@jetbrains/ring-ui-built/components/button-group/button-group';
-import {Input, Size} from '@jetbrains/ring-ui-built/components/input/input';
 import LoaderInline from '@jetbrains/ring-ui-built/components/loader-inline/loader-inline';
 import Icon from '@jetbrains/ring-ui-built/components/icon/icon';
 import List from '@jetbrains/ring-ui-built/components/list/list';
@@ -23,6 +22,43 @@ import {orderBoards} from '../model/boardOrder';
 import type {FieldUniverse} from '../model/fieldUniverse';
 
 export const ALL_SPRINTS = '';
+
+type FindMenuProps = {
+  /** Card fields that may be empty: each offers a "No <field>" highlight. */
+  fields: string[];
+  quickFilter: string | null;
+  onQuickFilter: (field: string | null) => void;
+};
+
+/** Radio-style indicator for menu items where only one option can be active. */
+const OptionIndicator: React.FC<{selected: boolean}> = ({selected}) => (
+  <span className={`option-indicator${selected ? ' option-indicator_selected' : ''}`} aria-hidden="true"/>
+);
+
+/** Magnifying glass menu: highlight issues where a card field is unset. */
+const FindMenu: React.FC<FindMenuProps> = ({fields, quickFilter, onQuickFilter}) => {
+  const items: SelectItem[] = [
+    {key: 'highlight-title', label: 'Highlight issues with', rgItemType: List.ListProps.Type.TITLE},
+    ...fields.map(name => ({key: name, label: `No ${name}`, leftNodes: <OptionIndicator selected={quickFilter === name}/>}))
+  ];
+  return (
+    <Dropdown
+      disabled={fields.length === 0}
+      anchor={<Button icon={searchIcon} disabled={fields.length === 0} title={fields.length > 0 ? 'Highlight issues' : 'No card field can be empty'}/>}
+    >
+      <PopupMenu
+        directions={[Directions.BOTTOM_LEFT, Directions.TOP_LEFT]}
+        closeOnSelect
+        data={items}
+        onSelect={(item: SelectItem) => {
+          if (fields.includes(String(item.key))) {
+            onQuickFilter(item.key === quickFilter ? null : String(item.key));
+          }
+        }}
+      />
+    </Dropdown>
+  );
+};
 
 const RELATION_OPTIONS: {mode: ConnectorsMode; label: string}[] = [
   {mode: 'none', label: 'None'},
@@ -78,7 +114,6 @@ type Props = {
   board: BoardConfig;
   universe: FieldUniverse;
   sprint: string | null;
-  searchTerm: string;
   /** Name of a card field; cards where it is unset are highlighted. */
   quickFilter: string | null;
   onQuickFilter: (field: string | null) => void;
@@ -90,9 +125,8 @@ type Props = {
   onNewBoard: () => void;
   onOpenSettings: () => void;
   onSelectSprint: (sprint: string | null) => void;
-  onSearchChange: (term: string) => void;
-  /** Returns true when matches were selected; the search box then gives up focus. */
-  onSearchSubmit: () => boolean;
+  /** Opens the interactive find box (same as pressing "/"). */
+  onOpenQuickFind: () => void;
   onCardSize: (size: CardSize) => void;
   onConnectorsMode: (mode: ConnectorsMode) => void;
   onRefresh: () => void;
@@ -157,7 +191,6 @@ export const Toolbar: React.FC<Props> = ({
   board,
   universe,
   sprint,
-  searchTerm,
   quickFilter,
   onQuickFilter,
   cardSize,
@@ -168,8 +201,7 @@ export const Toolbar: React.FC<Props> = ({
   onNewBoard,
   onOpenSettings,
   onSelectSprint,
-  onSearchChange,
-  onSearchSubmit,
+  onOpenQuickFind,
   onCardSize,
   onConnectorsMode,
   onRefresh,
@@ -180,15 +212,10 @@ export const Toolbar: React.FC<Props> = ({
   onShowNewIssue,
   onToggleStar
 }) => {
-  // The quick-filter menu opens from the search box; it closes when Enter has selected matches.
-  const filterDropdownRef = useRef<Dropdown>(null);
   const boardItems = useMemo(() => buildBoardItems(boards, starredBoards, onToggleStar), [boards, starredBoards, onToggleStar]);
   const isStarred = starredBoards.includes(board.id);
-  const filterItems = useMemo<SelectItem[]>(
-    () =>
-      board.cardFields
-        .filter(name => universe.byName.get(name)?.canBeEmpty !== false)
-        .map(name => ({key: name, label: `No ${name}`})),
+  const filterFields = useMemo(
+    () => board.cardFields.filter(name => universe.byName.get(name)?.canBeEmpty !== false),
     [board.cardFields, universe]
   );
   const sprintItems = useMemo<SelectItem[]>(() => {
@@ -230,44 +257,13 @@ export const Toolbar: React.FC<Props> = ({
         </div>
       )}
       <div className="toolbar__group toolbar__group_search">
+        <FindMenu fields={filterFields} quickFilter={quickFilter} onQuickFilter={onQuickFilter}/>
+        <button type="button" className="toolbar__find-hint" onClick={onOpenQuickFind}>{'Type "/" to find…'}</button>
         {quickFilter && (
           <Tag onRemove={() => onQuickFilter(null)} readOnly={false} className="toolbar__filter-tag">{`No ${quickFilter}`}</Tag>
         )}
-        <Dropdown
-          ref={filterDropdownRef}
-          className="toolbar__search-wrap"
-          disabled={filterItems.length === 0}
-          anchor={(
-            <Input
-              className="toolbar__search"
-              icon={searchIcon}
-              size={Size.M}
-              placeholder="Find issue by ID or summary"
-              value={searchTerm}
-              onChange={event => onSearchChange(event.target.value)}
-              onClear={() => onSearchChange('')}
-              onKeyDown={event => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  if (onSearchSubmit()) {
-                    event.currentTarget.blur();
-                    filterDropdownRef.current?.toggle(false);
-                  }
-                }
-              }}
-            />
-          )}
-        >
-          <PopupMenu
-            directions={[Directions.BOTTOM_LEFT, Directions.TOP_LEFT]}
-            minWidth="target"
-            closeOnSelect
-            data={filterItems}
-            onSelect={(item: SelectItem) => onQuickFilter(String(item.key))}
-          />
-        </Dropdown>
         {matchCount !== null && (
-          <span className="toolbar__match-count" title="Issues on the board that match the search">{`${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`}</span>
+          <span className="toolbar__match-count" title="Issues on the board that are highlighted">{`${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`}</span>
         )}
         {selectedCount > 0 && <span className="toolbar__selected-count">{`${selectedCount} selected`}</span>}
       </div>
