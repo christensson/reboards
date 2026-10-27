@@ -807,6 +807,22 @@ body {
   fill-opacity: 0.7;
 }
 
+/* "relates to" (undirected): a subtle dashed line. */
+.connectors__edge_undirected .connectors__line {
+  stroke-width: 1;
+  stroke-opacity: 0.4;
+  stroke-dasharray: 4 3;
+}
+
+.connectors__edge_undirected .connectors__label {
+  fill-opacity: 0.75;
+}
+
+.connectors__edge_undirected.connectors__edge_selected .connectors__line {
+  stroke-width: 1.5;
+  stroke-opacity: 0.7;
+}
+
 .connectors__edge_selected .connectors__line {
   stroke: var(--ring-main-color);
   stroke-width: 2;

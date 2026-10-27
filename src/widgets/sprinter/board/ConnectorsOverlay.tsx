@@ -123,7 +123,7 @@ export const ConnectorsOverlay: React.FC<Props> = ({edges, selectedIds, mode, co
         const markerEnd = markerFor(edge.kind, edge.selected);
         const labelWidth = edge.label.length * LABEL_CHAR_WIDTH + LABEL_PADDING * 2;
         return (
-          <g key={edge.id} className={`connectors__edge${edge.selected ? ' connectors__edge_selected' : ''}`}>
+          <g key={edge.id} className={`connectors__edge connectors__edge_${edge.kind}${edge.selected ? ' connectors__edge_selected' : ''}`}>
             <path d={edge.path} className="connectors__line" markerEnd={markerEnd}/>
             {edge.label && (
               <g transform={`translate(${edge.mid.x - labelWidth / 2}, ${edge.mid.y - LABEL_HEIGHT / 2})`}>
