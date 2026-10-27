@@ -117,6 +117,8 @@ body {
   align-items: center;
   justify-content: center;
   background-color: var(--ring-content-background-color);
+  /* Same line as the first-level swimlane column below. */
+  border-right: 1px solid var(--ring-line-color);
 }
 
 .board-header__column {
@@ -137,7 +139,8 @@ body {
   cursor: pointer;
 }
 
-.board-header__column:first-child {
+.board-header__column:first-child,
+.board-header__corner + .board-header__column {
   border-left: none;
 }
 
@@ -279,7 +282,8 @@ body {
 }
 
 .board-band_loose > .board-cell:first-child,
-.board-band_group > .band-drop:first-child {
+.board-band_group > .band-drop:first-child,
+.board-band_picker > .band-drop:first-child {
   border-left: none;
 }
 
@@ -369,6 +373,7 @@ body {
 
 .board-band_picker {
   position: relative;
+  flex: 1 1 auto;
 }
 
 .board-band_picker .band-drop {
@@ -434,7 +439,14 @@ body {
 }
 
 .outer-row__body {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+}
+
+/* The picker row is last in its group: it fills the rest of the group's height so the column lines reach the bottom. */
+.outer-row__body > .board-row_picker:last-child {
+  flex: 1 1 auto;
 }
 
 .outer-row_collapsed {
