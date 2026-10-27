@@ -384,17 +384,21 @@ export const BoardScreen: React.FC<Props> = ({
     [layout.placement, layout.groupAncestors, layout.rowsByKey, updatePrefs, board.id]
   );
 
-  const onSearchSubmit = useCallback(() => {
+  /** Selects the matches and scrolls to the first; returns whether anything was selected. */
+  const onSearchSubmit = useCallback((): boolean => {
     const ids = Array.from(matchIds);
     setSelectedIds(new Set(ids));
     if (ids.length === 0) {
-      return;
+      return false;
     }
     ids.forEach(expandFor);
+    // The matches are now selected; the search has done its job.
+    setSearchTerm('');
     const SCROLL_DELAY = 50;
     window.setTimeout(() => {
       registry.get(ids[0])?.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'smooth'});
     }, SCROLL_DELAY);
+    return true;
   }, [matchIds, expandFor, registry]);
 
   const applyMove = useCallback(
@@ -594,6 +598,7 @@ export const BoardScreen: React.FC<Props> = ({
         universe={reference.universe}
         sprint={sprint}
         searchTerm={searchTerm}
+        matchCount={searchTerm.trim() || quickFilter ? matchIds.size : null}
         quickFilter={quickFilter}
         onQuickFilter={setQuickFilter}
         cardSize={view.cardSize}

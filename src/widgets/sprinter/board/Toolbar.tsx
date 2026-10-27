@@ -1,4 +1,4 @@
-import React, {useMemo} from 'react';
+import React, {useMemo, useRef} from 'react';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import ButtonGroup from '@jetbrains/ring-ui-built/components/button-group/button-group';
 import {Input, Size} from '@jetbrains/ring-ui-built/components/input/input';
@@ -91,11 +91,14 @@ type Props = {
   onOpenSettings: () => void;
   onSelectSprint: (sprint: string | null) => void;
   onSearchChange: (term: string) => void;
-  onSearchSubmit: () => void;
+  /** Returns true when matches were selected; the search box then gives up focus. */
+  onSearchSubmit: () => boolean;
   onCardSize: (size: CardSize) => void;
   onConnectorsMode: (mode: ConnectorsMode) => void;
   onRefresh: () => void;
   starredBoards: string[];
+  /** Issues matching the search or quick filter; null when neither is active. */
+  matchCount: number | null;
   showNewIssue: boolean;
   onShowNewIssue: (show: boolean) => void;
   onToggleStar: (boardId: string) => void;
@@ -170,10 +173,13 @@ export const Toolbar: React.FC<Props> = ({
   onConnectorsMode,
   onRefresh,
   starredBoards,
+  matchCount,
   showNewIssue,
   onShowNewIssue,
   onToggleStar
 }) => {
+  // The quick-filter menu opens from the search box; it closes when Enter has selected matches.
+  const filterDropdownRef = useRef<Dropdown>(null);
   const boardItems = useMemo(() => buildBoardItems(boards, starredBoards, onToggleStar), [boards, starredBoards, onToggleStar]);
   const isStarred = starredBoards.includes(board.id);
   const filterItems = useMemo<SelectItem[]>(
@@ -226,6 +232,7 @@ export const Toolbar: React.FC<Props> = ({
           <Tag onRemove={() => onQuickFilter(null)} readOnly={false} className="toolbar__filter-tag">{`No ${quickFilter}`}</Tag>
         )}
         <Dropdown
+          ref={filterDropdownRef}
           className="toolbar__search-wrap"
           disabled={filterItems.length === 0}
           anchor={(
@@ -240,7 +247,10 @@ export const Toolbar: React.FC<Props> = ({
               onKeyDown={event => {
                 if (event.key === 'Enter') {
                   event.preventDefault();
-                  onSearchSubmit();
+                  if (onSearchSubmit()) {
+                    event.currentTarget.blur();
+                    filterDropdownRef.current?.toggle(false);
+                  }
                 }
               }}
             />
@@ -254,6 +264,9 @@ export const Toolbar: React.FC<Props> = ({
             onSelect={(item: SelectItem) => onQuickFilter(String(item.key))}
           />
         </Dropdown>
+        {matchCount !== null && (
+          <span className="toolbar__match-count" title="Issues on the board that match the search">{`${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`}</span>
+        )}
       </div>
       <div className="toolbar__group">
         <ButtonGroup>

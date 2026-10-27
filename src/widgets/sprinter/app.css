@@ -69,7 +69,8 @@ body {
 }
 
 .toolbar__search-wrap {
-  flex: 1;
+  /* Keep the box its own width so the match count sits right next to it. */
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -1129,4 +1130,11 @@ body {
 
 .parent-confirm__summary {
   color: var(--ring-secondary-color);
+}
+
+.toolbar__match-count {
+  flex: none;
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+  white-space: nowrap;
 }
