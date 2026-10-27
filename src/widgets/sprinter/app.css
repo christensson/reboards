@@ -807,6 +807,22 @@ body {
   gap: var(--ring-unit);
 }
 
+/* Taller than a default Ring UI button so the value pill sits vertically centered with room around it. */
+.value-picker__values .value-picker__button {
+  display: inline-flex;
+  align-items: center;
+  height: auto;
+  min-height: calc(var(--ring-unit) * 4);
+  padding-top: calc(var(--ring-unit) / 2);
+  padding-bottom: calc(var(--ring-unit) / 2);
+  line-height: normal;
+}
+
+.value-picker__values .value-picker__button > span {
+  display: inline-flex;
+  align-items: center;
+}
+
 /* ---------- Settings ---------- */
 
 .settings-screen {
