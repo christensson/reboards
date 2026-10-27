@@ -2,7 +2,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {type CollisionDetection, DndContext, type DragEndEvent, type DragOverEvent, type DragStartEvent, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors} from '@dnd-kit/core';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
 import {type BoardConfig, isTwoLevel, swapSwimlanes} from '@/common/model/board-config';
-import type {UserPrefs} from '@/common/storage/prefs';
+import {type UserPrefs, boardView, setBoardView, toggleStar} from '@/common/storage/prefs';
 import {buildFieldUpdate} from '@/common/youtrack/fields';
 import {errorMessage} from '@/common/youtrack/rest';
 import {issueUrl, newIssueUrl} from '@/common/youtrack/urls';
@@ -13,6 +13,7 @@ import {useBoardReference} from '../data/useBoardReference';
 import {toggleCollapsedColumn, toggleCollapsedGroup, toggleCollapsedOuterRow, toggleCollapsedRow} from '../hooks/usePrefs';
 import {computeEdges} from '../model/connectors';
 import type {FieldUniverse} from '../model/fieldUniverse';
+import {sprintForDate} from '../model/sprints';
 import type {BoardIssue} from '../model/issue';
 import {type BoardLayout, type LayoutGroup, computeLayout, walkGroups} from '../model/layout';
 import {type FieldChange, type MoveTarget, applyChanges, planMove, planRowChanges} from '../model/mutations';
@@ -38,6 +39,8 @@ type Props = {
   updatePrefs: (patch: Partial<UserPrefs> | ((prev: UserPrefs) => Partial<UserPrefs>)) => void;
   onSelectBoard: (boardId: string) => void;
   onSelectSprint: (sprint: string | null) => void;
+  /** Shows a sprint picked automatically (by date) without remembering it. */
+  onAutoSelectSprint: (sprint: string) => void;
   onNewBoard: () => void;
   onOpenSettings: () => void;
 };
@@ -241,6 +244,27 @@ const useCardRegistry = (): CardRegistry => {
   );
 };
 
+/** Selects the sprint whose date range contains today when neither the URL nor storage names one. */
+const useAutoSprint = (
+  board: BoardConfig,
+  sprint: string | null,
+  hasStoredSprint: boolean,
+  reference: {loading: boolean; universe: FieldUniverse},
+  onAutoSelectSprint: (sprint: string) => void
+) => {
+  const fieldName = board.sprints.enabled ? board.sprints.field?.name : undefined;
+  const values = fieldName ? reference.universe.byName.get(fieldName)?.values : undefined;
+  useEffect(() => {
+    if (sprint !== null || hasStoredSprint || reference.loading || !values) {
+      return;
+    }
+    const current = sprintForDate(values, Date.now());
+    if (current) {
+      onAutoSelectSprint(current);
+    }
+  }, [sprint, hasStoredSprint, reference.loading, values, onAutoSelectSprint]);
+};
+
 export const BoardScreen: React.FC<Props> = ({
   board: configuredBoard,
   boards,
@@ -249,6 +273,7 @@ export const BoardScreen: React.FC<Props> = ({
   updatePrefs,
   onSelectBoard,
   onSelectSprint,
+  onAutoSelectSprint,
   onNewBoard,
   onOpenSettings
 }) => {
@@ -257,6 +282,8 @@ export const BoardScreen: React.FC<Props> = ({
   const board = useMemo(() => (swapped ? swapSwimlanes(configuredBoard) : configuredBoard), [configuredBoard, swapped]);
   const reference = useBoardReference(board.projects);
   const data = useBoardIssues(board, sprint);
+  const view = boardView(prefs, board.id);
+  useAutoSprint(board, sprint, board.id in prefs.lastSprintByBoard, reference, onAutoSelectSprint);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [quickFilter, setQuickFilter] = useState<string | null>(null);
@@ -501,7 +528,7 @@ export const BoardScreen: React.FC<Props> = ({
     () => ({
       dragHighlight,
       issuesById,
-      cardSize: prefs.cardSize,
+      cardSize: view.cardSize,
       cardFields: board.cardFields,
       cardColorField: board.cardColorField?.name ?? null,
       collapsedColumns,
@@ -514,7 +541,7 @@ export const BoardScreen: React.FC<Props> = ({
       registry,
       columnLabel: columnLabelOf
     }),
-    [dragHighlight, issuesById, prefs.cardSize, board.cardFields, board.cardColorField, collapsedColumns, selectedIds, matchIds, searchTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf]
+    [dragHighlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, collapsedColumns, selectedIds, matchIds, searchTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf]
   );
 
   const status = useMemo(
@@ -524,10 +551,10 @@ export const BoardScreen: React.FC<Props> = ({
 
   const dragHint = useMemo(() => describeDragHint(activeDrag, layout, board, reference.universe, dragTarget), [activeDrag, layout, board, reference.universe, dragTarget]);
   const error = reference.error ?? data.error;
-  const colWidth = columnWidth(prefs.cardSize, availableWidth(scrollWidth, twoLevel), layout.columns.length - collapsedColumns.size, collapsedColumns.size);
+  const colWidth = columnWidth(view.cardSize, availableWidth(scrollWidth, twoLevel), layout.columns.length - collapsedColumns.size, collapsedColumns.size);
   const layoutVersion = useMemo(
-    () => [layout, prefs.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading],
-    [layout, prefs.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading]
+    () => [layout, view.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading],
+    [layout, view.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading]
   );
   const onToggleRow = useCallback((rowKey: string) => updatePrefs(prev => toggleCollapsedRow(prev, board.id, rowKey)), [updatePrefs, board.id]);
   const onToggleGroup = useCallback((groupKey: string) => updatePrefs(prev => toggleCollapsedGroup(prev, board.id, groupKey)), [updatePrefs, board.id]);
@@ -543,8 +570,8 @@ export const BoardScreen: React.FC<Props> = ({
         searchTerm={searchTerm}
         quickFilter={quickFilter}
         onQuickFilter={setQuickFilter}
-        cardSize={prefs.cardSize}
-        connectorsMode={prefs.connectorsMode}
+        cardSize={view.cardSize}
+        connectorsMode={view.connectorsMode}
         loading={data.loading || reference.loading}
         status={status}
         onSelectBoard={onSelectBoard}
@@ -553,8 +580,10 @@ export const BoardScreen: React.FC<Props> = ({
         onSelectSprint={onSelectSprint}
         onSearchChange={setSearchTerm}
         onSearchSubmit={onSearchSubmit}
-        onCardSize={size => updatePrefs({cardSize: size})}
-        onConnectorsMode={mode => updatePrefs({connectorsMode: mode})}
+        onCardSize={size => updatePrefs(prev => setBoardView(prev, board.id, {cardSize: size}))}
+        onConnectorsMode={mode => updatePrefs(prev => setBoardView(prev, board.id, {connectorsMode: mode}))}
+        starredBoards={prefs.starredBoards}
+        onToggleStar={boardId => updatePrefs(prev => toggleStar(prev, boardId))}
         onRefresh={() => {
           reference.reload();
           data.refresh();
@@ -600,7 +629,7 @@ export const BoardScreen: React.FC<Props> = ({
               <ConnectorsOverlay
                 edges={edges}
                 selectedIds={selectedIds}
-                mode={prefs.connectorsMode}
+                mode={view.connectorsMode}
                 contentRef={contentRef}
                 registry={registry}
                 layoutVersion={layoutVersion}
@@ -608,7 +637,7 @@ export const BoardScreen: React.FC<Props> = ({
             </div>
           </div>
           <DragOverlay dropAnimation={null}>
-            <DragPreview active={activeDrag} hint={dragHint} cardSize={prefs.cardSize} board={board}/>
+            <DragPreview active={activeDrag} hint={dragHint} cardSize={view.cardSize} board={board}/>
           </DragOverlay>
         </DndContext>
       </BoardContext.Provider>

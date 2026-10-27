@@ -899,4 +899,25 @@ body {
   margin-top: calc(var(--ring-unit) * 3);
   padding-top: calc(var(--ring-unit) * 2);
   border-top: 1px solid var(--ring-line-color);
+  align-items: center;
+}
+
+.settings-footer__note {
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+}
+
+/* Starred boards */
+.board-star {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--ring-unit);
+  color: var(--ring-secondary-color);
+  cursor: pointer;
+}
+
+.board-star:hover,
+.board-star_active,
+.star-button_active {
+  color: var(--ring-warning-color);
 }

@@ -20,6 +20,9 @@ export type YtBundleValue = {
   id: string;
   name: string;
   ordinal?: number;
+  /** Version values only: sprint start and release dates in epoch milliseconds. */
+  startDate?: number | null;
+  releaseDate?: number | null;
   isResolved?: boolean;
   color?: YtColor | null;
 };

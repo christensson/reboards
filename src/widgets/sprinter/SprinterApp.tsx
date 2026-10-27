@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import Loader from '@jetbrains/ring-ui-built/components/loader/loader';
 import addIcon from '@jetbrains/icons/add';
@@ -62,6 +62,47 @@ export const SprinterApp: React.FC = () => {
     }
   }, [route, prefs.lastBoardId, updatePrefs]);
 
+  // Sprints picked by date are shown in the URL but not remembered, so a later visit picks the then-current sprint.
+  const autoSprints = useRef<Record<string, string>>({});
+  const routeBoardId = route.kind === 'board' ? route.boardId : null;
+  const routeSprint = route.kind === 'board' ? route.sprint : null;
+
+  useEffect(() => {
+    if (!ready || !routeBoardId) {
+      return;
+    }
+    const stored = prefs.lastSprintByBoard[routeBoardId];
+    const sprintsEnabled = boards.find(b => b.id === routeBoardId)?.sprints.enabled;
+    if (routeSprint === null && stored && sprintsEnabled) {
+      // Show the remembered sprint in the URL.
+      navigate({kind: 'board', boardId: routeBoardId, sprint: stored}, true);
+    } else if (routeSprint !== null && routeSprint !== stored && autoSprints.current[routeBoardId] !== routeSprint) {
+      // A link that names a sprint becomes the remembered sprint.
+      updatePrefs(prev => ({lastSprintByBoard: {...prev.lastSprintByBoard, [routeBoardId]: routeSprint}}));
+    }
+  }, [ready, routeBoardId, routeSprint, boards, prefs.lastSprintByBoard, navigate, updatePrefs]);
+
+  const onAutoSelectSprint = useCallback(
+    (sprint: string) => {
+      if (routeBoardId) {
+        autoSprints.current[routeBoardId] = sprint;
+        navigate({kind: 'board', boardId: routeBoardId, sprint}, true);
+      }
+    },
+    [routeBoardId, navigate]
+  );
+
+  // Forget stars of boards that no longer exist.
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+    const known = new Set(boardsState.boards.map(b => b.id));
+    if (prefs.starredBoards.some(id => !known.has(id))) {
+      updatePrefs(prev => ({starredBoards: prev.starredBoards.filter(id => known.has(id))}));
+    }
+  }, [ready, boardsState.boards, prefs.starredBoards, updatePrefs]);
+
   const openBoard = useCallback(
     (boardId: string) => navigate({kind: 'board', boardId, sprint: prefs.lastSprintByBoard[boardId] ?? null}),
     [navigate, prefs.lastSprintByBoard]
@@ -124,7 +165,9 @@ export const SprinterApp: React.FC = () => {
         prefs={prefs}
         updatePrefs={updatePrefs}
         onSelectBoard={openBoard}
+        onAutoSelectSprint={onAutoSelectSprint}
         onSelectSprint={sprint => {
+          delete autoSprints.current[board.id];
           updatePrefs(prev => ({lastSprintByBoard: {...prev.lastSprintByBoard, [board.id]: sprint ?? ''}}));
           navigate({kind: 'board', boardId: board.id, sprint});
         }}

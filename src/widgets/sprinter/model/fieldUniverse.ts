@@ -9,6 +9,9 @@ export type UniverseValue = {
   color?: YtColor;
   isResolved?: boolean;
   avatarUrl?: string;
+  /** Version values: sprint range in epoch milliseconds. */
+  startDate?: number;
+  releaseDate?: number;
 };
 
 export type ResolvedField = {
@@ -49,7 +52,9 @@ const bundleValues = (field: YtProjectCustomField): UniverseValue[] => {
     label: v.name,
     ordinal: v.ordinal ?? index,
     ...(v.color ? {color: v.color} : {}),
-    ...(v.isResolved !== undefined ? {isResolved: v.isResolved} : {})
+    ...(v.isResolved !== undefined ? {isResolved: v.isResolved} : {}),
+    ...(typeof v.startDate === 'number' ? {startDate: v.startDate} : {}),
+    ...(typeof v.releaseDate === 'number' ? {releaseDate: v.releaseDate} : {})
   }));
 };
 

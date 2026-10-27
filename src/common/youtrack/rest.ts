@@ -13,7 +13,7 @@ export const ISSUE_FIELDS = [
 ].join(',');
 
 export const PROJECT_FIELD_FIELDS =
-  'id,$type,canBeEmpty,field(id,name,fieldType(id,valueType)),bundle(id,$type,values(id,name,ordinal,isResolved,color(background,foreground)),aggregatedUsers(id,login,fullName,avatarUrl))';
+  'id,$type,canBeEmpty,field(id,name,fieldType(id,valueType)),bundle(id,$type,values(id,name,ordinal,isResolved,startDate,releaseDate,color(background,foreground)),aggregatedUsers(id,login,fullName,avatarUrl))';
 
 export const LINK_TYPE_FIELDS = 'id,name,sourceToTarget,targetToSource,directed,aggregation';
 

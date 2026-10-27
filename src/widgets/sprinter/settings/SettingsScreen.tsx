@@ -1,14 +1,16 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import {Input, Size} from '@jetbrains/ring-ui-built/components/input/input';
 import LoaderInline from '@jetbrains/ring-ui-built/components/loader-inline/loader-inline';
 import Toggle from '@jetbrains/ring-ui-built/components/toggle/toggle';
 import confirm from '@jetbrains/ring-ui-built/components/confirm-service/confirm-service';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
+import duplicateIcon from '@jetbrains/icons/duplicate';
 import {FieldSelect} from '@/common/components/FieldSelect';
 import {ProjectsSelect} from '@/common/components/ProjectsSelect';
 import {QueryEditor} from '@/common/components/QueryEditor';
 import {type BoardConfig, type FieldRef, validateBoardConfig} from '@/common/model/board-config';
+import {currentUserLogin} from '@/common/youtrack/host';
 import {composeQuery} from '@/common/youtrack/query';
 import {errorMessage} from '@/common/youtrack/rest';
 import type {YtProject} from '@/common/youtrack/types';
@@ -36,14 +38,49 @@ const Section: React.FC<{title: string; children: React.ReactNode}> = ({title, c
   </section>
 );
 
+type FooterProps = {
+  creating: boolean;
+  duplicating: boolean;
+  readOnly: boolean;
+  saving: boolean;
+  onSave: () => void;
+  onCancel: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+};
+
+const SettingsFooter: React.FC<FooterProps> = ({creating, duplicating, readOnly, saving, onSave, onCancel, onDuplicate, onDelete}) => (
+  <div className="settings-footer">
+    <Button primary disabled={readOnly || saving} loader={saving} onClick={onSave}>{creating ? 'Create board' : 'Save'}</Button>
+    <Button onClick={onCancel}>{readOnly ? 'Back' : 'Cancel'}</Button>
+    {!creating && (
+      <Button icon={duplicateIcon} disabled={saving} title="Copy these settings into a new, unsaved board" onClick={onDuplicate}>
+        Duplicate
+      </Button>
+    )}
+    {!creating && <Button danger disabled={readOnly || saving} onClick={onDelete}>Delete board</Button>}
+    {duplicating && <span className="settings-footer__note">The copy is not stored until you create it.</span>}
+  </div>
+);
+
+const screenTitle = (isNew: boolean, duplicating: boolean, name: string): string => {
+  if (isNew) {
+    return 'New board';
+  }
+  return duplicating ? `New board (copy of ${name})` : `Board settings: ${name}`;
+};
+
 export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, onDelete, onCancel, onSaved}) => {
   const [draft, setDraft] = useState<BoardConfig>(board);
   const [projects, setProjects] = useState<YtProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [duplicating, setDuplicating] = useState(false);
+  const creating = isNew || duplicating;
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const reference = useBoardReference(draft.projects);
-  const readOnly = !canEdit;
+  const readOnly = !canEdit && !duplicating;
   const [defaultsApplied, setDefaultsApplied] = useState(!isNew);
 
   useEffect(() => {
@@ -90,7 +127,7 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, 
     setErrors([]);
     setSaving(true);
     try {
-      const saved = await onSave(draft, isNew ? undefined : board.updatedAt);
+      const saved = await onSave(draft, creating ? undefined : board.updatedAt);
       alertService.successMessage(`Board "${saved.name}" saved`);
       onSaved(saved);
     } catch (error) {
@@ -98,7 +135,7 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, 
     } finally {
       setSaving(false);
     }
-  }, [draft, onSave, isNew, board.updatedAt, onSaved]);
+  }, [draft, onSave, creating, board.updatedAt, onSaved]);
 
   const remove = useCallback(async () => {
     try {
@@ -114,6 +151,25 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, 
       setErrors([errorMessage(error)]);
     }
   }, [board.id, board.name, onDelete, onCancel]);
+
+  // Copies the current values into a new, unsaved board; only "Create board" stores it.
+  const duplicate = useCallback(() => {
+    setDraft(prev => ({...prev, id: '', name: `${prev.name} (copy)`, owner: currentUserLogin() || prev.owner, createdAt: 0, updatedAt: 0}));
+    setDuplicating(true);
+    setErrors([]);
+    rootRef.current?.scrollIntoView({block: 'start'});
+  }, []);
+
+  const cancel = useCallback(() => {
+    if (duplicating) {
+      setDraft(board);
+      setDuplicating(false);
+      setErrors([]);
+      return;
+    }
+    onCancel();
+  }, [duplicating, board, onCancel]);
+
 
   const sampleQuery = useMemo(
     () =>
@@ -136,9 +192,9 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, 
   );
 
   return (
-    <div className="settings-screen">
+    <div className="settings-screen" ref={rootRef}>
       <div className="settings-header">
-        <h2 className="settings-title">{isNew ? 'New board' : `Board settings: ${board.name}`}</h2>
+        <h2 className="settings-title">{screenTitle(isNew, duplicating, board.name)}</h2>
         {readOnly && <span className="settings-readonly">Read only: only the owner or a system administrator can change this board.</span>}
       </div>
 
@@ -238,11 +294,16 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, 
           {errors.map(message => <li key={message}>{message}</li>)}
         </ul>
       )}
-      <div className="settings-footer">
-        <Button primary disabled={readOnly || saving} loader={saving} onClick={save}>{isNew ? 'Create board' : 'Save'}</Button>
-        <Button onClick={onCancel}>{readOnly ? 'Back' : 'Cancel'}</Button>
-        {!isNew && <Button danger disabled={readOnly || saving} onClick={remove}>Delete board</Button>}
-      </div>
+      <SettingsFooter
+        creating={creating}
+        duplicating={duplicating}
+        readOnly={readOnly}
+        saving={saving}
+        onSave={save}
+        onCancel={cancel}
+        onDuplicate={duplicate}
+        onDelete={remove}
+      />
     </div>
   );
 };

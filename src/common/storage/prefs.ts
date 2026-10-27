@@ -5,11 +5,22 @@ export type CardSize = 'small' | 'normal';
 /** Which relation connectors are drawn. */
 export type ConnectorsMode = 'none' | 'selected' | 'all';
 
-export type UserPrefs = {
-  lastBoardId?: string;
-  lastSprintByBoard: Record<string, string>;
+/** View settings remembered per board. */
+export type BoardView = {
   cardSize: CardSize;
   connectorsMode: ConnectorsMode;
+};
+
+export type UserPrefs = {
+  lastBoardId?: string;
+  /** Explicitly chosen sprint per board id; '' means "All sprints". */
+  lastSprintByBoard: Record<string, string>;
+  /** Last used view settings, the default for boards without a stored view. */
+  cardSize: CardSize;
+  connectorsMode: ConnectorsMode;
+  viewByBoard: Record<string, Partial<BoardView>>;
+  /** Board ids the user has starred. */
+  starredBoards: string[];
   /** Collapsed row keys per board id. */
   collapsedRows: Record<string, string[]>;
   /** Collapsed column ids per board id. */
@@ -28,6 +39,8 @@ export const defaultPrefs = (): UserPrefs => ({
   lastSprintByBoard: {},
   cardSize: 'normal',
   connectorsMode: 'selected',
+  viewByBoard: {},
+  starredBoards: [],
   collapsedRows: {},
   collapsedColumns: {},
   collapsedOuterRows: {},
@@ -76,3 +89,20 @@ export const loadPrefs = async (host: HostAPI): Promise<UserPrefs> => {
 };
 
 export const savePrefs = (host: HostAPI, prefs: UserPrefs): Promise<void> => writeRaw(host, JSON.stringify(prefs));
+
+export const boardView = (prefs: UserPrefs, boardId: string): BoardView => ({
+  cardSize: prefs.viewByBoard[boardId]?.cardSize ?? prefs.cardSize,
+  connectorsMode: prefs.viewByBoard[boardId]?.connectorsMode ?? prefs.connectorsMode
+});
+
+/** Stores view settings for one board and makes them the default for boards without a stored view. */
+export const setBoardView = (prefs: UserPrefs, boardId: string, patch: Partial<BoardView>): Partial<UserPrefs> => ({
+  ...patch,
+  viewByBoard: {...prefs.viewByBoard, [boardId]: {...prefs.viewByBoard[boardId], ...patch}}
+});
+
+export const toggleStar = (prefs: UserPrefs, boardId: string): Partial<UserPrefs> => ({
+  starredBoards: prefs.starredBoards.includes(boardId)
+    ? prefs.starredBoards.filter(id => id !== boardId)
+    : [...prefs.starredBoards, boardId]
+});

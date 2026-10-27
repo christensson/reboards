@@ -3,6 +3,8 @@ import Button from '@jetbrains/ring-ui-built/components/button/button';
 import ButtonGroup from '@jetbrains/ring-ui-built/components/button-group/button-group';
 import {Input, Size} from '@jetbrains/ring-ui-built/components/input/input';
 import LoaderInline from '@jetbrains/ring-ui-built/components/loader-inline/loader-inline';
+import Icon from '@jetbrains/ring-ui-built/components/icon/icon';
+import List from '@jetbrains/ring-ui-built/components/list/list';
 import Dropdown from '@jetbrains/ring-ui-built/components/dropdown/dropdown';
 import PopupMenu from '@jetbrains/ring-ui-built/components/popup-menu/popup-menu';
 import {Directions} from '@jetbrains/ring-ui-built/components/popup/popup.consts';
@@ -11,9 +13,12 @@ import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
 import addIcon from '@jetbrains/icons/add';
 import searchIcon from '@jetbrains/icons/search';
 import settingsIcon from '@jetbrains/icons/settings';
+import starEmptyIcon from '@jetbrains/icons/star-empty';
+import starFilledIcon from '@jetbrains/icons/star-filled';
 import updateIcon from '@jetbrains/icons/update';
 import {type BoardConfig} from '@/common/model/board-config';
 import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
+import {orderBoards} from '../model/boardOrder';
 import type {FieldUniverse} from '../model/fieldUniverse';
 
 export const ALL_SPRINTS = '';
@@ -46,6 +51,55 @@ type Props = {
   onCardSize: (size: CardSize) => void;
   onConnectorsMode: (mode: ConnectorsMode) => void;
   onRefresh: () => void;
+  starredBoards: string[];
+  onToggleStar: (boardId: string) => void;
+};
+
+const StarToggle: React.FC<{starred: boolean; onToggle: () => void}> = ({starred, onToggle}) => (
+  <span
+    role="button"
+    tabIndex={-1}
+    className={`board-star${starred ? ' board-star_active' : ''}`}
+    title={starred ? 'Unstar board' : 'Star board'}
+    onMouseDown={event => {
+      event.preventDefault();
+      event.stopPropagation();
+    }}
+    onClick={event => {
+      event.preventDefault();
+      event.stopPropagation();
+      onToggle();
+    }}
+    onKeyDown={event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        event.stopPropagation();
+        onToggle();
+      }
+    }}
+  >
+    <Icon glyph={starred ? starFilledIcon : starEmptyIcon}/>
+  </span>
+);
+
+/** Board selector items: starred boards first under a "Starred" separator, then the others. */
+const buildBoardItems = (boards: BoardConfig[], starredIds: string[], onToggleStar: (boardId: string) => void): SelectItem[] => {
+  const {starred, others} = orderBoards(boards, starredIds);
+  const item = (b: BoardConfig, isStarred: boolean): SelectItem => ({
+    key: b.id,
+    label: b.name,
+    description: b.shared ? undefined : 'personal',
+    rightNodes: <StarToggle starred={isStarred} onToggle={() => onToggleStar(b.id)}/>
+  });
+  if (starred.length === 0) {
+    return others.map(b => item(b, false));
+  }
+  const separator = (key: string, description: string): SelectItem => ({key, description, rgItemType: List.ListProps.Type.SEPARATOR});
+  return [
+    separator('__starred', 'Starred'),
+    ...starred.map(b => item(b, true)),
+    ...(others.length > 0 ? [separator('__others', 'Other boards'), ...others.map(b => item(b, false))] : [])
+  ];
 };
 
 export const Toolbar: React.FC<Props> = ({
@@ -68,12 +122,12 @@ export const Toolbar: React.FC<Props> = ({
   onSearchSubmit,
   onCardSize,
   onConnectorsMode,
-  onRefresh
+  onRefresh,
+  starredBoards,
+  onToggleStar
 }) => {
-  const boardItems = useMemo<SelectItem[]>(
-    () => boards.map(b => ({key: b.id, label: b.name, description: b.shared ? undefined : 'personal'})),
-    [boards]
-  );
+  const boardItems = useMemo(() => buildBoardItems(boards, starredBoards, onToggleStar), [boards, starredBoards, onToggleStar]);
+  const isStarred = starredBoards.includes(board.id);
   const filterItems = useMemo<SelectItem[]>(
     () =>
       board.cardFields
@@ -97,6 +151,12 @@ export const Toolbar: React.FC<Props> = ({
           data={boardItems}
           selected={boardItems.find(item => item.key === board.id) ?? null}
           onChange={(item: SelectItem | null) => item && onSelectBoard(String(item.key))}
+        />
+        <Button
+          icon={isStarred ? starFilledIcon : starEmptyIcon}
+          className={isStarred ? 'star-button star-button_active' : 'star-button'}
+          title={isStarred ? 'Unstar board' : 'Star board'}
+          onClick={() => onToggleStar(board.id)}
         />
         <Button icon={settingsIcon} title="Board settings" onClick={onOpenSettings}/>
         <Button icon={addIcon} title="New board" onClick={onNewBoard}/>
