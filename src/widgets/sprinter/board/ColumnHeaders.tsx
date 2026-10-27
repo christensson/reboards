@@ -1,4 +1,6 @@
 import React, {memo} from 'react';
+import Button from '@jetbrains/ring-ui-built/components/button/button';
+import swapIcon from '@jetbrains/icons/unsorted';
 import {ValuePill} from '@/common/components/ValuePill';
 import type {FieldUniverse} from '../model/fieldUniverse';
 import type {LayoutColumn} from '../model/layout';
@@ -11,13 +13,24 @@ type Props = {
   collapsedColumns: Set<string>;
   onToggleColumn: (columnId: string) => void;
   twoLevel: boolean;
+  swappedSwimlanes: boolean;
+  onToggleSwappedSwimlanes: () => void;
 };
 
-const ColumnHeadersComponent: React.FC<Props> = ({columns, columnFieldName, universe, collapsedColumns, onToggleColumn, twoLevel}) => {
+const ColumnHeadersComponent: React.FC<Props> = ({columns, columnFieldName, universe, collapsedColumns, onToggleColumn, twoLevel, swappedSwimlanes, onToggleSwappedSwimlanes}) => {
   const field = universe.byName.get(columnFieldName);
   return (
     <div className="board-header" style={{gridTemplateColumns: headerTemplate(columns, collapsedColumns, twoLevel)}}>
-      {twoLevel && <div className="board-header__corner"/>}
+      {twoLevel && (
+        <div className="board-header__corner">
+          <Button
+            icon={swapIcon}
+            active={swappedSwimlanes}
+            title={swappedSwimlanes ? 'Swimlane levels are swapped. Click to restore' : 'Swap the two swimlane levels'}
+            onClick={onToggleSwappedSwimlanes}
+          />
+        </div>
+      )}
       {columns.map(column => {
         const isCollapsed = collapsedColumns.has(column.id);
         return (

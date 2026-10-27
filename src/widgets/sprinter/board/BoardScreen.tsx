@@ -549,8 +549,6 @@ export const BoardScreen: React.FC<Props> = ({
         status={status}
         onSelectBoard={onSelectBoard}
         onNewBoard={onNewBoard}
-        swappedSwimlanes={swapped}
-        onToggleSwappedSwimlanes={() => updatePrefs(prev => ({swappedSwimlanes: {...prev.swappedSwimlanes, [board.id]: !swapped}}))}
         onOpenSettings={onOpenSettings}
         onSelectSprint={onSelectSprint}
         onSearchChange={setSearchTerm}
@@ -587,6 +585,8 @@ export const BoardScreen: React.FC<Props> = ({
                 collapsedColumns={collapsedColumns}
                 onToggleColumn={columnId => updatePrefs(prev => toggleCollapsedColumn(prev, board.id, columnId))}
                 twoLevel={twoLevel}
+                swappedSwimlanes={swapped}
+                onToggleSwappedSwimlanes={() => updatePrefs(prev => ({swappedSwimlanes: {...prev.swappedSwimlanes, [board.id]: !swapped}}))}
               />
               <BoardRows
                 layout={layout}
