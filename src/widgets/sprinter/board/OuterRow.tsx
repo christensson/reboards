@@ -63,6 +63,7 @@ const OuterRowComponent: React.FC<Props> = ({outer, rowsByKey, columns, collapse
               collapsedGroups={collapsedGroups}
               onToggleRow={onToggleRow}
               onToggleGroup={onToggleGroup}
+              pickerOnly={outer.rowKeys.length === 1}
             />
           ) : null;
         })}

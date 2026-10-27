@@ -16,6 +16,14 @@ type Props = {
   showAdd?: boolean;
 };
 
+/** Discreet "+" that expands to "New issue…" on hover and opens the new-issue page with presets. */
+export const AddIssueLink: React.FC<{href: string}> = ({href}) => (
+  <a className="board-cell__add" href={href} target="_blank" rel="noreferrer" title="New issue…">
+    <Icon glyph={addIcon} className="board-cell__add-icon"/>
+    <span className="board-cell__add-label">New issue…</span>
+  </a>
+);
+
 const CellComponent: React.FC<Props> = ({rowKey, columnId, issueIds, groupKey, parentId, showAdd = true}) => {
   const ctx = useBoardContext();
   const {setNodeRef} = useDroppable({id: cellDroppableId(rowKey, columnId, groupKey), data: {rowKey, columnId}});
@@ -34,12 +42,7 @@ const CellComponent: React.FC<Props> = ({rowKey, columnId, issueIds, groupKey, p
     <div ref={setNodeRef} className={`board-cell${isOver ? ' board-cell_over' : ''}${groupKey ? ' board-cell_group' : ''}`}>
       {parentId && <IssueCard issueId={parentId} isParent/>}
       {issueIds.map(id => <IssueCard key={id} issueId={id}/>)}
-      {href && (
-        <a className="board-cell__add" href={href} target="_blank" rel="noreferrer" title="New issue…">
-          <Icon glyph={addIcon} className="board-cell__add-icon"/>
-          <span className="board-cell__add-label">New issue…</span>
-        </a>
-      )}
+      {href && <AddIssueLink href={href}/>}
     </div>
   );
 };

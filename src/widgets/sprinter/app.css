@@ -343,11 +343,31 @@ body {
   padding: 0 calc(var(--ring-unit) / 2);
   border-radius: var(--ring-border-radius);
   color: var(--ring-secondary-color);
-  font-size: var(--ring-font-size-smaller);
-  line-height: calc(var(--ring-unit) * 2);
+  /* Fixed height: showing the label on hover must not change the cell height. */
+  height: 12px;
+  font-size: 11px;
+  line-height: 12px;
   text-decoration: none;
   opacity: 0.35;
   transition: opacity 100ms ease, background-color 100ms ease;
+}
+
+/* Ring UI icons carry their own baseline offset; make the glyph a plain centered block instead. */
+.board-cell__add-icon {
+  display: inline-flex;
+  align-items: center;
+  width: 9px;
+  height: 12px;
+  line-height: 0;
+}
+
+.board-cell__add-icon svg {
+  display: block;
+  width: 9px;
+  height: 9px;
+  margin: 0;
+  vertical-align: top;
+  transform: none;
 }
 
 .board-cell__add-label {
@@ -363,6 +383,7 @@ body {
 .board-cell:hover .board-cell__add .board-cell__add-label,
 .board-cell__add:focus-visible .board-cell__add-label {
   display: inline;
+  line-height: 12px;
 }
 
 /* ---------- Picker rows (two-level boards) ---------- */
@@ -380,9 +401,26 @@ body {
   min-height: calc(var(--ring-unit) * 3);
 }
 
+/* Swimlane without issues: "+" at the top, "Assign other swimlane…" at the bottom. */
+.board-band_picker-only .band-drop {
+  min-height: calc(var(--ring-unit) * 6);
+  padding: calc(var(--ring-unit) / 2) var(--ring-unit);
+}
+
+.band-drop:hover .board-cell__add,
+.band-drop .board-cell__add:focus-visible {
+  opacity: 1;
+  color: var(--ring-link-color);
+}
+
+.band-drop:hover .board-cell__add .board-cell__add-label {
+  display: inline;
+  line-height: 12px;
+}
+
 .board-row__picker-label {
   position: absolute;
-  top: calc(var(--ring-unit) / 2);
+  bottom: calc(var(--ring-unit) / 2);
   left: var(--ring-unit);
   color: var(--ring-secondary-color);
   font-size: var(--ring-font-size-smaller);

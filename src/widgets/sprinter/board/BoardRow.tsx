@@ -17,18 +17,20 @@ type Props = {
   collapsedGroups: Set<string>;
   onToggleRow: (rowKey: string) => void;
   onToggleGroup: (groupKey: string) => void;
+  /** The picker row is the only row of its first-level swimlane, which has no issues. */
+  pickerOnly?: boolean;
 };
 
-const BoardRowComponent: React.FC<Props> = ({row, columns, collapsed, collapsedGroups, onToggleRow, onToggleGroup}) => {
+const BoardRowComponent: React.FC<Props> = ({row, columns, collapsed, collapsedGroups, onToggleRow, onToggleGroup, pickerOnly = false}) => {
   const ctx = useBoardContext();
   const bandStyle: React.CSSProperties = {gridTemplateColumns: bandTemplate(columns, ctx.collapsedColumns)};
   const bands = packGroups(row.groups);
   if (row.kind === 'picker') {
     return (
       <div className="board-row board-row_picker" data-row-key={row.key}>
-        <div className="board-band board-band_picker" style={bandStyle}>
+        <div className={`board-band board-band_picker${pickerOnly ? ' board-band_picker-only' : ''}`} style={bandStyle}>
           {columns.map(column => (
-            <BandDropCell key={column.id} rowKey={row.key} columnId={column.id} columnIndex={column.index} bandKey="picker"/>
+            <BandDropCell key={column.id} rowKey={row.key} columnId={column.id} columnIndex={column.index} bandKey="picker" showAdd={pickerOnly}/>
           ))}
           <span className="board-row__picker-label" title="Drop an issue here to choose its swimlane">{row.label}</span>
         </div>
