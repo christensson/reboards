@@ -71,6 +71,19 @@ export const createYouTrackClient = (host: HostAPI) => {
         body: {customFields: updates}
       }),
 
+    /** Adds `otherId` to the given link end of `issueId` (`<typeId>s`, `<typeId>t` or the id of an undirected type). */
+    addLink: (issueId: string, linkId: string, otherId: string): Promise<unknown> =>
+      host.fetchYouTrack(`issues/${encodeURIComponent(issueId)}/links/${encodeURIComponent(linkId)}/issues`, {
+        method: 'POST',
+        query: {fields: 'id'},
+        body: {id: otherId}
+      }),
+
+    removeLink: (issueId: string, linkId: string, otherId: string): Promise<unknown> =>
+      host.fetchYouTrack(`issues/${encodeURIComponent(issueId)}/links/${encodeURIComponent(linkId)}/issues/${encodeURIComponent(otherId)}`, {
+        method: 'DELETE'
+      }),
+
     searchAssist: (query: string, caret: number): Promise<YtSearchAssist> =>
       host.fetchYouTrack('search/assist', {
         method: 'POST',

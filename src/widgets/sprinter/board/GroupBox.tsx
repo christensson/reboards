@@ -1,5 +1,5 @@
 import React, {memo} from 'react';
-import {useDraggable} from '@dnd-kit/core';
+import {useDraggable, useDroppable} from '@dnd-kit/core';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import chevronDownIcon from '@jetbrains/icons/chevron-down';
 import chevronRightIcon from '@jetbrains/icons/chevron-right';
@@ -8,6 +8,7 @@ import {useBoardContext} from './BoardContext';
 import {Cell} from './Cell';
 import {IssueDot} from './IssueDot';
 import {type TrackInsets, boxTracks} from './tracks';
+import {LINK_GROUP_PREFIX} from '../model/linkTargets';
 
 type Props = {
   group: LayoutGroup;
@@ -124,6 +125,11 @@ const GroupMemberRow: React.FC<{group: LayoutGroup; span: LayoutColumn[]}> = ({g
 
 function GroupBoxComponent({group, columns, collapsedGroups, onToggle, containerStart = 0, containerInsets}: Props): React.JSX.Element {
   const ctx = useBoardContext();
+  // Target for Ctrl/Ctrl+Shift drags: the box stands for its parent issue.
+  const {setNodeRef: setLinkDropRef} = useDroppable({
+    id: `${LINK_GROUP_PREFIX}${group.key}`,
+    data: {kind: 'link-group', groupKey: group.key, parentId: group.parentId, parentIdReadable: group.parentIdReadable}
+  });
   const collapsed = collapsedGroups.has(group.key);
   const span = columns.slice(group.startIndex, group.endIndex + 1);
   const tracks = boxTracks(span, ctx.collapsedColumns, containerInsets);
@@ -137,7 +143,8 @@ function GroupBoxComponent({group, columns, collapsedGroups, onToggle, container
     'group-box',
     `group-box_depth-${Math.min(group.depth, MAX_DEPTH_CLASS)}`,
     collapsed ? 'group-box_collapsed' : '',
-    group.parentInThisRow ? 'group-box_parent-here' : ''
+    group.parentInThisRow ? 'group-box_parent-here' : '',
+    ctx.linkHighlight?.kind === 'group' && ctx.linkHighlight.id === group.key ? 'group-box_link-target' : ''
   ]
     .filter(Boolean)
     .join(' ');
@@ -147,14 +154,14 @@ function GroupBoxComponent({group, columns, collapsedGroups, onToggle, container
 
   if (withinCollapsed) {
     return (
-      <div className={`${classes} group-box_minimal`} style={style} data-group-key={group.key}>
+      <div ref={setLinkDropRef} className={`${classes} group-box_minimal`} style={style} data-group-key={group.key}>
         <GroupIndicators group={group} span={span}/>
       </div>
     );
   }
 
   return (
-    <div className={classes} style={style} data-group-key={group.key}>
+    <div ref={setLinkDropRef} className={classes} style={style} data-group-key={group.key}>
       <GroupTitle group={group} collapsed={collapsed} spanLength={span.length} onToggle={onToggle}/>
       {collapsed && <GroupIndicators group={group} span={span}/>}
       {!collapsed && hasMemberRow && <GroupMemberRow group={group} span={span}/>}

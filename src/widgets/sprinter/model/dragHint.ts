@@ -2,6 +2,7 @@ import {type BoardConfig, UNCATEGORIZED_ROW_KEY} from '@/common/model/board-conf
 import type {FieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
 import type {LayoutGroup, LayoutRow} from './layout';
+import type {LinkMode, LinkTargetResult} from './linkTargets';
 import {type FieldChange, type MoveTarget, type RowsByKey, planMove} from './mutations';
 
 const valueLabel = (universe: FieldUniverse, fieldName: string, key: string | null): string => {
@@ -64,4 +65,19 @@ export const groupDragHint = (
     return `Move ${what} to ${outerLabel}, choosing the ${innerFieldName ?? 'swimlane'} on drop`;
   }
   return `Move ${what} to ${rowLabel(rows, target.rowKey)} swimlane`;
+};
+
+/** Text shown while an issue card is dragged with Ctrl (change parent) or Ctrl+Shift (add a relation). */
+export const linkDragHint = (mode: Exclude<LinkMode, 'none'>, dragged: BoardIssue, target: LinkTargetResult | null): string => {
+  if (!target) {
+    return mode === 'parent'
+      ? `Drop on an issue or parent group to change the parent of ${dragged.idReadable}`
+      : `Drop on an issue or parent group to add a relation to ${dragged.idReadable}`;
+  }
+  if ('invalid' in target) {
+    return target.invalid;
+  }
+  return mode === 'parent'
+    ? `Change parent of ${dragged.idReadable} to ${target.targetLabel}.`
+    : `Add a relation between ${dragged.idReadable} and ${target.targetLabel}. You choose the relation on drop.`;
 };

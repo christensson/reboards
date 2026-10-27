@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import {type BoardConfig, UNCATEGORIZED_ROW_KEY, createEmptyBoard} from '@/common/model/board-config';
 import type {YtProjectCustomField} from '@/common/youtrack/types';
-import {groupDragHint, issueDragHint} from './dragHint';
+import {groupDragHint, issueDragHint, linkDragHint} from './dragHint';
 import {buildFieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
 import type {LayoutGroup, LayoutRow} from './layout';
@@ -57,5 +57,21 @@ describe('groupDragHint', () => {
     expect(groupDragHint(group, 3, rows, {rowKey: 'Major', columnId: 'x'})).toBe('Drop on another swimlane to move SP-9 and its 3 subtasks');
     expect(groupDragHint(group, 3, rows, null)).toBe('Drop on another swimlane to move SP-9 and its 3 subtasks');
     expect(groupDragHint(group, 3, rows, {rowKey: 'Minor\u0000__pick__', columnId: 'x'}, 'Type')).toBe('Move SP-9 and its 3 subtasks to Minor, choosing the Type on drop');
+  });
+});
+
+describe('linkDragHint', () => {
+  const dragged = {idReadable: 'SP-5'} as BoardIssue;
+
+  it('describes both link modes', () => {
+    expect(linkDragHint('parent', dragged, {targetId: 'x', targetLabel: 'SP-12'})).toBe('Change parent of SP-5 to SP-12.');
+    expect(linkDragHint('relation', dragged, {targetId: 'x', targetLabel: 'SP-12'})).toBe(
+      'Add a relation between SP-5 and SP-12. You choose the relation on drop.'
+    );
+  });
+
+  it('explains missing and invalid targets', () => {
+    expect(linkDragHint('parent', dragged, null)).toBe('Drop on an issue or parent group to change the parent of SP-5');
+    expect(linkDragHint('relation', dragged, {invalid: 'nope'})).toBe('nope');
   });
 });

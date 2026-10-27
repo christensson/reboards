@@ -987,3 +987,101 @@ body {
 .star-button_active {
   color: var(--ring-warning-color);
 }
+
+/* ---------- Link drags (Ctrl: change parent, Ctrl+Shift: add relation) ---------- */
+
+.issue-card.issue-card_link-target {
+  outline: 2px solid var(--ring-main-color);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring-main-color) 25%, transparent);
+}
+
+.group-box.group-box_link-target {
+  border: 2px solid var(--ring-main-color);
+  background-color: color-mix(in srgb, var(--ring-main-color) 8%, transparent);
+}
+
+.relation-picker__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ring-unit);
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.relation-picker__type {
+  margin-bottom: calc(var(--ring-unit) / 2);
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+  text-transform: uppercase;
+}
+
+.relation-picker__option {
+  display: flex;
+  align-items: center;
+  gap: var(--ring-unit);
+  width: 100%;
+  margin: 0 0 2px;
+  padding: calc(var(--ring-unit) / 2) var(--ring-unit);
+  border: 1px solid transparent;
+  border-radius: var(--ring-border-radius);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.relation-picker__option:hover:not(:disabled) {
+  background-color: var(--ring-hover-background-color);
+}
+
+.relation-picker__option_selected {
+  border-color: var(--ring-main-color);
+  background-color: var(--ring-selected-background-color);
+}
+
+.relation-picker__option:disabled {
+  color: var(--ring-disabled-color);
+  cursor: default;
+}
+
+.relation-picker__sentence {
+  display: inline-flex;
+  align-items: baseline;
+  gap: calc(var(--ring-unit) * 0.75);
+  min-width: 0;
+}
+
+.relation-picker__issue {
+  display: inline-flex;
+  gap: calc(var(--ring-unit) / 2);
+  max-width: 220px;
+  min-width: 0;
+}
+
+.relation-picker__issue-id {
+  flex: none;
+  font-weight: bold;
+}
+
+.relation-picker__issue-summary {
+  overflow: hidden;
+  color: var(--ring-secondary-color);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.relation-picker__verb {
+  flex: none;
+  color: var(--ring-main-color);
+}
+
+.relation-picker__existing {
+  margin-left: auto;
+  font-size: var(--ring-font-size-smaller);
+}
+
+.relation-picker__preview {
+  margin: calc(var(--ring-unit) * 1.5) 0 0;
+}

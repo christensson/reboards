@@ -1,5 +1,5 @@
 import React, {memo, useCallback} from 'react';
-import {useDraggable} from '@dnd-kit/core';
+import {useDraggable, useDroppable} from '@dnd-kit/core';
 import Avatar from '@jetbrains/ring-ui-built/components/avatar/avatar';
 import {Size as AvatarSize} from '@jetbrains/ring-ui-built/components/avatar/avatar-size';
 import {ValuePill} from '@/common/components/ValuePill';
@@ -7,6 +7,7 @@ import type {FieldValue} from '@/common/youtrack/fields';
 import type {CardSize} from '@/common/storage/prefs';
 import type {BoardIssue} from '../model/issue';
 import {searchWords, splitForHighlight} from '../model/search';
+import {LINK_CARD_PREFIX} from '../model/linkTargets';
 import {useBoardContext} from './BoardContext';
 
 type ViewProps = {
@@ -111,14 +112,18 @@ const IssueCardComponent: React.FC<Props> = ({issueId, isParent}) => {
   const ctx = useBoardContext();
   const issue = ctx.issuesById.get(issueId);
   const {attributes, listeners, setNodeRef, isDragging} = useDraggable({id: issueId, data: {issueId}});
+  // Target for Ctrl/Ctrl+Shift drags (change parent, add relation); ignored by plain drags.
+  const {setNodeRef: setLinkDropRef} = useDroppable({id: `${LINK_CARD_PREFIX}${issueId}`, data: {kind: 'link-card', issueId}});
 
   const setRef = useCallback(
     (element: HTMLDivElement | null) => {
       setNodeRef(element);
+      setLinkDropRef(element);
       ctx.registry.register(issueId, element);
     },
-    [setNodeRef, ctx.registry, issueId]
+    [setNodeRef, setLinkDropRef, ctx.registry, issueId]
   );
+  const isLinkTarget = ctx.linkHighlight?.kind === 'card' && ctx.linkHighlight.id === issueId;
 
   const onClick = useCallback(
     (event: React.MouseEvent) => {
@@ -151,6 +156,7 @@ const IssueCardComponent: React.FC<Props> = ({issueId, isParent}) => {
       searchTerm={ctx.searchTerm}
       dragging={isDragging}
       isParent={isParent}
+      className={isLinkTarget ? 'issue-card_link-target' : undefined}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       {...attributes}

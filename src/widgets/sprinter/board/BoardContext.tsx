@@ -16,8 +16,12 @@ export type DragHighlight = {
 export const isHighlightedCell = (highlight: DragHighlight | null, rowKey: string, columnId: string): boolean =>
   highlight !== null && highlight.rowKey === rowKey && (highlight.columnId === null || highlight.columnId === columnId);
 
+/** Card or group box under the pointer while Ctrl- or Ctrl+Shift-dragging. */
+export type LinkHighlight = {kind: 'card' | 'group'; id: string};
+
 export type BoardContextValue = {
   dragHighlight: DragHighlight | null;
+  linkHighlight: LinkHighlight | null;
   issuesById: Map<string, BoardIssue>;
   cardSize: CardSize;
   cardFields: string[];

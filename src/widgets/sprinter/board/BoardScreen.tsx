@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {type CollisionDetection, DndContext, type DragEndEvent, type DragOverEvent, type DragStartEvent, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors} from '@dnd-kit/core';
+import {DndContext, type DragEndEvent, type DragOverEvent, type DragStartEvent, DragOverlay, PointerSensor, useSensor, useSensors} from '@dnd-kit/core';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
 import {type BoardConfig, isTwoLevel, swapSwimlanes} from '@/common/model/board-config';
 import {type UserPrefs, boardView, setBoardView, toggleStar} from '@/common/storage/prefs';
@@ -17,7 +17,8 @@ import {sprintForDate} from '../model/sprints';
 import type {BoardIssue} from '../model/issue';
 import {type BoardLayout, type LayoutGroup, computeLayout, walkGroups} from '../model/layout';
 import {type FieldChange, type MoveTarget, applyChanges, planMove, planRowChanges} from '../model/mutations';
-import {groupDragHint, issueDragHint} from '../model/dragHint';
+import {groupDragHint, issueDragHint, linkDragHint} from '../model/dragHint';
+import {isLinkDropData} from '../model/linkTargets';
 import {computeMatchIds} from '../model/search';
 import {visibleIssueIds} from '../model/visibility';
 import {BoardContext, type BoardContextValue, type CardRegistry, type DragHighlight} from './BoardContext';
@@ -30,6 +31,8 @@ import {SwimlanePickerDialog} from './SwimlanePickerDialog';
 import {OUTER_WIDTH} from './tracks';
 import {Toolbar} from './Toolbar';
 import {ValuePickerDialog} from './ValuePickerDialog';
+import {RelationPickerDialog} from './RelationPickerDialog';
+import {useLinkDrag} from './useLinkDrag';
 
 type Props = {
   board: BoardConfig;
@@ -215,16 +218,6 @@ const useElementWidth = (ref: React.RefObject<HTMLElement | null>): number => {
     return () => observer.disconnect();
   }, [ref]);
   return width;
-};
-
-/** Among the drop targets under the pointer, prefer the smallest one (a cell over the band behind it). */
-const mostSpecificTarget: CollisionDetection = args => {
-  const collisions = pointerWithin(args);
-  const area = (id: string | number): number => {
-    const rect = args.droppableRects.get(id);
-    return rect ? rect.width * rect.height : Number.MAX_SAFE_INTEGER;
-  };
-  return [...collisions].sort((a, b) => area(a.id) - area(b.id));
 };
 
 const useCardRegistry = (): CardRegistry => {
@@ -427,11 +420,26 @@ export const BoardScreen: React.FC<Props> = ({
 
   const sensors = useSensors(useSensor(PointerSensor, {activationConstraint: {distance: DRAG_ACTIVATION_DISTANCE}}));
 
-  const onDragStart = useCallback((event: DragStartEvent) => {
-    setActiveDragId(String(event.active.id));
-    setDragTarget(null);
-  }, []);
-  const onDragOver = useCallback((event: DragOverEvent) => setDragTarget((event.over?.data.current as MoveTarget | undefined) ?? null), []);
+  const link = useLinkDrag({issuesById, linkTypes: reference.linkTypes, data});
+  const {start: startLinkDrag, onOver: onLinkOver, end: endLinkDrag, drop: dropLink} = link;
+
+  const onDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const activeId = String(event.active.id);
+      setActiveDragId(activeId);
+      setDragTarget(null);
+      startLinkDrag(event, !activeId.startsWith(GROUP_DRAG_PREFIX));
+    },
+    [startLinkDrag]
+  );
+  const onDragOver = useCallback(
+    (event: DragOverEvent) => {
+      const over = event.over?.data.current;
+      onLinkOver(over);
+      setDragTarget(isLinkDropData(over) ? null : ((over as MoveTarget | undefined) ?? null));
+    },
+    [onLinkOver]
+  );
   const findGroup = useCallback(
     (groupKey: string): LayoutGroup | undefined => {
       let found: LayoutGroup | undefined;
@@ -480,6 +488,10 @@ export const BoardScreen: React.FC<Props> = ({
       setActiveDragId(null);
       setDragTarget(null);
       const activeId = String(event.active.id);
+      // Ctrl / Ctrl+Shift drags change the parent or add a relation, never fields.
+      if (dropLink(activeId.startsWith(GROUP_DRAG_PREFIX) ? undefined : issuesById.get(activeId))) {
+        return;
+      }
       const target = event.over?.data.current as MoveTarget | undefined;
       if (activeId.startsWith(GROUP_DRAG_PREFIX)) {
         if (target) {
@@ -496,7 +508,7 @@ export const BoardScreen: React.FC<Props> = ({
       const plan = planMove(board, from, target, layout.rowsByKey);
       settlePending({issues: [issue], changes: plan.changes, pickColumnId: plan.pickColumn?.id, pickInner: plan.pickInnerValue, label: issue.idReadable});
     },
-    [issuesById, layout.placement, layout.rowsByKey, board, settlePending, moveGroup]
+    [issuesById, layout.placement, layout.rowsByKey, board, settlePending, moveGroup, dropLink]
   );
 
   const onPickValue = useCallback(
@@ -522,11 +534,12 @@ export const BoardScreen: React.FC<Props> = ({
   const columnLabelOf = useCallback((columnId: string) => layout.columns.find(c => c.id === columnId)?.label ?? '', [layout.columns]);
 
   const activeDrag = useMemo(() => describeActiveDrag(activeDragId, issuesById, findGroup), [activeDragId, issuesById, findGroup]);
-  const dragHighlight = useMemo(() => computeDragHighlight(activeDrag, dragTarget), [activeDrag, dragTarget]);
+  const dragHighlight = useMemo(() => (link.mode === 'none' ? computeDragHighlight(activeDrag, dragTarget) : null), [link.mode, activeDrag, dragTarget]);
 
   const contextValue = useMemo<BoardContextValue>(
     () => ({
       dragHighlight,
+      linkHighlight: link.highlight,
       issuesById,
       cardSize: view.cardSize,
       cardFields: board.cardFields,
@@ -541,7 +554,7 @@ export const BoardScreen: React.FC<Props> = ({
       registry,
       columnLabel: columnLabelOf
     }),
-    [dragHighlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, collapsedColumns, selectedIds, matchIds, searchTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf]
+    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, collapsedColumns, selectedIds, matchIds, searchTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf]
   );
 
   const status = useMemo(
@@ -549,7 +562,14 @@ export const BoardScreen: React.FC<Props> = ({
     [data, layout]
   );
 
-  const dragHint = useMemo(() => describeDragHint(activeDrag, layout, board, reference.universe, dragTarget), [activeDrag, layout, board, reference.universe, dragTarget]);
+  const linkTargetOf = link.target;
+  const dragHint = useMemo(
+    () =>
+      link.mode !== 'none' && activeDrag.issue
+        ? linkDragHint(link.mode, activeDrag.issue, linkTargetOf(activeDrag.issue))
+        : describeDragHint(activeDrag, layout, board, reference.universe, dragTarget),
+    [link.mode, linkTargetOf, activeDrag, layout, board, reference.universe, dragTarget]
+  );
   const error = reference.error ?? data.error;
   const colWidth = columnWidth(view.cardSize, availableWidth(scrollWidth, twoLevel), layout.columns.length - collapsedColumns.size, collapsedColumns.size);
   const layoutVersion = useMemo(
@@ -596,13 +616,14 @@ export const BoardScreen: React.FC<Props> = ({
       <BoardContext.Provider value={contextValue}>
         <DndContext
           sensors={sensors}
-          collisionDetection={mostSpecificTarget}
+          collisionDetection={link.collisionDetection}
           onDragStart={onDragStart}
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
           onDragCancel={() => {
             setActiveDragId(null);
             setDragTarget(null);
+            endLinkDrag();
           }}
         >
           <div className="board-scroll" ref={scrollRef} onClick={() => setSelectedIds(new Set())} role="presentation">
@@ -650,6 +671,7 @@ export const BoardScreen: React.FC<Props> = ({
         onPickInner={onPickInner}
         onCancel={() => setPendingMove(null)}
       />
+      <RelationPickerDialog {...link.dialog}/>
     </div>
   );
 };
