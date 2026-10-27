@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {DndContext, type DragEndEvent, type DragOverEvent, type DragStartEvent, DragOverlay, PointerSensor, useSensor, useSensors} from '@dnd-kit/core';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
-import {type BoardConfig, isTwoLevel, swapSwimlanes} from '@/common/model/board-config';
+import {type BoardConfig, type FieldRef, isTwoLevel, swapSwimlanes} from '@/common/model/board-config';
 import {type UserPrefs, boardView, setBoardView, toggleStar} from '@/common/storage/prefs';
 import {buildFieldUpdate} from '@/common/youtrack/fields';
 import {errorMessage} from '@/common/youtrack/rest';
@@ -536,6 +536,11 @@ export const BoardScreen: React.FC<Props> = ({
   const activeDrag = useMemo(() => describeActiveDrag(activeDragId, issuesById, findGroup), [activeDragId, issuesById, findGroup]);
   const dragHighlight = useMemo(() => (link.mode === 'none' ? computeDragHighlight(activeDrag, dragTarget) : null), [link.mode, activeDrag, dragTarget]);
 
+  const stateFieldNames = useMemo(
+    () => [board.columnField, board.row.field, board.innerRow?.field].filter((f): f is FieldRef => f?.kind === 'state').map(f => f.name),
+    [board.columnField, board.row.field, board.innerRow]
+  );
+
   const contextValue = useMemo<BoardContextValue>(
     () => ({
       dragHighlight,
@@ -544,6 +549,7 @@ export const BoardScreen: React.FC<Props> = ({
       cardSize: view.cardSize,
       cardFields: board.cardFields,
       cardColorField: board.cardColorField?.name ?? null,
+      stateFieldNames,
       collapsedColumns,
       selectedIds,
       matchIds,
@@ -554,7 +560,7 @@ export const BoardScreen: React.FC<Props> = ({
       registry,
       columnLabel: columnLabelOf
     }),
-    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, collapsedColumns, selectedIds, matchIds, searchTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf]
+    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, searchTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf]
   );
 
   const status = useMemo(

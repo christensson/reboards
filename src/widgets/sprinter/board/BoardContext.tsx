@@ -26,6 +26,8 @@ export type BoardContextValue = {
   cardSize: CardSize;
   cardFields: string[];
   cardColorField: string | null;
+  /** Column and swimlane fields of state type; a resolved value strikes through the card's issue ID. */
+  stateFieldNames: string[];
   collapsedColumns: Set<string>;
   selectedIds: Set<string>;
   matchIds: Set<string>;

@@ -19,6 +19,8 @@ type ViewProps = {
   style?: React.CSSProperties;
   selected?: boolean;
   highlighted?: boolean;
+  /** Strike through the issue ID (resolved state in a column or swimlane field). */
+  resolved?: boolean;
   searchTerm?: string;
   dragging?: boolean;
   isParent?: boolean;
@@ -34,6 +36,14 @@ const Highlighted: React.FC<{text: string; words: string[]}> = ({text, words}) =
   });
   return nodes;
 };
+
+/** "ID: " at the start of the card title; the ID alone is struck through when resolved. */
+const IssueId: React.FC<{idReadable: string; words: string[]; resolved?: boolean}> = ({idReadable, words, resolved}) => (
+  <span className="issue-card__id">
+    <span className={resolved ? 'issue-card__id-text_resolved' : undefined}><Highlighted text={idReadable} words={words}/></span>
+    {': '}
+  </span>
+);
 
 const FieldChip: React.FC<{name: string; value: FieldValue | null}> = ({name, value}) => {
   if (!value) {
@@ -60,7 +70,7 @@ const FieldChip: React.FC<{name: string; value: FieldValue | null}> = ({name, va
 
 /** Pure card rendering, also used for the drag overlay. */
 export const IssueCardView = React.forwardRef<HTMLDivElement, ViewProps & React.HTMLAttributes<HTMLDivElement>>(
-  ({issue, size, cardFields, cardColorField, selected, highlighted, searchTerm = '', dragging, isParent, className, style, ...rest}, ref) => {
+  ({issue, size, cardFields, cardColorField, selected, highlighted, resolved, searchTerm = '', dragging, isParent, className, style, ...rest}, ref) => {
     const color = cardColorField ? issue.fields[cardColorField]?.color : undefined;
     const colorStyle: React.CSSProperties | undefined = color
       ? ({'--card-color': color.background} as React.CSSProperties)
@@ -79,7 +89,7 @@ export const IssueCardView = React.forwardRef<HTMLDivElement, ViewProps & React.
       <div ref={ref} className={`${classes}${color ? ' issue-card_colored' : ''}`} style={{...colorStyle, ...style}} data-issue-id={issue.id} {...rest}>
         {isParent && <span className="issue-card__parent-badge">parent</span>}
         <div className="issue-card__title">
-          <span className="issue-card__id"><Highlighted text={issue.idReadable} words={words}/>{': '}</span>
+          <IssueId idReadable={issue.idReadable} words={words} resolved={resolved}/>
           <span className="issue-card__summary"><Highlighted text={issue.summary} words={words}/></span>
           {size === 'normal' && issue.tags.map(tag => (
             <span
@@ -153,6 +163,7 @@ const IssueCardComponent: React.FC<Props> = ({issueId, isParent}) => {
       cardColorField={ctx.cardColorField}
       selected={ctx.selectedIds.has(issueId)}
       highlighted={ctx.matchIds.has(issueId)}
+      resolved={ctx.stateFieldNames.some(name => issue.fields[name]?.isResolved)}
       searchTerm={ctx.searchTerm}
       dragging={isDragging}
       isParent={isParent}

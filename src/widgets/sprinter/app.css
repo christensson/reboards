@@ -1106,3 +1106,8 @@ body {
 .relation-picker__preview {
   margin: calc(var(--ring-unit) * 1.5) 0 0;
 }
+
+/* Issue ID of a card whose column or swimlane state is resolved. */
+.issue-card__id-text_resolved {
+  text-decoration: line-through;
+}
