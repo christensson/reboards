@@ -1147,3 +1147,52 @@ body {
   font-size: var(--ring-font-size-smaller);
   white-space: nowrap;
 }
+
+/* ---------- Interactive find ("/") ---------- */
+
+.quick-find {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--ring-unit);
+  box-sizing: border-box;
+  width: 400px;
+  max-width: calc(100vw - var(--ring-unit) * 4);
+  padding: var(--ring-unit) calc(var(--ring-unit) * 1.5);
+  border: 1px solid var(--ring-borders-color);
+  border-radius: var(--ring-border-radius);
+  background-color: var(--ring-content-background-color);
+  box-shadow: var(--ring-popup-shadow, 0 4px 16px rgba(0, 0, 0, 0.2));
+  transform: translate(-50%, -50%);
+}
+
+.quick-find__icon {
+  flex: none;
+  color: var(--ring-icon-secondary-color, var(--ring-secondary-color));
+}
+
+.quick-find__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--ring-text-color);
+  font: inherit;
+  font-size: var(--ring-font-size);
+}
+
+.quick-find__button {
+  flex: none;
+}
+
+.quick-find__count {
+  flex: none;
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+  white-space: nowrap;
+}

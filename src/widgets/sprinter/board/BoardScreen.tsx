@@ -33,6 +33,8 @@ import {Toolbar} from './Toolbar';
 import {ValuePickerDialog} from './ValuePickerDialog';
 import {RelationPickerDialog} from './RelationPickerDialog';
 import {useLinkDrag} from './useLinkDrag';
+import {QuickFind} from './QuickFind';
+import {useQuickFind} from './useQuickFind';
 
 type Props = {
   board: BoardConfig;
@@ -299,7 +301,14 @@ export const BoardScreen: React.FC<Props> = ({
   const collapsedColumns = useMemo(() => new Set(prefs.collapsedColumns[board.id] ?? []), [prefs.collapsedColumns, board.id]);
   const collapsedOuterRows = useMemo(() => new Set(prefs.collapsedOuterRows[board.id] ?? []), [prefs.collapsedOuterRows, board.id]);
   const twoLevel = isTwoLevel(board);
-  const matchIds = useMemo(() => computeMatchIds(data.issues, searchTerm, quickFilter), [data.issues, searchTerm, quickFilter]);
+  const toolbarMatchIds = useMemo(() => computeMatchIds(data.issues, searchTerm, quickFilter), [data.issues, searchTerm, quickFilter]);
+  // While the "/" find box is open, its text drives matching and highlighting instead of the toolbar's.
+  const [quickFindTerm, setQuickFindTerm] = useState<string | null>(null);
+  const activeTerm = quickFindTerm ?? searchTerm;
+  const matchIds = useMemo(
+    () => (quickFindTerm === null ? toolbarMatchIds : computeMatchIds(data.issues, quickFindTerm, quickFilter)),
+    [quickFindTerm, toolbarMatchIds, data.issues, quickFilter]
+  );
 
   const visibleIds = useMemo(
     () => visibleIssueIds(layout, {rows: collapsedRows, outerRows: collapsedOuterRows, columns: collapsedColumns, groups: collapsedGroups}),
@@ -384,22 +393,30 @@ export const BoardScreen: React.FC<Props> = ({
     [layout.placement, layout.groupAncestors, layout.rowsByKey, updatePrefs, board.id]
   );
 
-  /** Selects the matches and scrolls to the first; returns whether anything was selected. */
-  const onSearchSubmit = useCallback((): boolean => {
+  /** Selects the current matches, expands what hides them and scrolls to the first; returns whether anything was selected. */
+  const selectMatches = useCallback((): boolean => {
     const ids = Array.from(matchIds);
     setSelectedIds(new Set(ids));
     if (ids.length === 0) {
       return false;
     }
     ids.forEach(expandFor);
-    // The matches are now selected; the search has done its job.
-    setSearchTerm('');
     const SCROLL_DELAY = 50;
     window.setTimeout(() => {
       registry.get(ids[0])?.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'smooth'});
     }, SCROLL_DELAY);
     return true;
   }, [matchIds, expandFor, registry]);
+
+  const onSearchSubmit = useCallback((): boolean => {
+    const selected = selectMatches();
+    if (selected) {
+      // The matches are now selected; the search has done its job.
+      setSearchTerm('');
+    }
+    return selected;
+  }, [selectMatches]);
+
 
   const applyMove = useCallback(
     async (issue: BoardIssue, changes: FieldChange[]) => {
@@ -425,6 +442,7 @@ export const BoardScreen: React.FC<Props> = ({
   const sensors = useSensors(useSensor(PointerSensor, {activationConstraint: {distance: DRAG_ACTIVATION_DISTANCE}}));
 
   const link = useLinkDrag({issuesById, linkTypes: reference.linkTypes, data});
+  useQuickFind(quickFindTerm, setQuickFindTerm, matchIds, registry, pendingMove !== null || link.dialog.from !== null);
   const {start: startLinkDrag, onOver: onLinkOver, end: endLinkDrag, drop: dropLink} = link;
 
   const onDragStart = useCallback(
@@ -557,14 +575,14 @@ export const BoardScreen: React.FC<Props> = ({
       collapsedColumns,
       selectedIds,
       matchIds,
-      searchTerm,
+      searchTerm: activeTerm,
       onSelect,
       onOpen,
       newIssueHref,
       registry,
       columnLabel: columnLabelOf
     }),
-    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, searchTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf]
+    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf]
   );
 
   const status = useMemo(
@@ -599,7 +617,7 @@ export const BoardScreen: React.FC<Props> = ({
         sprint={sprint}
         searchTerm={searchTerm}
         selectedCount={selectedIds.size}
-        matchCount={searchTerm.trim() || quickFilter ? matchIds.size : null}
+        matchCount={searchTerm.trim() || quickFilter ? toolbarMatchIds.size : null}
         quickFilter={quickFilter}
         onQuickFilter={setQuickFilter}
         cardSize={view.cardSize}
@@ -686,6 +704,15 @@ export const BoardScreen: React.FC<Props> = ({
         onCancel={() => setPendingMove(null)}
       />
       <RelationPickerDialog {...link.dialog}/>
+      {quickFindTerm !== null && (
+        <QuickFind
+          term={quickFindTerm}
+          matchCount={matchIds.size}
+          onChange={setQuickFindTerm}
+          onSubmit={selectMatches}
+          onClose={() => setQuickFindTerm(null)}
+        />
+      )}
     </div>
   );
 };
