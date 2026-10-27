@@ -1,6 +1,7 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {createElement, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {type CollisionDetection, type DragStartEvent, pointerWithin} from '@dnd-kit/core';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
+import confirm from '@jetbrains/ring-ui-built/components/confirm-service/confirm-service';
 import {errorMessage} from '@/common/youtrack/rest';
 import type {YtIssueLinkType} from '@/common/youtrack/types';
 import {youtrack} from '../data/api';
@@ -20,6 +21,7 @@ import {
   subtaskLinkType
 } from '../model/linkTargets';
 import type {LinkHighlight} from './BoardContext';
+import {type IssueRef, ParentChangeDescription} from './ParentChangeConfirm';
 import type {RelationIssue} from './RelationPickerDialog';
 
 type BoardData = ReturnType<typeof useBoardIssues>;
@@ -28,6 +30,21 @@ type Options = {
   issuesById: Map<string, BoardIssue>;
   linkTypes: YtIssueLinkType[];
   data: BoardData;
+};
+
+/** Asks before any parent change; resolves to false when the user cancels. */
+const confirmParentChange = async (child: IssueRef, parent: IssueRef): Promise<boolean> => {
+  try {
+    await confirm({
+      text: 'Change parent',
+      description: createElement(ParentChangeDescription, {child, parent}),
+      confirmLabel: 'Change parent',
+      rejectLabel: 'Cancel'
+    });
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 type RelationRequest = {from: BoardIssue; to: RelationIssue};
@@ -126,6 +143,19 @@ export const useLinkDrag = ({issuesById, linkTypes, data}: Options) => {
     [issuesById, data]
   );
 
+  /** ID and summary of an issue, fetched when the board doesn't know it. */
+  const issueRefOf = useCallback(
+    async (id: string): Promise<IssueRef> => {
+      const known = issuesById.get(id) ?? data.parents[id];
+      if (known) {
+        return {idReadable: known.idReadable, summary: known.summary};
+      }
+      const fetched = await youtrack.getIssue(id);
+      return {idReadable: fetched.idReadable, summary: fetched.summary ?? ''};
+    },
+    [issuesById, data.parents]
+  );
+
   const changeParent = useCallback(
     async (childId: string, parentId: string) => {
       const type = subtaskLinkType(linkTypes);
@@ -139,6 +169,9 @@ export const useLinkDrag = ({issuesById, linkTypes, data}: Options) => {
         // Fresh parents: the board may not know an off-board child's links.
         const current = onBoard ?? normalizeIssue(await youtrack.getIssue(childId));
         const oldParents = current.parentIds.filter(id => id !== parentId);
+        if (!(await confirmParentChange({idReadable: current.idReadable, summary: current.summary}, await issueRefOf(parentId)))) {
+          return;
+        }
         if (onBoard) {
           data.replaceIssue({...onBoard, parentIds: [parentId]});
         }
@@ -154,7 +187,7 @@ export const useLinkDrag = ({issuesById, linkTypes, data}: Options) => {
         alertService.error(`Could not change the parent of ${label}: ${errorMessage(failure)}`);
       }
     },
-    [linkTypes, issuesById, data, refreshAfter]
+    [linkTypes, issuesById, data, refreshAfter, issueRefOf]
   );
 
   const addRelation = useCallback(

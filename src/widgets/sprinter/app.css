@@ -1111,3 +1111,22 @@ body {
 .issue-card__id-text_resolved {
   text-decoration: line-through;
 }
+
+/* Parent change confirmation: one line per part, issues stand out. */
+.parent-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--ring-unit) / 2);
+  line-height: calc(var(--ring-unit) * 2.5);
+}
+
+.parent-confirm__issue {
+  display: flex;
+  gap: calc(var(--ring-unit) / 2);
+  padding-left: var(--ring-unit);
+  overflow-wrap: anywhere;
+}
+
+.parent-confirm__summary {
+  color: var(--ring-secondary-color);
+}
