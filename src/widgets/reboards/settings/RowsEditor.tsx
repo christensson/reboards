@@ -3,10 +3,10 @@ import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/selec
 import {FieldSelect} from '@/common/components/FieldSelect';
 import {SortableValueList} from '@/common/components/SortableValueList';
 import {ValuePill} from '@/common/components/ValuePill';
-import {DYNAMIC_KINDS, type FieldRef, type RowConfig, type RowSortMode, isDynamicKind} from '@/common/model/board-config';
+import {DYNAMIC_KINDS, type FieldRef, type RowConfig, type RowSortMode, canBeDynamic, isDynamicField} from '@/common/model/board-config';
 import {type FieldUniverse, ROW_FIELD_KINDS, type UniverseValue} from '../model/fieldUniverse';
 import {orderValues} from '../model/sorting';
-import {DynamicOptionsEditor} from './DynamicOptionsEditor';
+import {AsDynamicToggle, DynamicOptionsEditor} from './DynamicOptionsEditor';
 
 type Props = {
   universe: FieldUniverse;
@@ -76,7 +76,7 @@ const NO_VALUES: UniverseValue[] = [];
 const rowForField = (row: RowConfig, universe: FieldUniverse, fieldRef: FieldRef | null): RowConfig => {
   const values = fieldRef ? (universe.byName.get(fieldRef.name)?.values ?? []) : [];
   const sort: RowSortMode = fieldRef?.kind === 'integer' ? 'numerical' : 'custom';
-  return {...row, field: fieldRef, sort, customOrder: values.map(v => v.key)};
+  return {...row, field: fieldRef, sort, customOrder: values.map(v => v.key), dynamic: {...row.dynamic, asDynamic: false}};
 };
 
 export const RowsEditor: React.FC<Props> = ({universe, row, onChange, disabled, fieldLabel = 'Swimlane field', noneLabel = 'No swimlanes', excludeNames}) => {
@@ -99,7 +99,14 @@ export const RowsEditor: React.FC<Props> = ({universe, row, onChange, disabled, 
           onChange={fieldRef => onChange(rowForField(row, universe, fieldRef))}
         />
       </div>
-      {row.field && (isDynamicKind(kind)
+      {row.field && canBeDynamic(kind) && (
+        <AsDynamicToggle
+          checked={row.dynamic.asDynamic}
+          disabled={disabled}
+          onChange={on => onChange({...row, dynamic: {...row.dynamic, asDynamic: on, ...(on ? {sort: 'order' as const} : {})}})}
+        />
+      )}
+      {row.field && (isDynamicField(kind, row.dynamic)
         ? <DynamicOptionsEditor kind={kind} options={row.dynamic} disabled={disabled} onChange={next => onChange({...row, dynamic: next})}/>
         : <StableRowOptions row={row} values={field?.values ?? NO_VALUES} disabled={disabled} onChange={onChange}/>)}
     </div>

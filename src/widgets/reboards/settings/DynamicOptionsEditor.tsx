@@ -2,7 +2,7 @@ import React from 'react';
 import {Input, Size} from '@jetbrains/ring-ui-built/components/input/input';
 import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/select/select';
 import Toggle from '@jetbrains/ring-ui-built/components/toggle/toggle';
-import {BOARD_LIMITS, type DynamicOptions, type DynamicSortMode, type FieldKind} from '@/common/model/board-config';
+import {BOARD_LIMITS, type DynamicOptions, type DynamicSortMode, type FieldKind, canBeDynamic} from '@/common/model/board-config';
 
 type Props = {
   /** Kind of the field: user fields sort by name only, versions and builds also by date. */
@@ -24,9 +24,39 @@ const DATE_SORTS: SelectItem[] = [
   {key: 'date-desc', label: 'Date, newest first'}
 ];
 
-/** Sorting and filtering of a dynamic field (user, version, build), whose columns or swimlanes come from the issues. */
+const ORDER_SORTS: SelectItem[] = [{key: 'order', label: 'Field order'}];
+
+const sortItemsFor = (kind: FieldKind | 'other'): SelectItem[] => {
+  if (kind === 'version' || kind === 'build') {
+    return [...NAME_SORTS, ...DATE_SORTS];
+  }
+  return canBeDynamic(kind) ? [...ORDER_SORTS, ...NAME_SORTS] : NAME_SORTS;
+};
+
+type AsDynamicProps = {
+  checked: boolean;
+  columns?: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+};
+
+/** Enum and owned fields: take the columns or swimlanes from the issues, like user and version fields. */
+export const AsDynamicToggle: React.FC<AsDynamicProps> = ({checked, columns, disabled, onChange}) => (
+  <div className="settings-field">
+    <Toggle checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)}>
+      Treat as a changing field
+    </Toggle>
+    <span className="settings-field__help">
+      {columns
+        ? 'Columns come from the values on the board, and everyone picks which ones to show, as with user and version fields.'
+        : 'Swimlanes come from the values on the board, as with user and version fields.'}
+    </span>
+  </div>
+);
+
+/** Sorting and filtering of a dynamic field (user, version, build, or an enum treated so), whose columns or swimlanes come from the issues. */
 export const DynamicOptionsEditor: React.FC<Props> = ({kind, options, onChange, columns, disabled}) => {
-  const sortItems = kind === 'version' || kind === 'build' ? [...NAME_SORTS, ...DATE_SORTS] : NAME_SORTS;
+  const sortItems = sortItemsFor(kind);
   const patch = (changes: Partial<DynamicOptions>) => onChange({...options, ...changes});
   const what = columns ? 'Columns' : 'Swimlanes';
   return (

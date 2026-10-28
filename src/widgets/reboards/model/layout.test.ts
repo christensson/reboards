@@ -270,6 +270,19 @@ describe('computeLayout with dynamic fields', () => {
     expect(layout.rowsByKey[compositeRowKey('bob', PICKER_ROW_SUFFIX)].pickLevel).toBe('inner');
   });
 
+  it('takes the columns of an enum treated as a changing field from the issues, in field order', () => {
+    const board: BoardConfig = {
+      ...config(),
+      columnField: {name: 'Priority', kind: 'enum'},
+      columns: [],
+      columnOptions: {...defaultDynamicOptions(), asDynamic: true, sort: 'order'},
+      row: {...config().row, field: null}
+    };
+    const issuesByPriority = [issue({id: '1', state: 'Open', priority: 'Major'}), issue({id: '2', state: 'Open', priority: 'Critical'})];
+    const layout = computeLayout({issues: issuesByPriority, config: board, universe: dynamicUniverse, parents: {}});
+    expect(layout.columns.map(c => c.id)).toEqual([dynamicColumnId('Critical'), dynamicColumnId('Major'), ASSIGN_COLUMN_ID]);
+  });
+
   it('adds no "Assign…" targets for stable fields', () => {
     const layout = computeLayout({issues, config: config(), universe: dynamicUniverse, parents: {}});
     expect(layout.columns.some(c => c.assign)).toBe(false);

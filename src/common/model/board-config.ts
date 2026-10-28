@@ -19,12 +19,16 @@ export type FieldKind = FieldRef['kind'];
 
 // How the values of a dynamic field (user, version, build) become columns or
 // swimlanes. Their value sets change all the time, so they are taken from the
-// issues on the board instead of being configured one by one.
+// issues on the board instead of being configured one by one. Enum and owned
+// fields can opt in with `asDynamic`.
+// `order` sorts by the field's own value order (enum and owned fields).
 /**
  * @zod-to-schema
  */
 export type DynamicOptions = {
-  sort: 'alphabetical' | 'alphabetical-desc' | 'date' | 'date-desc';
+  sort: 'alphabetical' | 'alphabetical-desc' | 'date' | 'date-desc' | 'order';
+  /** Enum and owned fields only: treat the field as dynamic, like user and version fields. */
+  asDynamic: boolean;
   /** Versions only: show released versions. */
   showReleased: boolean;
   /** Versions only: show archived versions. */
@@ -129,7 +133,7 @@ export const generateId = (): string =>
 export const DEFAULT_MAX_COLUMNS = 5;
 
 /** Released versions shown, archived ones hidden, like YouTrack itself. */
-export const defaultDynamicOptions = (): DynamicOptions => ({sort: 'alphabetical', showReleased: true, showArchived: false, maxColumns: DEFAULT_MAX_COLUMNS});
+export const defaultDynamicOptions = (): DynamicOptions => ({sort: 'alphabetical', asDynamic: false, showReleased: true, showArchived: false, maxColumns: DEFAULT_MAX_COLUMNS});
 
 /** A swimlane level without a field. */
 export const emptyRow = (): RowConfig => ({field: null, sort: 'custom', customOrder: [], dynamic: defaultDynamicOptions()});
@@ -194,13 +198,14 @@ const normalizeProjects = (value: unknown): ProjectRef[] =>
       .map(p => ({id: p.id as string, shortName: p.shortName as string}))
     : [];
 
-const DYNAMIC_SORT_MODES: DynamicSortMode[] = ['alphabetical', 'alphabetical-desc', 'date', 'date-desc'];
+const DYNAMIC_SORT_MODES: DynamicSortMode[] = ['alphabetical', 'alphabetical-desc', 'date', 'date-desc', 'order'];
 
 const normalizeDynamic = (value: unknown): DynamicOptions => {
   const options = isRecord(value) ? value : {};
   const base = defaultDynamicOptions();
   return {
     sort: DYNAMIC_SORT_MODES.includes(options.sort as DynamicSortMode) ? (options.sort as DynamicSortMode) : base.sort,
+    asDynamic: options.asDynamic === true,
     showReleased: typeof options.showReleased === 'boolean' ? options.showReleased : base.showReleased,
     showArchived: typeof options.showArchived === 'boolean' ? options.showArchived : base.showArchived,
     maxColumns: typeof options.maxColumns === 'number' && options.maxColumns >= 1 ? Math.floor(options.maxColumns) : base.maxColumns
@@ -335,8 +340,15 @@ export const DYNAMIC_KINDS: FieldKind[] = ['user', 'version', 'build'];
 
 export const isDynamicKind = (kind: FieldKind | 'other' | undefined): boolean => DYNAMIC_KINDS.includes(kind as FieldKind);
 
+/** Enum fields (including owned fields) the board may treat as dynamic. */
+export const canBeDynamic = (kind: FieldKind | 'other' | undefined): boolean => kind === 'enum';
+
+/** Whether a column or swimlane field takes its values from the issues: dynamic kinds, and enums that opted in. */
+export const isDynamicField = (kind: FieldKind | 'other' | undefined, options: DynamicOptions | undefined): boolean =>
+  isDynamicKind(kind) || (canBeDynamic(kind) && Boolean(options?.asDynamic));
+
 const validateColumns = (config: BoardConfig): ValidationIssue[] => {
-  if (isDynamicKind(config.columnField.kind)) {
+  if (isDynamicField(config.columnField.kind, config.columnOptions)) {
     const max = config.columnOptions.maxColumns;
     return max >= 1 && max <= BOARD_LIMITS.dynamicColumns
       ? []

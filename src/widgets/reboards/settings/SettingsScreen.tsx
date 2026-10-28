@@ -9,7 +9,7 @@ import duplicateIcon from '@jetbrains/icons/duplicate';
 import {FieldSelect} from '@/common/components/FieldSelect';
 import {ProjectsSelect} from '@/common/components/ProjectsSelect';
 import {QueryEditor} from '@/common/components/QueryEditor';
-import {type BoardConfig, DYNAMIC_KINDS, type FieldKind, type FieldRef, isDynamicKind, validateBoardConfig} from '@/common/model/board-config';
+import {type BoardConfig, DYNAMIC_KINDS, type FieldKind, type FieldRef, canBeDynamic, isDynamicField, isDynamicKind, validateBoardConfig} from '@/common/model/board-config';
 import {type MergeChoice, type MergeGroup, mergeBoards, resolveMerge} from '@/common/model/board-merge';
 import {currentUserLogin} from '@/common/youtrack/host';
 import {composeQuery} from '@/common/youtrack/query';
@@ -27,7 +27,7 @@ import {
   defaultColumns
 } from '../model/fieldUniverse';
 import {ColumnsEditor} from './ColumnsEditor';
-import {DynamicOptionsEditor} from './DynamicOptionsEditor';
+import {AsDynamicToggle, DynamicOptionsEditor} from './DynamicOptionsEditor';
 import {ListEditor} from './ListEditor';
 import {MergeDialog, type PendingMerge} from './MergeDialog';
 import {OwnerField} from './OwnerField';
@@ -125,9 +125,25 @@ type ColumnValuesProps = {
   patch: (changes: Partial<BoardConfig>) => void;
 };
 
-/** Dynamic column fields take their columns from the issues; stable ones get configured columns. */
-const ColumnValues: React.FC<ColumnValuesProps> = ({draft, kind, universe, readOnly, patch}) =>
-  isDynamicKind(kind) ? (
+/** Switches an enum column field between configured columns and columns taken from the issues. */
+const setColumnsDynamic = async (draft: BoardConfig, universe: FieldUniverse, asDynamic: boolean, patch: ColumnValuesProps['patch']): Promise<void> => {
+  if (asDynamic && draft.columns.length > 0) {
+    try {
+      await confirm({text: 'This removes the configured columns. Continue?', confirmLabel: 'Remove columns', rejectLabel: 'Cancel'});
+    } catch {
+      return;
+    }
+  }
+  patch({
+    // Enums have a natural order, such as priorities.
+    columnOptions: {...draft.columnOptions, asDynamic, ...(asDynamic ? {sort: 'order' as const} : {})},
+    columns: asDynamic ? [] : defaultColumns(universe, draft.columnField.name),
+    ignoredValues: []
+  });
+};
+
+const ColumnValuesEditor: React.FC<ColumnValuesProps> = ({draft, kind, universe, readOnly, patch}) =>
+  isDynamicField(kind, draft.columnOptions) ? (
     <DynamicOptionsEditor kind={kind} options={draft.columnOptions} columns disabled={readOnly} onChange={columnOptions => patch({columnOptions})}/>
   ) : (
     <ColumnsEditor
@@ -139,6 +155,16 @@ const ColumnValues: React.FC<ColumnValuesProps> = ({draft, kind, universe, readO
       onChange={(columns, ignoredValues) => patch({columns, ignoredValues})}
     />
   );
+
+/** Dynamic column fields take their columns from the issues; stable ones get configured columns. */
+const ColumnValues: React.FC<ColumnValuesProps> = ({draft, kind, universe, readOnly, patch}) => (
+  <>
+    {canBeDynamic(kind) && (
+      <AsDynamicToggle checked={draft.columnOptions.asDynamic} columns disabled={readOnly} onChange={on => setColumnsDynamic(draft, universe, on, patch)}/>
+    )}
+    <ColumnValuesEditor draft={draft} kind={kind} universe={universe} readOnly={readOnly} patch={patch}/>
+  </>
+);
 
 /** Asks whether to store the draft as a new board after the edited one was deleted meanwhile. */
 const confirmRecreate = async (): Promise<boolean> => {
@@ -219,9 +245,15 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelet
       }
       // Dynamic fields take their columns from the issues; only stable fields get configured columns.
       const dynamic = isDynamicKind(reference.universe.byName.get(field.name)?.kind ?? field.kind);
-      patch({columnField: field, columns: dynamic ? [] : defaultColumns(reference.universe, field.name), ignoredValues: []});
+      // A new field starts as what its kind is: an enum's "treat as changing" choice does not carry over.
+      patch({
+        columnField: field,
+        columns: dynamic ? [] : defaultColumns(reference.universe, field.name),
+        ignoredValues: [],
+        columnOptions: {...draft.columnOptions, asDynamic: false}
+      });
     },
-    [draft.columns.length, draft.columnField.name, patch, reference.universe]
+    [draft.columns.length, draft.columnField.name, draft.columnOptions, patch, reference.universe]
   );
 
   const save = useCallback(async () => {

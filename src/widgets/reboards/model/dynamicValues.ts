@@ -17,6 +17,8 @@ export type DynamicValue = {
   date?: number;
   /** Issues carrying the value. */
   count: number;
+  /** Position in the field's own value order, when the field has one. */
+  ordinal?: number;
 };
 
 export type DynamicValues = {
@@ -65,7 +67,9 @@ export const sortDynamicValues = (values: DynamicValue[], sort: DynamicOptions['
     'alphabetical': byLabel,
     'alphabetical-desc': (a, b) => byLabel(b, a),
     'date': (a, b) => compareDates(a, b, 1) || byLabel(a, b),
-    'date-desc': (a, b) => compareDates(a, b, -1) || byLabel(a, b)
+    'date-desc': (a, b) => compareDates(a, b, -1) || byLabel(a, b),
+    // Values outside the field's order (removed from it meanwhile) go last.
+    'order': (a, b) => (a.ordinal ?? Number.MAX_SAFE_INTEGER) - (b.ordinal ?? Number.MAX_SAFE_INTEGER) || byLabel(a, b)
   };
   return [...values].sort(compare[sort]);
 };
@@ -80,7 +84,15 @@ const describeValue = (key: string, meta: UniverseValue | undefined, value: Fiel
   const color = meta?.color ?? own?.color;
   const avatarUrl = meta?.avatarUrl ?? own?.avatarUrl;
   const date = sortDate(meta, kind);
-  return {key, label: labelOf(key, meta, value), count: 1, ...(color ? {color} : {}), ...(avatarUrl ? {avatarUrl} : {}), ...(date === undefined ? {} : {date})};
+  return {
+    key,
+    label: labelOf(key, meta, value),
+    count: 1,
+    ...(color ? {color} : {}),
+    ...(avatarUrl ? {avatarUrl} : {}),
+    ...(date === undefined ? {} : {date}),
+    ...(meta ? {ordinal: meta.ordinal} : {})
+  };
 };
 
 /** The values of a dynamic field across the given issues, filtered and sorted per the options. */

@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {DndContext, type DragEndEvent, type DragOverEvent, type DragStartEvent, DragOverlay, PointerSensor, useSensor, useSensors} from '@dnd-kit/core';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
-import {type BoardConfig, type DynamicOptions, type FieldRef, isDynamicKind, isTwoLevel, swapSwimlanes} from '@/common/model/board-config';
+import {type BoardConfig, type DynamicOptions, type FieldRef, isDynamicField, isTwoLevel, swapSwimlanes} from '@/common/model/board-config';
 import {type UserPrefs, boardView, setBoardView, toggleStar} from '@/common/storage/prefs';
 import {buildFieldUpdate, buildMultiFieldUpdate} from '@/common/youtrack/fields';
 import {errorMessage} from '@/common/youtrack/rest';
@@ -762,7 +762,7 @@ export const BoardScreen: React.FC<Props> = ({
         }}
       />
       {error && <div className="board-error">{error}</div>}
-      {board.columns.length === 0 && !isDynamicKind(reference.universe.byName.get(board.columnField.name)?.kind ?? board.columnField.kind) && !error && (
+      {board.columns.length === 0 && !isDynamicField(reference.universe.byName.get(board.columnField.name)?.kind ?? board.columnField.kind, board.columnOptions) && !error && (
         <div className="board-empty">This board has no columns yet. Open the board settings to configure columns.</div>
       )}
       <BoardContext.Provider value={contextValue}>

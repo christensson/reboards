@@ -5,7 +5,7 @@ import {Header, Content} from '@jetbrains/ring-ui-built/components/island/island
 import {Input, Size} from '@jetbrains/ring-ui-built/components/input/input';
 import Panel from '@jetbrains/ring-ui-built/components/panel/panel';
 import {ValuePill} from '@/common/components/ValuePill';
-import {type DynamicOptions, type FieldRef, isDynamicKind} from '@/common/model/board-config';
+import {type DynamicOptions, type FieldRef, isDynamicField} from '@/common/model/board-config';
 import {choosableValues, noValueLabel} from '../model/dynamicValues';
 import type {FieldUniverse, UniverseValue} from '../model/fieldUniverse';
 import type {BoardIssue} from '../model/issue';
@@ -99,7 +99,7 @@ export const FieldValuePickerDialog: React.FC<Props> = ({show, field, universe, 
       return [];
     }
     const resolved = universe.byName.get(field.name);
-    return options && isDynamicKind(resolved?.kind ?? field.kind)
+    return options && isDynamicField(resolved?.kind ?? field.kind, options)
       ? choosableValues(field.name, resolved, issues, options)
       : stableChoices(field, universe, issues);
   }, [field, universe, issues, options]);

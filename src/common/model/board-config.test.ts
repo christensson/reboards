@@ -60,6 +60,13 @@ describe('validateBoardConfig', () => {
     expect(validateBoardConfig(valid())).toEqual([]);
   });
 
+  it('needs no configured columns for an enum treated as a changing field', () => {
+    const enumBoard = {...valid(), columnField: {name: 'Priority', kind: 'enum' as const}, columns: []};
+    expect(validateBoardConfig(enumBoard).map(i => i.message)).toEqual(['Add at least one column']);
+    expect(validateBoardConfig({...enumBoard, columnOptions: {...defaultDynamicOptions(), asDynamic: true}})).toEqual([]);
+    expect(normalizeBoardConfig({columnOptions: {asDynamic: true, sort: 'order'}}).columnOptions).toMatchObject({asDynamic: true, sort: 'order'});
+  });
+
   it('reports missing name, projects and columns', () => {
     const fields = validateBoardConfig({...valid(), name: ' ', projects: [], columns: []}).map(i => i.field);
     expect(fields).toEqual(['name', 'projects', 'columns']);
@@ -139,7 +146,7 @@ describe('dynamic column and swimlane fields', () => {
 
   it('fills dynamic defaults for stored boards without them', () => {
     const config = normalizeBoardConfig({row: {field: {name: 'Fix versions', kind: 'version'}}});
-    expect(config.columnOptions).toEqual({sort: 'alphabetical', showReleased: true, showArchived: false, maxColumns: 5});
+    expect(config.columnOptions).toEqual({sort: 'alphabetical', asDynamic: false, showReleased: true, showArchived: false, maxColumns: 5});
     expect(config.row.dynamic.showArchived).toBe(false);
     expect(normalizeBoardConfig({columnField: {name: 'Fixed in build', kind: 'build'}}).columnField.kind).toBe('build');
   });

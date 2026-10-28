@@ -1,4 +1,4 @@
-import {type BoardConfig, type RowConfig, UNCATEGORIZED_ROW_KEY, columnLabel, isDynamicKind, isTwoLevel} from '@/common/model/board-config';
+import {type BoardConfig, type RowConfig, UNCATEGORIZED_ROW_KEY, columnLabel, isDynamicField, isTwoLevel} from '@/common/model/board-config';
 import type {YtColor} from '@/common/youtrack/types';
 import {dynamicValues, noValueLabel, shownKeys} from './dynamicValues';
 import type {FieldUniverse} from './fieldUniverse';
@@ -209,7 +209,7 @@ const compareReadable = (a: string, b: string): number => a.localeCompare(b, und
 type RowMeta = {key: string; label: string; ordinal?: number; color?: YtColor; avatarUrl?: string};
 
 const isDynamicRow = (rowConfig: RowConfig | null, universe: FieldUniverse): boolean =>
-  Boolean(rowConfig?.field && isDynamicKind(universe.byName.get(rowConfig.field.name)?.kind ?? rowConfig.field.kind));
+  Boolean(rowConfig?.field && isDynamicField(universe.byName.get(rowConfig.field.name)?.kind ?? rowConfig.field.kind, rowConfig.dynamic));
 
 /**
  * Value keys of a swimlane field for an issue: several for a multi-value dynamic field; Uncategorized
@@ -351,7 +351,7 @@ const dynamicColumns = (config: BoardConfig, universe: FieldUniverse, issues: Bo
 };
 
 const planColumns = (config: BoardConfig, universe: FieldUniverse, issues: BoardIssue[], visibleColumnIds?: string[]): ColumnPlan =>
-  isDynamicKind(universe.byName.get(config.columnField.name)?.kind ?? config.columnField.kind)
+  isDynamicField(universe.byName.get(config.columnField.name)?.kind ?? config.columnField.kind, config.columnOptions)
     ? dynamicColumns(config, universe, issues, visibleColumnIds)
     : configuredColumns(config);
 
