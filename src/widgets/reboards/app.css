@@ -63,6 +63,26 @@ body {
   gap: var(--ring-unit);
 }
 
+/* The closed (inline) sprint selector: the name, then the dates small and secondary. */
+.sprint-button-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--ring-unit);
+  max-width: 100%;
+}
+
+.sprint-button-label__name {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.sprint-button-label__dates {
+  flex: none;
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+}
+
 .toolbar__group_search {
   flex: 1 1 240px;
   min-width: 200px;

@@ -1,6 +1,6 @@
 import type {HostAPI} from '../../../@types/globals';
 import type {IssueFieldUpdate} from './fields';
-import type {YtIssue, YtIssueLinkType, YtProject, YtProjectCustomField, YtSearchAssist, YtUser} from './types';
+import type {YtGeneralProfile, YtIssue, YtIssueLinkType, YtProject, YtProjectCustomField, YtSearchAssist, YtUser} from './types';
 
 export const ISSUE_FIELDS = [
   'id',
@@ -47,6 +47,14 @@ export const createYouTrackClient = (host: HostAPI) => {
     searchUsers: async (query: string): Promise<YtUser[]> => {
       const users = await get<YtUser[]>('users', {query, fields: 'id,login,fullName,avatarUrl,banned', $top: USERS_TOP});
       return users.filter(user => !user.banned);
+    },
+
+    /** Date pattern and locale from the current user's profile. */
+    getMyGeneralProfile: async (): Promise<YtGeneralProfile> => {
+      const me = await get<{profiles?: {general?: YtGeneralProfile}}>('users/me', {
+        fields: 'profiles(general(dateFieldFormat(datePattern),locale(locale)))'
+      });
+      return me.profiles?.general ?? {};
     },
 
     getLinkTypes: (): Promise<YtIssueLinkType[]> => get<YtIssueLinkType[]>('issueLinkTypes', {fields: LINK_TYPE_FIELDS}),

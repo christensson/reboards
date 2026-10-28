@@ -11,6 +11,8 @@ export const quoteToken = (token: string): string => (/^[\w.-]+$/u.test(token) ?
 /**
  * Composes the effective board query:
  * `project: {A}, {B} and (<user query>) and <SprintField>: {<sprint>}`.
+ * With a sprint field but no sprint, the board shows unscheduled issues:
+ * `has: -<SprintField>` matches issues where the field is empty.
  */
 export const composeQuery = ({projects, query, sprintField, sprint}: ComposeQueryInput): string => {
   const parts: string[] = [];
@@ -21,8 +23,8 @@ export const composeQuery = ({projects, query, sprintField, sprint}: ComposeQuer
   if (trimmed) {
     parts.push(parts.length > 0 ? `(${trimmed})` : trimmed);
   }
-  if (sprintField && sprint) {
-    parts.push(`${quoteToken(sprintField)}: ${quoteToken(sprint)}`);
+  if (sprintField) {
+    parts.push(sprint ? `${quoteToken(sprintField)}: ${quoteToken(sprint)}` : `has: -${quoteToken(sprintField)}`);
   }
   return parts.join(' and ');
 };

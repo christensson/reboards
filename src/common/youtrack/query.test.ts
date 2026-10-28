@@ -25,7 +25,12 @@ describe('composeQuery', () => {
       .toBe('project: SP and (#Unresolved) and Sprints: {Sprint 1}');
   });
 
-  it('omits the sprint clause when no sprint is selected', () => {
-    expect(composeQuery({projects: [], query: 'Type: Bug', sprintField: 'Sprints', sprint: null})).toBe('Type: Bug');
+  it('shows unscheduled issues when no sprint is selected', () => {
+    expect(composeQuery({projects: [], query: 'Type: Bug', sprintField: 'Sprints', sprint: null})).toBe('Type: Bug and has: -Sprints');
+    expect(composeQuery({projects: ['SP'], query: '', sprintField: 'Fix versions', sprint: ''})).toBe('project: SP and has: -{Fix versions}');
+  });
+
+  it('omits the sprint clause without a sprint field', () => {
+    expect(composeQuery({projects: ['SP'], query: '', sprintField: null, sprint: null})).toBe('project: SP');
   });
 });

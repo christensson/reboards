@@ -15,7 +15,7 @@ export type BoardView = {
 
 export type UserPrefs = {
   lastBoardId?: string;
-  /** Explicitly chosen sprint per board id; '' means "All sprints". */
+  /** Explicitly chosen sprint per board id; '' means "Unscheduled" (issues without a sprint). */
   lastSprintByBoard: Record<string, string>;
   /** Last used view settings, the default for boards without a stored view. */
   cardSize: CardSize;

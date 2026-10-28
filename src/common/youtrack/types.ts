@@ -16,6 +16,12 @@ export type YtFieldType = {
   valueType: string;
 };
 
+/** The parts of the user's general profile that decide how dates are shown. */
+export type YtGeneralProfile = {
+  dateFieldFormat?: {datePattern?: string};
+  locale?: {locale?: string};
+};
+
 export type YtBundleValue = {
   id: string;
   name: string;

@@ -20,8 +20,12 @@ import {type BoardConfig} from '@/common/model/board-config';
 import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
 import {orderBoards} from '../model/boardOrder';
 import type {FieldUniverse} from '../model/fieldUniverse';
+import type {UniverseValue} from '../model/fieldUniverse';
+import {currentSprints, sortSprintsByDate, sprintDateRange} from '../model/sprints';
+import {type DateFormatter, useDateFormat} from '../data/useDateFormat';
 
-export const ALL_SPRINTS = '';
+/** Selector key for issues without a sprint; it is also what an unset sprint (null) shows. */
+export const UNSCHEDULED = '';
 
 type FindMenuProps = {
   /** Card fields that may be empty: each offers a "No <field>" highlight. */
@@ -166,6 +170,61 @@ const StarToggle: React.FC<{starred: boolean; onToggle: () => void}> = ({starred
   </span>
 );
 
+const separator = (key: string, description: string): SelectItem => ({key, description, rgItemType: List.ListProps.Type.SEPARATOR});
+
+/**
+ * Ring UI drops a separator that would open the list, which hides the label of
+ * the first section. This filter keeps every separator while nothing is typed
+ * and hides them all while filtering; items match on their label.
+ */
+const sectionedFilter = {
+  preserveSeparators: true,
+  fn: (item: SelectItem, query: string): boolean => {
+    if (item.rgItemType === List.ListProps.Type.SEPARATOR) {
+      return query === '';
+    }
+    return typeof item.label !== 'string' || item.label.toLowerCase().includes(query);
+  }
+};
+
+/** Prefix of the keys of the copies of the current sprints listed at the top. */
+const CURRENT_SPRINT_PREFIX = '__current:';
+
+const sprintKeyOf = (itemKey: string): string =>
+  itemKey.startsWith(CURRENT_SPRINT_PREFIX) ? itemKey.slice(CURRENT_SPRINT_PREFIX.length) : itemKey;
+
+const SprintButtonLabel: React.FC<{label: string; range: string}> = ({label, range}) => (
+  <span className="sprint-button-label">
+    <span className="sprint-button-label__name">{label}</span>
+    <span className="sprint-button-label__dates">{range}</span>
+  </span>
+);
+
+/**
+ * Sprint selector items, newest first with their dates. Sprints running today
+ * come first under a "Current sprint" label and appear again in the full list.
+ */
+const buildSprintItems = (values: UniverseValue[], formatDate: DateFormatter, now: number): SelectItem[] => {
+  const item = (v: UniverseValue, keyPrefix = ''): SelectItem => {
+    const range = sprintDateRange(v, formatDate);
+    // The closed selector shows `selectedLabel`. Ring UI types it as a string but renders any node,
+    // which lets the chosen sprint keep its dates there, small and after the name.
+    const selectedLabel = range ? (<SprintButtonLabel label={v.label} range={range}/>) as unknown as string : v.label;
+    return {key: keyPrefix + v.key, label: v.label, description: range, selectedLabel};
+  };
+  const all: SelectItem[] = [{key: UNSCHEDULED, label: 'Unscheduled', description: 'No sprint set'}, ...sortSprintsByDate(values).map(v => item(v))];
+  const current = currentSprints(values, now);
+  if (current.length === 0) {
+    return all;
+  }
+  return [
+    separator('__current', current.length === 1 ? 'Current sprint' : 'Current sprints'),
+    ...current.map(v => item(v, CURRENT_SPRINT_PREFIX)),
+    separator('__sprints', 'All sprints'),
+    ...all
+  ];
+};
+
 /** Board selector items: starred boards first under a "Starred" separator, then the others. */
 const buildBoardItems = (boards: BoardConfig[], starredIds: string[], onToggleStar: (boardId: string) => void): SelectItem[] => {
   const {starred, others} = orderBoards(boards, starredIds);
@@ -178,7 +237,6 @@ const buildBoardItems = (boards: BoardConfig[], starredIds: string[], onToggleSt
   if (starred.length === 0) {
     return others.map(b => item(b, false));
   }
-  const separator = (key: string, description: string): SelectItem => ({key, description, rgItemType: List.ListProps.Type.SEPARATOR});
   return [
     separator('__starred', 'Starred'),
     ...starred.map(b => item(b, true)),
@@ -218,11 +276,12 @@ export const Toolbar: React.FC<Props> = ({
     () => board.cardFields.filter(name => universe.byName.get(name)?.canBeEmpty !== false),
     [board.cardFields, universe]
   );
+  const formatDate = useDateFormat();
   const sprintItems = useMemo<SelectItem[]>(() => {
     const fieldName = board.sprints.field?.name;
     const values = fieldName ? (universe.byName.get(fieldName)?.values ?? []) : [];
-    return [{key: ALL_SPRINTS, label: 'All sprints'}, ...values.map(v => ({key: v.key, label: v.label}))];
-  }, [board.sprints.field, universe]);
+    return buildSprintItems(values, formatDate, Date.now());
+  }, [board.sprints.field, universe, formatDate]);
 
   return (
     <div className="toolbar">
@@ -230,7 +289,7 @@ export const Toolbar: React.FC<Props> = ({
         <Select
           type={Select.Type.BUTTON}
           label="Select board"
-          filter
+          filter={sectionedFilter}
           data={boardItems}
           selected={boardItems.find(item => item.key === board.id) ?? null}
           onChange={(item: SelectItem | null) => item && onSelectBoard(String(item.key))}
@@ -247,12 +306,12 @@ export const Toolbar: React.FC<Props> = ({
       {board.sprints.enabled && (
         <div className="toolbar__group">
           <Select
-            type={Select.Type.BUTTON}
+            type={Select.Type.INLINE}
             label="Sprint"
-            filter
+            filter={sectionedFilter}
             data={sprintItems}
-            selected={sprintItems.find(item => item.key === (sprint ?? ALL_SPRINTS)) ?? sprintItems[0]}
-            onChange={(item: SelectItem | null) => onSelectSprint(item && item.key !== ALL_SPRINTS ? String(item.key) : null)}
+            selected={sprintItems.find(item => item.key === (sprint ?? UNSCHEDULED)) ?? sprintItems[0]}
+            onChange={(item: SelectItem | null) => onSelectSprint(item && item.key !== UNSCHEDULED ? sprintKeyOf(String(item.key)) : null)}
           />
         </div>
       )}
