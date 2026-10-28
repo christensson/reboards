@@ -21,7 +21,7 @@ export const resolveBaseUrl = (user: User): string | null => {
     const first = issues.first();
     return first ? baseUrlFromIssueUrl(first.url) : null;
   } catch (error) {
-    console.warn('[sprinter] Could not resolve the base URL', error);
+    console.warn('[reboards] Could not resolve the base URL', error);
     return null;
   }
 };

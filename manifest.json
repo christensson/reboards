@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/youtrack-app.json",
-  "name": "sprinter",
-  "title": "Sprinter",
-  "description": "Kanban and scrum sprint boards with subtask grouping and relation connectors",
+  "name": "reboards",
+  "title": "ReBoards",
+  "description": "Agile boards with relations, hierarchy and smarter swimlanes",
   "version": "0.1.0",
   "minYouTrackVersion": "2025.3.0",
   "vendor": {
@@ -13,12 +13,12 @@
   "iconDark": "icon-dark.svg",
   "widgets": [
     {
-      "key": "sprinter",
-      "name": "Sprinter",
+      "key": "reboards",
+      "name": "ReBoards",
       "description": "Agile boards with subtask grouping and relation connectors",
-      "indexPath": "sprinter/index.html",
+      "indexPath": "reboards/index.html",
       "extensionPoint": "MAIN_MENU_ITEM",
-      "iconPath": "sprinter/widget-icon.svg",
+      "iconPath": "reboards/widget-icon.svg",
       "permissions": ["READ_ISSUE"]
     }
   ]

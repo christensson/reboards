@@ -34,7 +34,7 @@ describe('resolveBaseUrl', () => {
   });
 
   it('falls back to the referrer page', () => {
-    expect(resolveBaseUrl('https://cdn.test/widget.html', 'https://h.test/youtrack/app/sprinter/boards/1?x=1', 'https://cdn.test'))
+    expect(resolveBaseUrl('https://cdn.test/widget.html', 'https://h.test/youtrack/app/reboards/boards/1?x=1', 'https://cdn.test'))
       .toBe('https://h.test/youtrack');
     expect(resolveBaseUrl('about:blank', 'https://h.test/issues', 'x')).toBe('https://h.test');
   });

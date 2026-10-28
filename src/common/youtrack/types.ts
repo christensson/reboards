@@ -1,4 +1,4 @@
-/** Minimal YouTrack REST DTOs used by Sprinter (shapes verified against YouTrack 2026.2). */
+/** Minimal YouTrack REST DTOs used by ReBoards (shapes verified against YouTrack 2026.2). */
 
 export type YtColor = {
   background: string;

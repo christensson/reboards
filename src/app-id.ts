@@ -1,1 +1,1 @@
-export const appId = 'sprinter';
+export const appId = 'reboards';

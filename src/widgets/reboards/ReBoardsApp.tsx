@@ -39,7 +39,7 @@ const useRoute = () => {
   return {route, ready, navigate};
 };
 
-export const SprinterApp: React.FC = () => {
+export const ReBoardsApp: React.FC = () => {
   const boardsState = useBoards();
   const {prefs, ready: prefsReady, update: updatePrefs} = usePrefs();
   const {route, ready: routeReady, navigate} = useRoute();
@@ -109,12 +109,12 @@ export const SprinterApp: React.FC = () => {
   );
 
   if (!ready) {
-    return <div className="sprinter-loading"><Loader message="Loading Sprinter…"/></div>;
+    return <div className="reboards-loading"><Loader message="Loading ReBoards…"/></div>;
   }
 
   if (boardsState.error) {
     return (
-      <div className="sprinter-empty">
+      <div className="reboards-empty">
         <p className="board-error">{`Could not load boards: ${boardsState.error}`}</p>
         <Button onClick={boardsState.reload}>Retry</Button>
       </div>
@@ -141,7 +141,7 @@ export const SprinterApp: React.FC = () => {
   if (route.kind === 'settings') {
     const board = boards.find(b => b.id === route.boardId);
     if (!board) {
-      return <div className="sprinter-empty"><p>Board not found.</p><Button onClick={() => navigate({kind: 'home'})}>Back</Button></div>;
+      return <div className="reboards-empty"><p>Board not found.</p><Button onClick={() => navigate({kind: 'home'})}>Back</Button></div>;
     }
     return settingsFor(board, false);
   }
@@ -150,7 +150,7 @@ export const SprinterApp: React.FC = () => {
     const board = boards.find(b => b.id === route.boardId);
     if (!board) {
       return (
-        <div className="sprinter-empty">
+        <div className="reboards-empty">
           <p>This board does not exist or is not visible to you.</p>
           <Button onClick={() => navigate({kind: 'home'})}>Go to my boards</Button>
         </div>
@@ -178,8 +178,8 @@ export const SprinterApp: React.FC = () => {
   }
 
   return (
-    <div className="sprinter-empty">
-      <h2>Welcome to Sprinter</h2>
+    <div className="reboards-empty">
+      <h2>Welcome to ReBoards</h2>
       <p>No boards yet. Create your first board to get started.</p>
       <Button primary icon={addIcon} onClick={() => navigate({kind: 'new'})}>Create board</Button>
     </div>

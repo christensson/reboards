@@ -21,7 +21,7 @@ export const parseBoardsDocument = (raw: string | null | undefined): BoardsDocum
     const boards = Array.isArray((parsed as {boards?: unknown}).boards) ? (parsed as {boards: unknown[]}).boards : [];
     return {version: 1, boards: boards.map(b => normalizeBoardConfig(b)).filter(b => b.id)};
   } catch (error) {
-    console.error('[sprinter] Could not parse stored boards, starting empty', error);
+    console.error('[reboards] Could not parse stored boards, starting empty', error);
     return {version: 1, boards: []};
   }
 };

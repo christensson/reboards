@@ -5,7 +5,7 @@
       "properties": {
         "boards": {
           "type": "string",
-          "description": "JSON document holding all Sprinter board configurations"
+          "description": "JSON document holding all ReBoards board configurations"
         }
       }
     }

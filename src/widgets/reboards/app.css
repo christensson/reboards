@@ -13,8 +13,8 @@ body {
   line-height: var(--ring-line-height);
 }
 
-.sprinter-loading,
-.sprinter-empty {
+.reboards-loading,
+.reboards-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -553,10 +553,10 @@ body {
   outline: 2px solid var(--ring-main-color);
   outline-offset: 1px;
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--ring-main-color) 70%, transparent));
-  animation: sprinter-glow 1.4s ease-in-out infinite alternate;
+  animation: reboards-glow 1.4s ease-in-out infinite alternate;
 }
 
-@keyframes sprinter-glow {
+@keyframes reboards-glow {
   from {
     filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ring-main-color) 55%, transparent));
   }

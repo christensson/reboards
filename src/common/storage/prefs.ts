@@ -36,7 +36,7 @@ export type UserPrefs = {
   collapsedGroups: Record<string, string[]>;
 };
 
-export const PREFS_KEY = 'sprinter.prefs.v1';
+export const PREFS_KEY = 'reboards.prefs.v1';
 
 export const defaultPrefs = (): UserPrefs => ({
   lastSprintByBoard: {},
@@ -71,7 +71,7 @@ const writeRaw = async (host: HostAPI, value: string): Promise<void> => {
       window.localStorage.setItem(PREFS_KEY, value);
     }
   } catch (error) {
-    console.warn('[sprinter] Could not persist preferences', error);
+    console.warn('[reboards] Could not persist preferences', error);
   }
 };
 

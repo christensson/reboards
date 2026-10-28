@@ -1,7 +1,7 @@
-# Sprinter
+# ReBoards
 
 Kanban and scrum sprint boards for YouTrack with first-class grouping of subtasks and relation connectors.
-Sprinter is a YouTrack app (Enhanced DX, TypeScript) that adds a **Sprinter** item to the main menu.
+ReBoards is a YouTrack app (Enhanced DX, TypeScript) that adds a **ReBoards** item to the main menu.
 
 ## What it does
 
@@ -37,9 +37,9 @@ npm run watch                   # rebuild and upload on change (refresh the YouT
 Useful checks after an upload:
 
 ```bash
-npx youtrack-app app info --app sprinter
-npx youtrack-app app requirement-errors --app sprinter
-npx youtrack-app app logs --app sprinter
+npx youtrack-app app info --app reboards
+npx youtrack-app app requirement-errors --app reboards
+npx youtrack-app app logs --app reboards
 ```
 
 ## Project layout
@@ -55,7 +55,7 @@ src/
     storage/           per-user preferences (host.storage with a localStorage fallback)
     components/        reusable UI: QueryEditor (Ring UI QueryAssist + search/assist), SortableValueList,
                        FieldSelect, ProjectsSelect, ValuePill
-  widgets/sprinter/
+  widgets/reboards/
     model/             pure board logic: issue normalization, field universe, layout, grouping, sorting,
                        connectors, search, drag/drop planning (all unit-tested with vitest)
     data/              hooks that load boards, reference data and issues

@@ -1,7 +1,7 @@
 import React, {useMemo} from 'react';
 import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/select/select';
 import type {FieldKind, FieldRef} from '@/common/model/board-config';
-import {type FieldUniverse, type ResolvedField, fieldsMatching, toFieldRef} from '@/widgets/sprinter/model/fieldUniverse';
+import {type FieldUniverse, type ResolvedField, fieldsMatching, toFieldRef} from '@/widgets/reboards/model/fieldUniverse';
 
 type Props = {
   universe: FieldUniverse;
