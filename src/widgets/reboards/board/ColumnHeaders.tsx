@@ -16,7 +16,7 @@ type Props = {
   twoLevel: boolean;
   swappedSwimlanes: boolean;
   onToggleSwappedSwimlanes: () => void;
-  /** Dynamic column fields: every column that could be shown, for the picker in the last header. */
+  /** Dynamic column fields: every column that could be shown, for the picker in the "Assign <field>…" header. */
   availableColumns: AvailableColumn[];
   onPickColumns: (columnIds: string[] | null) => void;
 };
@@ -34,9 +34,6 @@ const ColumnHeadersComponent: React.FC<Props> = ({
   onPickColumns
 }) => {
   const field = universe.byName.get(columnFieldName);
-  const hasAssign = columns.some(c => c.assign);
-  // The picker sits in the last value column, left of the "Assign <field>…" column.
-  const lastValueIndex = columns.length - 1 - (hasAssign ? 1 : 0);
   return (
     <div className="board-header" style={{gridTemplateColumns: headerTemplate(columns, collapsedColumns, twoLevel)}}>
       {twoLevel && (
@@ -49,17 +46,21 @@ const ColumnHeadersComponent: React.FC<Props> = ({
           />
         </div>
       )}
-      {columns.map((column, index) => {
+      {columns.map(column => {
         if (column.assign) {
-          return <div key={column.id} className="board-header__column board-header__column_assign" title={`${column.label} Drop an issue in this column to choose the value`}/>;
+          // The column picker lives in the rightmost "Assign <field>…" column, which is never collapsed.
+          return (
+            <div key={column.id} className="board-header__column board-header__column_assign">
+              <ColumnPicker columns={availableColumns} onChange={onPickColumns}/>
+            </div>
+          );
         }
         const isCollapsed = collapsedColumns.has(column.id);
-        const withPicker = availableColumns.length > 0 && index === lastValueIndex;
         return (
           <button
             key={column.id}
             type="button"
-            className={`board-header__column${isCollapsed ? ' board-header__column_collapsed' : ''}${withPicker ? ' board-header__column_with-picker' : ''}`}
+            className={`board-header__column${isCollapsed ? ' board-header__column_collapsed' : ''}`}
             title={isCollapsed ? `Expand column ${column.label}` : `Collapse column ${column.label}`}
             onClick={() => onToggleColumn(column.id)}
           >
@@ -76,7 +77,6 @@ const ColumnHeadersComponent: React.FC<Props> = ({
           </button>
         );
       })}
-      {availableColumns.length > 0 && <ColumnPicker columns={availableColumns} onChange={onPickColumns} beforeAssign={hasAssign}/>}
     </div>
   );
 };
