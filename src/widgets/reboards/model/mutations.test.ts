@@ -121,6 +121,11 @@ describe('nextKeys', () => {
     expect(nextKeys([], {field, valueKey: 'v1', replaceKey: null}, true)).toEqual(['v1']);
   });
 
+  it('adds and removes the values checked and unchecked in the value selector, keeping the others', () => {
+    expect(nextKeys(['v1', 'v2'], {field, valueKey: 'v3', delta: {add: ['v3'], remove: ['v1']}, replaceKey: 'v1'}, true)).toEqual(['v2', 'v3']);
+    expect(nextKeys(['v1', 'v9'], {field, valueKey: null, delta: {add: [], remove: ['v1']}}, true)).toEqual(['v9']);
+  });
+
   it('sets single-value fields outright', () => {
     expect(nextKeys(['ann'], {field: {name: 'Assignee', kind: 'user'}, valueKey: 'bob', replaceKey: 'ann'}, false)).toEqual(['bob']);
     expect(nextKeys(['ann'], {field: {name: 'Assignee', kind: 'user'}, valueKey: null}, false)).toEqual([]);

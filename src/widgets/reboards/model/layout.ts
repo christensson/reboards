@@ -48,17 +48,18 @@ export const ASSIGN_COLUMN_ID = '__assign__';
 export const assignColumnLabel = (fieldName: string): string => `Assign ${fieldName}…`;
 
 /**
- * Column ids to show so that the column of a value just assigned to the dynamic column field
- * is visible: the shown columns plus that one. Null when it is shown already or the columns
- * are configured ones.
+ * Column ids to show so that the columns of values just assigned to the dynamic column field
+ * are visible: the shown columns plus those. No values means the "No <field>" column. Null
+ * when they are shown already or the columns are configured ones.
  */
-export const revealColumnIds = (columns: LayoutColumn[], valueKey: string | null): string[] | null => {
+export const revealColumnIds = (columns: LayoutColumn[], valueKeys: string[]): string[] | null => {
   if (!columns.some(c => c.assign)) {
     return null;
   }
-  const id = valueKey === null ? NO_VALUE_COLUMN_ID : dynamicColumnId(valueKey);
   const shown = columns.filter(c => !c.assign).map(c => c.id);
-  return shown.includes(id) ? null : [...shown, id];
+  const wanted = valueKeys.length > 0 ? valueKeys.map(dynamicColumnId) : [NO_VALUE_COLUMN_ID];
+  const missing = wanted.filter(id => !shown.includes(id));
+  return missing.length > 0 ? [...shown, ...missing] : null;
 };
 
 /**

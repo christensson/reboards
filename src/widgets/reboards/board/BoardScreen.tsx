@@ -95,6 +95,12 @@ const pickedColumn = (pending: PendingMove | null, columnById: Map<string, Board
 const pendingChoice = (pending: PendingMove | null): ValueChoice | null =>
   pending && !pending.pickColumnId ? (pending.choices[0] ?? null) : null;
 
+/** Values all the moved issues have, checked to start with when picking several values. */
+const commonKeys = (issues: BoardIssue[], fieldName: string): string[] => {
+  const [first, ...others] = issues.map(issue => issue.fields[fieldName]?.keys ?? []);
+  return (first ?? []).filter(key => others.every(keys => keys.includes(key)));
+};
+
 /** Filter and sort of the dynamic field picked on drop: the column field's or a swimlane level's. */
 const choiceOptions = (board: BoardConfig, field: FieldRef | null): DynamicOptions | undefined => {
   if (!field) {
@@ -134,7 +140,7 @@ type PendingMoveDialogsProps = {
   universe: FieldUniverse;
   issues: BoardIssue[];
   onPickValue: (value: string) => void;
-  onPickChoice: (valueKey: string | null) => void;
+  onPickChoice: (picked: string | null | string[]) => void;
   onCancel: () => void;
 };
 
@@ -159,6 +165,7 @@ const PendingMoveDialogs: React.FC<PendingMoveDialogsProps> = ({pending, board, 
         issues={issues}
         options={choiceOptions(board, choice?.field ?? null)}
         subjectLabel={pending?.label ?? ''}
+        currentKeys={choice ? commonKeys(pending?.issues ?? [], choice.field.name) : []}
         onPick={onPickChoice}
         onCancel={onCancel}
       />
@@ -555,7 +562,9 @@ export const BoardScreen: React.FC<Props> = ({
       pending.issues.forEach(issue => applyMove(issue, pending.changes));
       // A value assigned through "Assign <field>…" may have a column that is not shown: show it.
       const columnChange = pending.changes.find(change => change.field.name === board.columnField.name);
-      const reveal = columnChange ? revealColumnIds(layout.columns, columnChange.valueKey) : null;
+      // Only added values may need a column; unchecking alone never does.
+      const assigned = columnChange?.delta?.add ?? (columnChange?.valueKey ? [columnChange.valueKey] : []);
+      const reveal = columnChange && !(columnChange.delta && assigned.length === 0) ? revealColumnIds(layout.columns, assigned) : null;
       if (reveal) {
         updatePrefs(prev => ({visibleColumns: {...prev.visibleColumns, [board.id]: reveal}}));
       }
@@ -630,13 +639,22 @@ export const BoardScreen: React.FC<Props> = ({
     [pendingMove, board.columnField, settlePending]
   );
 
+  /** A value picked for a single-value field, or the values checked for a multi-value one. */
   const onPickChoice = useCallback(
-    (valueKey: string | null) => {
+    (picked: string | null | string[]) => {
       const [choice, ...rest] = pendingMove?.choices ?? [];
       if (!pendingMove || !choice) {
         return;
       }
-      const change: FieldChange = {field: choice.field, valueKey, ...(choice.replaceKey === undefined ? {} : {replaceKey: choice.replaceKey})};
+      // The dialog started with the values all moved issues share; apply what changed from those.
+      const before = commonKeys(pendingMove.issues, choice.field.name);
+      const change: FieldChange = Array.isArray(picked)
+        ? {
+          field: choice.field,
+          valueKey: picked[0] ?? null,
+          delta: {add: picked.filter(key => !before.includes(key)), remove: before.filter(key => !picked.includes(key))}
+        }
+        : {field: choice.field, valueKey: picked, ...(choice.replaceKey === undefined ? {} : {replaceKey: choice.replaceKey})};
       settlePending({...pendingMove, changes: [...pendingMove.changes, change], choices: rest});
     },
     [pendingMove, settlePending]

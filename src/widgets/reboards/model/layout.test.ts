@@ -329,12 +329,13 @@ describe('revealColumnIds', () => {
   ];
 
   it('adds the column of an assigned value that is not shown', () => {
-    expect(revealColumnIds(columns, 'bob')).toEqual(['__none__', 'v:ann', 'v:bob']);
-    expect(revealColumnIds(columns.slice(1), null)).toEqual(['v:ann', '__none__']);
+    expect(revealColumnIds(columns, ['bob'])).toEqual(['__none__', 'v:ann', 'v:bob']);
+    expect(revealColumnIds(columns, ['ann', 'bob', 'cid'])).toEqual(['__none__', 'v:ann', 'v:bob', 'v:cid']);
+    expect(revealColumnIds(columns.slice(1), [])).toEqual(['v:ann', '__none__']);
   });
 
   it('leaves shown and configured columns alone', () => {
-    expect(revealColumnIds(columns, 'ann')).toBeNull();
-    expect(revealColumnIds([{id: 'open', label: 'Open', values: ['Open'], index: 0, count: 0}], 'Done')).toBeNull();
+    expect(revealColumnIds(columns, ['ann'])).toBeNull();
+    expect(revealColumnIds([{id: 'open', label: 'Open', values: ['Open'], index: 0, count: 0}], ['Done'])).toBeNull();
   });
 });

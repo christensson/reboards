@@ -4,6 +4,7 @@ import Button from '@jetbrains/ring-ui-built/components/button/button';
 import {Header, Content} from '@jetbrains/ring-ui-built/components/island/island';
 import {Input, Size} from '@jetbrains/ring-ui-built/components/input/input';
 import Panel from '@jetbrains/ring-ui-built/components/panel/panel';
+import Checkbox from '@jetbrains/ring-ui-built/components/checkbox/checkbox';
 import {ValuePill} from '@/common/components/ValuePill';
 import {type DynamicOptions, type FieldRef, isDynamicField} from '@/common/model/board-config';
 import {choosableValues, noValueLabel} from '../model/dynamicValues';
@@ -20,7 +21,10 @@ type Props = {
   /** Filter and sort of a dynamic field's values (user, version, build). */
   options?: DynamicOptions;
   subjectLabel: string;
-  onPick: (valueKey: string | null) => void;
+  /** The values the moved issues have now: checked to start with for a multi-value field. */
+  currentKeys?: string[];
+  /** A single-value field gives the picked key (null clears it); a multi-value one all checked keys. */
+  onPick: (picked: string | null | string[]) => void;
   onCancel: () => void;
 };
 
@@ -51,10 +55,12 @@ type ItemProps = {
   match: boolean;
   dimmed: boolean;
   selected: boolean;
+  /** Multi-value fields: whether the value is checked; undefined for single-value fields. */
+  checked?: boolean;
   itemRef: (element: HTMLButtonElement | null) => void;
 };
 
-const ChoiceItem: React.FC<ItemProps> = ({choice, onPick, empty, match, dimmed, selected, itemRef}) => {
+const ChoiceItem: React.FC<ItemProps> = ({choice, onPick, empty, match, dimmed, selected, checked, itemRef}) => {
   const classes = [
     'value-picker__item',
     empty ? 'value-picker__item_empty' : '',
@@ -64,7 +70,19 @@ const ChoiceItem: React.FC<ItemProps> = ({choice, onPick, empty, match, dimmed, 
   ].filter(Boolean).join(' ');
   return (
     <li>
-      <button ref={itemRef} type="button" tabIndex={-1} className={classes} onClick={onPick} aria-current={selected}>
+      <button
+        ref={itemRef}
+        type="button"
+        tabIndex={-1}
+        className={classes}
+        // Keep focus in the search so Enter and Ctrl+Enter keep working after a click.
+        onMouseDown={event => event.preventDefault()}
+        onClick={onPick}
+        aria-current={selected}
+        aria-pressed={checked}
+      >
+        {/* Display only: the whole row toggles, so the box itself takes no clicks. */}
+        {checked !== undefined && <Checkbox className="value-picker__checkbox" checked={checked} readOnly tabIndex={-1} aria-hidden/>}
         {choice.avatarUrl && <img className="value-picker__avatar" src={choice.avatarUrl} alt=""/>}
         {choice.color ? <ValuePill label={choice.label} color={choice.color}/> : <span className="value-picker__label">{choice.label}</span>}
       </button>
@@ -84,17 +102,10 @@ const stepIn = (order: number[], current: number | null, step: number): number |
   return order[(at + step + order.length) % order.length];
 };
 
-/**
- * Asks which value to set after a drop on an "Assign <field>…" column or row. Typing
- * highlights the values that contain the text and selects the first; arrow keys move the
- * selection (between matches while searching) and Enter sets the selected value.
- */
-export const FieldValuePickerDialog: React.FC<Props> = ({show, field, universe, issues, options, subjectLabel, onPick, onCancel}) => {
-  const [filter, setFilter] = useState('');
-  const [selected, setSelected] = useState<number | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const values = useMemo<Choice[]>(() => {
+const sameKeys = (a: string[], b: string[]): boolean => a.length === b.length && a.every(key => b.includes(key));
+
+const useChoices = (field: FieldRef | null, universe: FieldUniverse, issues: BoardIssue[], options: DynamicOptions | undefined): Choice[] =>
+  useMemo<Choice[]>(() => {
     if (!field) {
       return [];
     }
@@ -103,15 +114,9 @@ export const FieldValuePickerDialog: React.FC<Props> = ({show, field, universe, 
       ? choosableValues(field.name, resolved, issues, options)
       : stableChoices(field, universe, issues);
   }, [field, universe, issues, options]);
-  // The last item clears the field, such as "No Assignee".
-  const items = useMemo<Choice[]>(() => [...values, {key: '', label: noValueLabel(field?.name ?? 'value')}], [values, field]);
-  const emptyIndex = items.length - 1;
-  const term = filter.trim().toLowerCase();
-  const matchIndexes = useMemo(
-    () => (term ? items.map((item, index) => (matches(term, item.label, item.key) ? index : -1)).filter(index => index >= 0) : []),
-    [items, term]
-  );
 
+/** Focuses the search once the dialog is open and the drop is over. */
+const useSearchFocus = (show: boolean, inputRef: React.RefObject<HTMLInputElement | null>): void => {
   useEffect(() => {
     if (!show) {
       return undefined;
@@ -125,8 +130,46 @@ export const FieldValuePickerDialog: React.FC<Props> = ({show, field, universe, 
       input?.setSelectionRange(input.value.length, input.value.length);
     }, FOCUS_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [show]);
+  }, [show, inputRef]);
+};
 
+/**
+ * Asks which value to set after a drop on an "Assign <field>…" column or row. Typing
+ * highlights the values that contain the text and selects the first; arrow keys move the
+ * selection (between matches while searching). For a single-value field a click or Enter sets
+ * the selected value, and so does Ctrl+Enter. A multi-value field gets checkboxes instead: a
+ * click or Enter toggles a value, and Ctrl+Enter or "Set" applies the checked values once
+ * something changed.
+ */
+export const FieldValuePickerDialog: React.FC<Props> = ({show, field, universe, issues, options, subjectLabel, currentKeys = [], onPick, onCancel}) => {
+  const [filter, setFilter] = useState('');
+  const [selected, setSelected] = useState<number | null>(null);
+  const [checked, setChecked] = useState<string[]>([]);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const multi = Boolean(field && universe.byName.get(field.name)?.multi);
+  const values = useChoices(field, universe, issues, options);
+  // Single-value fields end with an item that clears the field, such as "No Assignee";
+  // multi-value ones are cleared by unchecking everything.
+  const items = useMemo<Choice[]>(
+    () => (multi ? values : [...values, {key: '', label: noValueLabel(field?.name ?? 'value')}]),
+    [values, field, multi]
+  );
+  const emptyIndex = multi ? -1 : items.length - 1;
+  const term = filter.trim().toLowerCase();
+  const matchIndexes = useMemo(
+    () => (term ? items.map((item, index) => (matches(term, item.label, item.key) ? index : -1)).filter(index => index >= 0) : []),
+    [items, term]
+  );
+  const currentKey = currentKeys.join('\u0000');
+  useEffect(() => {
+    if (show) {
+      setChecked(currentKey ? currentKey.split('\u0000') : []);
+    }
+  }, [show, currentKey]);
+  const changed = multi && !sameKeys(checked, currentKeys);
+
+  useSearchFocus(show, inputRef);
   useEffect(() => {
     if (selected !== null) {
       itemRefs.current[selected]?.scrollIntoView({block: 'nearest'});
@@ -137,7 +180,25 @@ export const FieldValuePickerDialog: React.FC<Props> = ({show, field, universe, 
     setFilter('');
     setSelected(null);
   };
+  const toggle = (index: number) => {
+    const key = items[index].key;
+    setSelected(index);
+    setChecked(prev => (prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]));
+  };
+  const commit = () => {
+    if (changed) {
+      reset();
+      // The field's value order, not the order the boxes were checked in; values not in the list
+      // (such as hidden archived versions) stay as they are.
+      const listed = values.map(v => v.key);
+      onPick([...listed.filter(key => checked.includes(key)), ...checked.filter(key => !listed.includes(key))]);
+    }
+  };
   const pick = (index: number) => {
+    if (multi) {
+      toggle(index);
+      return;
+    }
     reset();
     onPick(index === emptyIndex ? null : items[index].key);
   };
@@ -158,7 +219,10 @@ export const FieldValuePickerDialog: React.FC<Props> = ({show, field, universe, 
       setSelected(stepIn(order, selected, event.key === 'ArrowDown' ? 1 : -1));
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      if (selected !== null) {
+      // Ctrl+Enter (Cmd+Enter) sets; a plain Enter toggles a value of a multi-value field.
+      if (multi && (event.ctrlKey || event.metaKey)) {
+        commit();
+      } else if (selected !== null) {
         pick(selected);
       }
     }
@@ -177,6 +241,11 @@ export const FieldValuePickerDialog: React.FC<Props> = ({show, field, universe, 
           onChange={event => onSearch(event.target.value)}
           onKeyDown={onKeyDown}
         />
+        <p className="value-picker__hint">
+          {multi
+            ? 'Enter or a click checks or unchecks a value; Ctrl+Enter sets the checked values.'
+            : 'Enter, Ctrl+Enter or a click sets the selected value.'}
+        </p>
         {term && matchIndexes.length === 0 && <p className="value-picker__none">No matching values</p>}
         <ul className="value-picker__list" role="listbox">
           {items.map((item, index) => (
@@ -187,6 +256,7 @@ export const FieldValuePickerDialog: React.FC<Props> = ({show, field, universe, 
               match={Boolean(term) && matchIndexes.includes(index)}
               dimmed={Boolean(term) && !matchIndexes.includes(index)}
               selected={index === selected}
+              {...(multi ? {checked: checked.includes(item.key)} : {})}
               itemRef={element => {
                 itemRefs.current[index] = element;
               }}
@@ -196,6 +266,7 @@ export const FieldValuePickerDialog: React.FC<Props> = ({show, field, universe, 
         </ul>
       </Content>
       <Panel>
+        {multi && <Button primary disabled={!changed} onClick={commit}>Set</Button>}
         <Button onClick={cancel}>Cancel</Button>
       </Panel>
     </Dialog>

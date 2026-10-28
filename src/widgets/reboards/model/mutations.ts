@@ -13,10 +13,22 @@ export type FieldChange = {
    * and keeps the others; single-value fields ignore it.
    */
   replaceKey?: string | null;
+  /**
+   * Values checked and unchecked in the value selector of a multi-value field. Each issue keeps
+   * its other values, so a group move does not wipe values only some subtasks have. Overrides
+   * `valueKey` and `replaceKey`.
+   */
+  delta?: {add: string[]; remove: string[]};
 };
 
 /** The keys a field has after a change; `multi` tells whether the field holds several values. */
 export const nextKeys = (current: string[], change: FieldChange, multi: boolean): string[] => {
+  if (change.delta) {
+    const {add, remove} = change.delta;
+    const kept = current.filter(key => !remove.includes(key));
+    const next = [...kept, ...add.filter(key => !kept.includes(key))];
+    return multi ? next : next.slice(-1);
+  }
   if (!multi || change.replaceKey === undefined) {
     return change.valueKey === null ? [] : [change.valueKey];
   }
