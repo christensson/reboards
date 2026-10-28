@@ -17,8 +17,8 @@ type ErrorResponse = {
   json: (object: never) => void;
 };
 
-/** Sends `{error}` with the given status code. */
-export const respondError = (response: ErrorResponse, code: number, error: string): void => {
+/** Sends `{error, code}` with the given status code, plus any extra fields the client needs to recover. */
+export const respondError = (response: ErrorResponse, code: number, error: string, extra: Record<string, unknown> = {}): void => {
   response.code = code;
-  response.json({error} as never);
+  response.json({...extra, error, code} as never);
 };

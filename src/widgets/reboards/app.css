@@ -1022,6 +1022,41 @@ body {
   color: var(--ring-warning-color);
 }
 
+/* ---------- Merge dialog (version conflicts) ---------- */
+
+.merge-dialog__note {
+  margin: 8px 0;
+  color: var(--ring-secondary-color);
+}
+
+.merge-dialog__conflict {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ring-line-color);
+  border-radius: var(--ring-border-radius);
+}
+
+.merge-dialog__group {
+  font-weight: var(--ring-font-weight-bold, 600);
+}
+
+.merge-dialog__option {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.merge-dialog__side {
+  flex: none;
+  width: 80px;
+}
+
+.merge-dialog__value {
+  overflow-wrap: anywhere;
+}
+
 /* ---------- Issues the user may not change ---------- */
 
 .issue-card.issue-card_locked,

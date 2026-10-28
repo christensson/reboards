@@ -15,6 +15,7 @@ import {
   isVisibleTo,
   ownedBy,
   serializeBoardsDocument,
+  versionMatches,
   writeBoards
 } from '@/backend/boards/store';
 
@@ -23,8 +24,8 @@ import {
  */
 export type BoardSaveReq = {
   board: BoardConfig;
-  /** updatedAt the client last saw; a mismatch is rejected with 409. */
-  expectedUpdatedAt?: number;
+  /** Version the edit started from; required for an existing board. A mismatch is rejected with 409 and the current board. */
+  baseVersion?: number;
 };
 
 /**
@@ -67,7 +68,7 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
       respondError(ctx.response, HTTP_BAD_REQUEST, `You can own at most ${MAX_BOARDS_PER_OWNER} boards. Delete one first`);
       return;
     }
-    stored = {...incoming, id: incoming.id || generateId(), owner: viewer.login, ownerId: viewer.id, createdAt: now, updatedAt: now};
+    stored = {...incoming, id: incoming.id || generateId(), owner: viewer.login, ownerId: viewer.id, createdAt: now, updatedAt: now, version: 1};
     doc.boards.push(stored);
   } else {
     const existing = doc.boards[existingIndex];
@@ -80,13 +81,13 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
       respondError(ctx.response, HTTP_FORBIDDEN, 'Only the board owner or a system administrator can change this board');
       return;
     }
-    if (body.expectedUpdatedAt !== undefined && body.expectedUpdatedAt !== existing.updatedAt) {
-      respondError(ctx.response, HTTP_CONFLICT, 'The board was changed by someone else. Reload and try again');
+    if (!versionMatches(existing, body.baseVersion)) {
+      respondError(ctx.response, HTTP_CONFLICT, 'The board was changed by someone else while you were editing', {current: existing});
       return;
     }
     // The owner's save refreshes the stored login, which may have been renamed since.
     const owner = isOwner(existing, viewer) ? viewer.login : existing.owner;
-    stored = {...incoming, id: existing.id, owner, ownerId: existing.ownerId, createdAt: existing.createdAt, updatedAt: now};
+    stored = {...incoming, id: existing.id, owner, ownerId: existing.ownerId, createdAt: existing.createdAt, updatedAt: now, version: existing.version + 1};
     doc.boards[existingIndex] = stored;
   }
 

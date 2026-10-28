@@ -91,6 +91,7 @@ export const boardConfigSchema = z.object({
   cardColorField: fieldRefSchema.nullable(),
   createdAt: z.number(),
   updatedAt: z.number(),
+  version: z.number(),
 });
 
 export const boardOwnerResSchema = z.object({
@@ -102,7 +103,7 @@ export const boardOwnerResSchema = z.object({
 
 export const boardSaveReqSchema = z.object({
   board: boardConfigSchema,
-  expectedUpdatedAt: z.number().optional(),
+  baseVersion: z.number().optional(),
 });
 
 export const boardSaveResSchema = z.object({

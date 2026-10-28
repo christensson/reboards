@@ -88,6 +88,8 @@ export type BoardConfig = {
   cardColorField: FieldRef | null;
   createdAt: number;
   updatedAt: number;
+  /** Raised by the server on every write; a save must name the version it started from. */
+  version: number;
 };
 
 export const UNCATEGORIZED_ROW_KEY = '__uncategorized__';
@@ -118,7 +120,8 @@ export const createEmptyBoard = (owner: string): BoardConfig => ({
   linkTypes: [...DEFAULT_LINK_TYPES],
   cardColorField: {name: 'Type', kind: 'enum'},
   createdAt: 0,
-  updatedAt: 0
+  updatedAt: 0,
+  version: 0
 });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -200,7 +203,8 @@ export const normalizeBoardConfig = (raw: unknown, fallbackOwner = ''): BoardCon
     linkTypes: 'linkTypes' in input ? stringArray(input.linkTypes) : base.linkTypes,
     cardColorField: 'cardColorField' in input ? fieldRef(input.cardColorField) : base.cardColorField,
     createdAt: num(input.createdAt),
-    updatedAt: num(input.updatedAt)
+    updatedAt: num(input.updatedAt),
+    version: num(input.version)
   };
 };
 

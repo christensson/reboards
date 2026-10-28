@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {createEmptyBoard} from '@/common/model/board-config';
-import {canDelete, canEdit, canShare, isOwner, parseBoardsDocument, readBoards, serializeBoardsDocument, visibleBoards, writeBoards} from './store';
+import {canDelete, canEdit, canShare, isOwner, parseBoardsDocument, versionMatches, readBoards, serializeBoardsDocument, visibleBoards, writeBoards} from './store';
 
 const board = (id: string, owner: string, shared: boolean, projects = ['SAN']) => ({
   ...createEmptyBoard(owner),
@@ -79,5 +79,13 @@ describe('boards store', () => {
     expect(isOwner(recorded, {login: 'alice-renamed', id: 'ring-alice'})).toBe(true);
     expect(isOwner(recorded, {login: 'alice', id: 'ring-new-alice'})).toBe(false);
     expect(isOwner(board('old', 'alice', true), as('alice'))).toBe(true);
+  });
+
+  it('accepts a save only from the stored version', () => {
+    const stored = {...board('s', 'alice', true), version: 3};
+    expect(versionMatches(stored, 3)).toBe(true);
+    expect(versionMatches(stored, 2)).toBe(false);
+    expect(versionMatches(stored, undefined)).toBe(false);
+    expect(versionMatches(board('old', 'alice', true), 0)).toBe(true);
   });
 });

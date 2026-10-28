@@ -10,15 +10,18 @@ import {FieldSelect} from '@/common/components/FieldSelect';
 import {ProjectsSelect} from '@/common/components/ProjectsSelect';
 import {QueryEditor} from '@/common/components/QueryEditor';
 import {type BoardConfig, type FieldRef, validateBoardConfig} from '@/common/model/board-config';
+import {type MergeChoice, type MergeGroup, mergeBoards, resolveMerge} from '@/common/model/board-merge';
 import {currentUserLogin} from '@/common/youtrack/host';
 import {composeQuery} from '@/common/youtrack/query';
 import {errorMessage} from '@/common/youtrack/rest';
 import type {YtProject} from '@/common/youtrack/types';
 import {api, youtrack} from '../data/api';
 import {useBoardReference} from '../data/useBoardReference';
+import type {SaveResult} from '../data/useBoards';
 import {CARD_COLOR_FIELD_KINDS, COLUMN_FIELD_KINDS, SPRINT_FIELD_KINDS, applyUniverseDefaults, defaultColumns} from '../model/fieldUniverse';
 import {ColumnsEditor} from './ColumnsEditor';
 import {ListEditor} from './ListEditor';
+import {MergeDialog, type PendingMerge} from './MergeDialog';
 import {OwnerField} from './OwnerField';
 import {SwimlanesSection} from './SwimlanesSection';
 
@@ -29,7 +32,8 @@ type Props = {
   canDelete: boolean;
   /** System administrator: may share any board. */
   isAdmin: boolean;
-  onSave: (board: BoardConfig, expectedUpdatedAt?: number) => Promise<BoardConfig>;
+  /** `baseVersion` is the version the edit started from; it is omitted for a new board. */
+  onSave: (board: BoardConfig, baseVersion?: number) => Promise<SaveResult>;
   onDelete: (id: string) => Promise<void>;
   /** Hands the board over; whoever may delete a board may also transfer it. */
   onTransfer: (id: string, login: string) => Promise<void>;
@@ -102,6 +106,21 @@ const ShareField: React.FC<ShareFieldProps> = ({shared, showToggle, canShare, re
   );
 };
 
+/** Asks whether to store the draft as a new board after the edited one was deleted meanwhile. */
+const confirmRecreate = async (): Promise<boolean> => {
+  try {
+    await confirm({
+      text: 'This board was deleted while you were editing it',
+      description: 'Create it again as a new board with your settings?',
+      confirmLabel: 'Create board',
+      rejectLabel: 'Cancel'
+    });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const screenTitle = (isNew: boolean, duplicating: boolean, name: string): string => {
   if (isNew) {
     return 'New board';
@@ -111,6 +130,9 @@ const screenTitle = (isNew: boolean, duplicating: boolean, name: string): string
 
 export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelete, isAdmin, onSave, onDelete, onTransfer, onCancel, onSaved}) => {
   const [draft, setDraft] = useState<BoardConfig>(board);
+  // The stored board the draft started from; the board prop follows later saves, so it cannot serve as the merge base.
+  const [base, setBase] = useState<BoardConfig>(board);
+  const [merge, setMerge] = useState<PendingMerge | null>(null);
   const [projects, setProjects] = useState<YtProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [adminProjects, setAdminProjects] = useState<Set<string>>(() => new Set());
@@ -173,15 +195,35 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelet
     setErrors([]);
     setSaving(true);
     try {
-      const saved = await onSave(draft, creating ? undefined : board.updatedAt);
-      alertService.successMessage(`Board "${saved.name}" saved`);
-      onSaved(saved);
+      let result = await onSave(draft, creating ? undefined : base.version);
+      if (result.kind === 'gone' && (await confirmRecreate())) {
+        result = await onSave({...draft, id: '', version: 0});
+      }
+      if (result.kind === 'saved') {
+        alertService.successMessage(`Board "${result.board.name}" saved`);
+        onSaved(result.board);
+      } else if (result.kind === 'conflict') {
+        setMerge({result: mergeBoards(base, draft, result.current), mine: draft, theirs: result.current});
+      } else {
+        setErrors(['This board was deleted by someone else']);
+      }
     } catch (error) {
       setErrors([errorMessage(error)]);
     } finally {
       setSaving(false);
     }
-  }, [draft, onSave, creating, board.updatedAt, onSaved]);
+  }, [draft, onSave, creating, base, onSaved]);
+
+  const applyMerge = useCallback((choices: Partial<Record<MergeGroup, MergeChoice>>) => {
+    if (!merge) {
+      return;
+    }
+    const merged = resolveMerge(merge.result, merge.theirs, choices);
+    setDraft(merged);
+    setBase(merge.theirs);
+    setMerge(null);
+    setErrors(validateBoardConfig(merged).map(p => p.message));
+  }, [merge]);
 
   const remove = useCallback(async () => {
     try {
@@ -201,7 +243,7 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelet
   // Copies the current values into a new, unsaved board; only "Create board" stores it.
   const duplicate = useCallback(() => {
     // The copy starts personal: sharing it is a separate decision, and may need admin rights.
-    setDraft(prev => ({...prev, id: '', name: `${prev.name} (copy)`, owner: currentUserLogin() || prev.owner, shared: false, createdAt: 0, updatedAt: 0}));
+    setDraft(prev => ({...prev, id: '', name: `${prev.name} (copy)`, owner: currentUserLogin() || prev.owner, shared: false, createdAt: 0, updatedAt: 0, version: 0}));
     setDuplicating(true);
     setErrors([]);
     rootRef.current?.scrollIntoView({block: 'start'});
@@ -343,6 +385,7 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelet
           {errors.map(message => <li key={message}>{message}</li>)}
         </ul>
       )}
+      <MergeDialog merge={merge} onApply={applyMerge} onCancel={() => setMerge(null)}/>
       <SettingsFooter
         creating={creating}
         duplicating={duplicating}

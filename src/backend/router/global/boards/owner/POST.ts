@@ -57,7 +57,7 @@ function handle(ctx: CtxPost<BoardOwnerReq, BoardOwnerRes, never, 'global'>): vo
     return;
   }
 
-  const stored = {...board, owner: target.login, ownerId: target.ringId, updatedAt: Date.now()};
+  const stored = {...board, owner: target.login, ownerId: target.ringId, updatedAt: Date.now(), version: board.version + 1};
   doc.boards[index] = stored;
   writeBoards(ctx.globalStorage, doc);
   ctx.response.json({

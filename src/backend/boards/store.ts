@@ -75,6 +75,9 @@ export const canShare = (board: BoardConfig, isAdmin: boolean, isProjectAdmin: P
 export const visibleBoards = (doc: BoardsDocument, viewer: Viewer, canReadProject: ProjectAccess): BoardConfig[] =>
   doc.boards.filter(b => isVisibleTo(b, viewer, canReadProject));
 
+/** A save must start from the stored version; a missing base version never matches an existing board. */
+export const versionMatches = (existing: BoardConfig, baseVersion: number | undefined): boolean => baseVersion === existing.version;
+
 /** Boards one user may own, so nobody can fill the shared document on their own. */
 export const MAX_BOARDS_PER_OWNER = 100;
 

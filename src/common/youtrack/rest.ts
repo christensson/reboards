@@ -102,6 +102,17 @@ export const createYouTrackClient = (host: HostAPI) => {
 
 export type YouTrackClient = ReturnType<typeof createYouTrackClient>;
 
+/** The JSON body of a failed host fetch, such as `{error, code, current}` from the app's own endpoints. */
+export const errorData = (error: unknown): Record<string, unknown> | undefined => {
+  if (typeof error === 'object' && error !== null) {
+    const data = (error as {data?: unknown}).data;
+    if (typeof data === 'object' && data !== null) {
+      return data as Record<string, unknown>;
+    }
+  }
+  return undefined;
+};
+
 /** Extracts a readable message from a failed host fetch. */
 export const errorMessage = (error: unknown): string => {
   if (error instanceof Error) {
