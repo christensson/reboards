@@ -1,12 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
-  <g fill="currentColor" transform="translate(10 0) skewX(-12)">
-    <rect x="18" y="30" width="9" height="20" rx="2.5"/>
-    <rect x="31" y="16" width="9" height="34" rx="2.5"/>
-    <rect x="44" y="23" width="9" height="27" rx="2.5"/>
-  </g>
-  <g stroke="currentColor" stroke-width="3.5" stroke-linecap="round">
-    <path d="M10 32H17" stroke-opacity="0.35"/>
-    <path d="M6 39.5H15" stroke-opacity="0.6"/>
-    <path d="M9 47H15" stroke-opacity="0.85"/>
-  </g>
+  <rect x="9" y="16" width="12" height="14" rx="2.5" fill="currentColor"/>
+  <rect x="26" y="16" width="12" height="20" rx="2.5" fill="currentColor" fill-opacity="0.5"/>
+  <rect x="43" y="16" width="12" height="14" rx="2.5" fill="currentColor"/>
+  <path d="M15 34C15 50 49 50 49 34" stroke="currentColor" stroke-width="5.5" stroke-linecap="round"/>
 </svg>
