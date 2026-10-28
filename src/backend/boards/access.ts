@@ -14,7 +14,7 @@ export const PROJECT_ADMIN_PERMISSION = 'UPDATE_PROJECT';
  * request looks each project up once. Unknown projects (deleted, or renamed
  * since the board was saved) never grant it.
  */
-const projectPermissionFor = (user: User, permission: string): ProjectAccess => {
+export const projectPermissionFor = (user: User, permission: string): ProjectAccess => {
   const cache = new Map<string, boolean>();
   return (project: ProjectRef) => {
     const cached = cache.get(project.shortName);

@@ -130,7 +130,7 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelet
       .getProjects()
       .then(async list => {
         setProjects([...list].sort((a, b) => a.name.localeCompare(b.name)));
-        const res = await api.global.projects.admin.POST({shortNames: list.map(p => p.shortName)});
+        const res = await api.global.projects.permissions.POST({shortNames: list.map(p => p.shortName)});
         setAdminProjects(new Set(res.adminShortNames));
       })
       .catch(error => alertService.error(`Could not load projects: ${errorMessage(error)}`))

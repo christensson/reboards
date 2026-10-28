@@ -1,6 +1,7 @@
 import {createContext, useContext} from 'react';
 import type {CardSize} from '@/common/storage/prefs';
 import type {BoardIssue} from '../model/issue';
+import type {LayoutGroup} from '../model/layout';
 
 export type CardRegistry = {
   register: (issueId: string, element: HTMLElement | null) => void;
@@ -37,6 +38,10 @@ export type BoardContextValue = {
   /** New-issue page for a cell; with a parent ID the new issue becomes its subtask. */
   newIssueHref: (rowKey: string, columnId: string, parentIdReadable?: string) => string | null;
   registry: CardRegistry;
+  /** The user may change or link the issue; cards of other issues cannot be dragged. */
+  canDrag: (issueId: string) => boolean;
+  /** The user may change at least one of the issues a group drag moves. */
+  canMoveGroup: (group: LayoutGroup) => boolean;
   columnLabel: (columnId: string) => string;
 };
 

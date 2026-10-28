@@ -56,16 +56,18 @@ const GroupTitle: React.FC<{group: LayoutGroup; collapsed: boolean; spanLength: 
   onToggle
 }) => {
   const ctx = useBoardContext();
+  const locked = !ctx.canMoveGroup(group);
   const {attributes, listeners, setNodeRef, isDragging} = useDraggable({
     id: `${GROUP_DRAG_PREFIX}${group.key}`,
-    data: {groupKey: group.key}
+    data: {groupKey: group.key},
+    disabled: locked
   });
   return (
     <div
       ref={setNodeRef}
-      className={`group-box__title${isDragging ? ' group-box__title_dragging' : ''}`}
+      className={`group-box__title${isDragging ? ' group-box__title_dragging' : ''}${locked ? ' group-box__title_locked' : ''}`}
       style={{gridColumn: `1 / ${spanLength + 1}`}}
-      title={`${groupTitleHint(group)}\nDrag to move the subtasks to another swimlane. Double-click to open ${group.parentIdReadable}.`}
+      title={`${groupTitleHint(group)}\n${locked ? 'You do not have permission to move these subtasks' : 'Drag to move the subtasks to another swimlane'}. Double-click to open ${group.parentIdReadable}.`}
       onDoubleClick={event => {
         event.stopPropagation();
         ctx.onOpen(group.parentId);

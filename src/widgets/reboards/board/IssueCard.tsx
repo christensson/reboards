@@ -121,7 +121,8 @@ type Props = {
 const IssueCardComponent: React.FC<Props> = ({issueId, isParent}) => {
   const ctx = useBoardContext();
   const issue = ctx.issuesById.get(issueId);
-  const {attributes, listeners, setNodeRef, isDragging} = useDraggable({id: issueId, data: {issueId}});
+  const locked = !ctx.canDrag(issueId);
+  const {attributes, listeners, setNodeRef, isDragging} = useDraggable({id: issueId, data: {issueId}, disabled: locked});
   // Target for Ctrl/Ctrl+Shift drags (change parent, add relation); ignored by plain drags.
   const {setNodeRef: setLinkDropRef} = useDroppable({id: `${LINK_CARD_PREFIX}${issueId}`, data: {kind: 'link-card', issueId}});
 
@@ -167,7 +168,8 @@ const IssueCardComponent: React.FC<Props> = ({issueId, isParent}) => {
       searchTerm={ctx.searchTerm}
       dragging={isDragging}
       isParent={isParent}
-      className={isLinkTarget ? 'issue-card_link-target' : undefined}
+      className={[isLinkTarget ? 'issue-card_link-target' : '', locked ? 'issue-card_locked' : ''].filter(Boolean).join(' ') || undefined}
+      title={locked ? 'You do not have permission to change this issue' : undefined}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       {...attributes}

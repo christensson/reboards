@@ -1022,6 +1022,17 @@ body {
   color: var(--ring-warning-color);
 }
 
+/* ---------- Issues the user may not change ---------- */
+
+.issue-card.issue-card_locked,
+.group-box__title.group-box__title_locked {
+  cursor: default;
+}
+
+.issue-card.issue-card_locked {
+  opacity: 0.7;
+}
+
 /* ---------- Link drags (Ctrl: change parent, Ctrl+Shift: add relation) ---------- */
 
 .issue-card.issue-card_link-target {

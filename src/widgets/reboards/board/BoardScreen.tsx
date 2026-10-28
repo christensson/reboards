@@ -33,6 +33,7 @@ import {Toolbar} from './Toolbar';
 import {ValuePickerDialog} from './ValuePickerDialog';
 import {RelationPickerDialog} from './RelationPickerDialog';
 import {useLinkDrag} from './useLinkDrag';
+import {useProjectPermissions} from '../data/useProjectPermissions';
 import {QuickFind} from './QuickFind';
 import {useQuickFind} from './useQuickFind';
 
@@ -437,7 +438,18 @@ export const BoardScreen: React.FC<Props> = ({
 
   const sensors = useSensors(useSensor(PointerSensor, {activationConstraint: {distance: DRAG_ACTIVATION_DISTANCE}}));
 
-  const link = useLinkDrag({issuesById, linkTypes: reference.linkTypes, data});
+  const permissions = useProjectPermissions(board.projects);
+  const canUpdateIssue = useCallback((issue: BoardIssue) => permissions.canUpdate(issue.projectShortName), [permissions]);
+  const canLinkIssue = useCallback((issue: BoardIssue) => permissions.canLink(issue.projectShortName), [permissions]);
+  const canDrag = useCallback(
+    (issueId: string) => {
+      const issue = issuesById.get(issueId);
+      return !issue || canUpdateIssue(issue) || canLinkIssue(issue);
+    },
+    [issuesById, canUpdateIssue, canLinkIssue]
+  );
+
+  const link = useLinkDrag({issuesById, linkTypes: reference.linkTypes, data, canLink: canLinkIssue});
   useQuickFind(quickFindTerm, setQuickFindTerm, matchIds, registry, pendingMove !== null || link.dialog.from !== null);
   const {start: startLinkDrag, onOver: onLinkOver, end: endLinkDrag, drop: dropLink} = link;
 
@@ -495,10 +507,17 @@ export const BoardScreen: React.FC<Props> = ({
       if (rowPlan.changes.length === 0 && !rowPlan.pickInnerValue) {
         return;
       }
-      const issues = movedIdsOf(group).map(id => issuesById.get(id)).filter((i): i is BoardIssue => Boolean(i));
+      const all = movedIdsOf(group).map(id => issuesById.get(id)).filter((i): i is BoardIssue => Boolean(i));
+      const issues = all.filter(canUpdateIssue);
+      if (issues.length < all.length) {
+        alertService.warning(`Skipped ${all.length - issues.length} subtask(s) you do not have permission to change`);
+      }
+      if (issues.length === 0) {
+        return;
+      }
       settlePending({issues, changes: rowPlan.changes, pickInner: rowPlan.pickInnerValue, label: `subtasks of ${group.parentIdReadable}`});
     },
-    [findGroup, board, layout.rowsByKey, issuesById, settlePending]
+    [findGroup, board, layout.rowsByKey, issuesById, settlePending, canUpdateIssue]
   );
 
   const onDragEnd = useCallback(
@@ -523,10 +542,14 @@ export const BoardScreen: React.FC<Props> = ({
       if (!issue || !from || !target) {
         return;
       }
+      if (!canUpdateIssue(issue)) {
+        alertService.warning(`You do not have permission to change ${issue.idReadable}`);
+        return;
+      }
       const plan = planMove(board, from, target, layout.rowsByKey);
       settlePending({issues: [issue], changes: plan.changes, pickColumnId: plan.pickColumn?.id, pickInner: plan.pickInnerValue, label: issue.idReadable});
     },
-    [issuesById, layout.placement, layout.rowsByKey, board, settlePending, moveGroup, dropLink]
+    [issuesById, layout.placement, layout.rowsByKey, board, settlePending, moveGroup, dropLink, canUpdateIssue]
   );
 
   const onPickValue = useCallback(
@@ -547,6 +570,14 @@ export const BoardScreen: React.FC<Props> = ({
       settlePending({...pendingMove, changes: [...pendingMove.changes, {field: board.innerRow.field, valueKey}], pickInner: false});
     },
     [pendingMove, board.innerRow, settlePending]
+  );
+
+  const canMoveGroup = useCallback(
+    (group: LayoutGroup) => movedIdsOf(group).some(id => {
+      const issue = issuesById.get(id);
+      return !issue || canUpdateIssue(issue);
+    }),
+    [issuesById, canUpdateIssue]
   );
 
   const columnLabelOf = useCallback((columnId: string) => layout.columns.find(c => c.id === columnId)?.label ?? '', [layout.columns]);
@@ -576,9 +607,11 @@ export const BoardScreen: React.FC<Props> = ({
       onOpen,
       newIssueHref,
       registry,
-      columnLabel: columnLabelOf
+      columnLabel: columnLabelOf,
+      canDrag,
+      canMoveGroup
     }),
-    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf]
+    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf, canDrag, canMoveGroup]
   );
 
   const status = useMemo(

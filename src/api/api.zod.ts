@@ -57,12 +57,14 @@ export const contextResSchema = z.object({
   baseUrl: z.string().nullable(),
 });
 
-export const projectsAdminReqSchema = z.object({
+export const projectsPermissionsReqSchema = z.object({
   shortNames: z.array(z.string()),
 });
 
-export const projectsAdminResSchema = z.object({
+export const projectsPermissionsResSchema = z.object({
   adminShortNames: z.array(z.string()),
+  updateShortNames: z.array(z.string()),
+  linkShortNames: z.array(z.string()),
 });
 
 export const sprintConfigSchema = z.object({
@@ -148,10 +150,10 @@ export const schema = {
       }
     },
     projects: {
-      admin: {
+      permissions: {
         POST: {
-          Req: projectsAdminReqSchema,
-          Res: projectsAdminResSchema
+          Req: projectsPermissionsReqSchema,
+          Res: projectsPermissionsResSchema
         }
       }
     }

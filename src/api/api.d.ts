@@ -4,7 +4,7 @@ import * as globalBoardsGETHandler from "../backend/router/global/boards/GET";
 import * as globalBoardsOwnerPOSTHandler from "../backend/router/global/boards/owner/POST";
 import * as globalBoardsSavePOSTHandler from "../backend/router/global/boards/save/POST";
 import * as globalContextGETHandler from "../backend/router/global/context/GET";
-import * as globalProjectsAdminPOSTHandler from "../backend/router/global/projects/admin/POST";
+import * as globalProjectsPermissionsPOSTHandler from "../backend/router/global/projects/permissions/POST";
 
 export type ApiRouter = {
     global: {
@@ -24,8 +24,8 @@ export type ApiRouter = {
             GET: ExtractRPCFromHandler<globalContextGETHandler.Handle>;
         };
         projects: {
-            admin: {
-                POST: ExtractRPCFromHandler<globalProjectsAdminPOSTHandler.Handle>;
+            permissions: {
+                POST: ExtractRPCFromHandler<globalProjectsPermissionsPOSTHandler.Handle>;
             };
         };
     };

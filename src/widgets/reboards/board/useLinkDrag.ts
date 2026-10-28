@@ -30,6 +30,8 @@ type Options = {
   issuesById: Map<string, BoardIssue>;
   linkTypes: YtIssueLinkType[];
   data: BoardData;
+  /** The user may link the issue; link drags of other issues are refused. */
+  canLink: (issue: BoardIssue) => boolean;
 };
 
 /** Asks before any parent change; resolves to false when the user cancels. */
@@ -60,7 +62,7 @@ const keyModifiers = (event: Event | null): {ctrlKey: boolean; metaKey: boolean;
  * Ctrl-drag of an issue card changes its parent; Ctrl+Shift-drag adds a relation chosen in a dialog.
  * Plain drags are left to the regular cell logic: in that mode the link drop targets are ignored.
  */
-export const useLinkDrag = ({issuesById, linkTypes, data}: Options) => {
+export const useLinkDrag = ({issuesById, linkTypes, data, canLink}: Options) => {
   const [mode, setMode] = useState<LinkMode>('none');
   const [over, setOver] = useState<LinkDropData | null>(null);
   const [tracking, setTracking] = useState(false);
@@ -220,6 +222,10 @@ export const useLinkDrag = ({issuesById, linkTypes, data}: Options) => {
       if (!dragged || !dropOver) {
         return true;
       }
+      if (!canLink(dragged)) {
+        alertService.warning(`You do not have permission to link ${dragged.idReadable}`);
+        return true;
+      }
       const result = resolveLinkTarget(dropOver, dragged, dropMode, issuesById);
       if ('invalid' in result) {
         return true;
@@ -232,7 +238,7 @@ export const useLinkDrag = ({issuesById, linkTypes, data}: Options) => {
       }
       return true;
     },
-    [end, issuesById, changeParent]
+    [end, issuesById, changeParent, canLink]
   );
 
   const dialog = {
