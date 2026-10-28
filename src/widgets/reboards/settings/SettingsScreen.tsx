@@ -9,7 +9,7 @@ import duplicateIcon from '@jetbrains/icons/duplicate';
 import {FieldSelect} from '@/common/components/FieldSelect';
 import {ProjectsSelect} from '@/common/components/ProjectsSelect';
 import {QueryEditor} from '@/common/components/QueryEditor';
-import {type BoardConfig, type FieldRef, validateBoardConfig} from '@/common/model/board-config';
+import {type BoardConfig, DYNAMIC_KINDS, type FieldKind, type FieldRef, isDynamicKind, validateBoardConfig} from '@/common/model/board-config';
 import {type MergeChoice, type MergeGroup, mergeBoards, resolveMerge} from '@/common/model/board-merge';
 import {currentUserLogin} from '@/common/youtrack/host';
 import {composeQuery} from '@/common/youtrack/query';
@@ -18,8 +18,16 @@ import type {YtProject} from '@/common/youtrack/types';
 import {api, youtrack} from '../data/api';
 import {useBoardReference} from '../data/useBoardReference';
 import type {SaveResult} from '../data/useBoards';
-import {CARD_COLOR_FIELD_KINDS, COLUMN_FIELD_KINDS, SPRINT_FIELD_KINDS, applyUniverseDefaults, defaultColumns} from '../model/fieldUniverse';
+import {
+  CARD_COLOR_FIELD_KINDS,
+  COLUMN_FIELD_KINDS,
+  type FieldUniverse,
+  SPRINT_FIELD_KINDS,
+  applyUniverseDefaults,
+  defaultColumns
+} from '../model/fieldUniverse';
 import {ColumnsEditor} from './ColumnsEditor';
+import {DynamicOptionsEditor} from './DynamicOptionsEditor';
 import {ListEditor} from './ListEditor';
 import {MergeDialog, type PendingMerge} from './MergeDialog';
 import {OwnerField} from './OwnerField';
@@ -106,6 +114,32 @@ const ShareField: React.FC<ShareFieldProps> = ({shared, showToggle, canShare, re
   );
 };
 
+/** On a sprint board the sprint field selects the issues, so it is not offered for columns or swimlanes. */
+const sprintExclusions = (board: BoardConfig): string[] => (board.sprints.enabled && board.sprints.field ? [board.sprints.field.name] : []);
+
+type ColumnValuesProps = {
+  draft: BoardConfig;
+  kind: FieldKind | 'other';
+  universe: FieldUniverse;
+  readOnly: boolean;
+  patch: (changes: Partial<BoardConfig>) => void;
+};
+
+/** Dynamic column fields take their columns from the issues; stable ones get configured columns. */
+const ColumnValues: React.FC<ColumnValuesProps> = ({draft, kind, universe, readOnly, patch}) =>
+  isDynamicKind(kind) ? (
+    <DynamicOptionsEditor kind={kind} options={draft.columnOptions} columns disabled={readOnly} onChange={columnOptions => patch({columnOptions})}/>
+  ) : (
+    <ColumnsEditor
+      fieldName={draft.columnField.name}
+      universe={universe}
+      columns={draft.columns}
+      ignoredValues={draft.ignoredValues}
+      disabled={readOnly}
+      onChange={(columns, ignoredValues) => patch({columns, ignoredValues})}
+    />
+  );
+
 /** Asks whether to store the draft as a new board after the edited one was deleted meanwhile. */
 const confirmRecreate = async (): Promise<boolean> => {
   try {
@@ -143,6 +177,8 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelet
   const rootRef = useRef<HTMLDivElement | null>(null);
   const reference = useBoardReference(draft.projects);
   const readOnly = !canEdit && !duplicating;
+  const sprintFieldNames = sprintExclusions(draft);
+  const columnKind = reference.universe.byName.get(draft.columnField.name)?.kind ?? draft.columnField.kind;
   const showShareToggle = isAdmin || adminProjects.size > 0;
   const canShareDraft = canShareProjects(draft.projects, isAdmin, adminProjects);
   const [defaultsApplied, setDefaultsApplied] = useState(!isNew);
@@ -181,7 +217,9 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelet
           return;
         }
       }
-      patch({columnField: field, columns: defaultColumns(reference.universe, field.name), ignoredValues: []});
+      // Dynamic fields take their columns from the issues; only stable fields get configured columns.
+      const dynamic = isDynamicKind(reference.universe.byName.get(field.name)?.kind ?? field.kind);
+      patch({columnField: field, columns: dynamic ? [] : defaultColumns(reference.universe, field.name), ignoredValues: []});
     },
     [draft.columns.length, draft.columnField.name, patch, reference.universe]
   );
@@ -340,20 +378,29 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelet
         {reference.loading && <LoaderInline/>}
         <div className="settings-field">
           <span className="settings-field__label">Column field</span>
-          <FieldSelect universe={reference.universe} kinds={COLUMN_FIELD_KINDS} singleOnly value={draft.columnField} disabled={readOnly} onChange={onColumnField}/>
+          <FieldSelect
+            universe={reference.universe}
+            kinds={COLUMN_FIELD_KINDS}
+            singleOnly
+            multiKinds={DYNAMIC_KINDS}
+            excludeNames={sprintFieldNames}
+            value={draft.columnField}
+            disabled={readOnly}
+            onChange={onColumnField}
+          />
         </div>
-        <ColumnsEditor
-          fieldName={draft.columnField.name}
-          universe={reference.universe}
-          columns={draft.columns}
-          ignoredValues={draft.ignoredValues}
-          disabled={readOnly}
-          onChange={(columns, ignoredValues) => patch({columns, ignoredValues})}
-        />
+        <ColumnValues draft={draft} kind={columnKind} universe={reference.universe} readOnly={readOnly} patch={patch}/>
       </Section>
 
       <Section title="Swimlanes (rows)">
-        <SwimlanesSection universe={reference.universe} row={draft.row} innerRow={draft.innerRow} readOnly={readOnly} onChange={patch}/>
+        <SwimlanesSection
+          universe={reference.universe}
+          row={draft.row}
+          innerRow={draft.innerRow}
+          readOnly={readOnly}
+          onChange={patch}
+          sprintFieldName={sprintFieldNames[0]}
+        />
       </Section>
 
       <Section title="Cards">

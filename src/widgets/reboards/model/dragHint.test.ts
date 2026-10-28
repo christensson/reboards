@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {type BoardConfig, UNCATEGORIZED_ROW_KEY, createEmptyBoard} from '@/common/model/board-config';
+import {type BoardConfig, UNCATEGORIZED_ROW_KEY, createEmptyBoard, defaultDynamicOptions} from '@/common/model/board-config';
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {groupDragHint, issueDragHint, linkDragHint} from './dragHint';
 import {buildFieldUniverse} from './fieldUniverse';
@@ -15,7 +15,7 @@ const board: BoardConfig = {
   ...createEmptyBoard('me'),
   columnField: {name: 'State', kind: 'state'},
   columns: [{id: 'open', values: ['Open']}, {id: 'wip', values: ['In Progress', 'Review']}, {id: 'done', values: ['Done']}],
-  row: {field: {name: 'Priority', kind: 'enum'}, sort: 'custom', customOrder: []}
+  row: {field: {name: 'Priority', kind: 'enum'}, sort: 'custom', customOrder: [], dynamic: defaultDynamicOptions()}
 };
 const issue: BoardIssue = {id: '1', idReadable: 'SP-1', summary: '', projectId: '', projectShortName: 'SP', number: 1, tags: [], fields: {}, links: [], parentIds: [], childIds: []};
 
@@ -27,7 +27,7 @@ describe('issueDragHint', () => {
   });
 
   it('describes two-level moves including picker rows', () => {
-    const twoLevel: BoardConfig = {...board, innerRow: {field: {name: 'Type', kind: 'enum'}, sort: 'custom', customOrder: []}};
+    const twoLevel: BoardConfig = {...board, innerRow: {field: {name: 'Type', kind: 'enum'}, sort: 'custom', customOrder: [], dynamic: defaultDynamicOptions()}};
     const rowsByKey = {
       'Major\u0000Bug': {key: 'Major\u0000Bug', kind: 'normal', outerValue: 'Major', innerValue: 'Bug'} as LayoutRow,
       'Minor\u0000__pick__': {key: 'Minor\u0000__pick__', kind: 'picker', outerValue: 'Minor', innerValue: null} as LayoutRow
@@ -47,7 +47,7 @@ describe('groupDragHint', () => {
   const rows = [
     {key: 'Major', label: 'Major', fullLabel: 'Major', kind: 'normal'},
     {key: 'Minor', label: 'Minor', fullLabel: 'Minor', kind: 'normal'},
-    {key: 'Minor\u0000__pick__', label: 'Assign other swimlane…', fullLabel: 'Minor / …', kind: 'picker'}
+    {key: 'Minor\u0000__pick__', label: 'Assign Type…', fullLabel: 'Minor / …', kind: 'picker'}
   ] as LayoutRow[];
   const group = {rowKey: 'Major', parentIdReadable: 'SP-9', parentInThisRow: true} as LayoutGroup;
 

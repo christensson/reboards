@@ -38,6 +38,8 @@ export type BoardContextValue = {
   /** New-issue page for a cell; with a parent ID the new issue becomes its subtask. */
   newIssueHref: (rowKey: string, columnId: string, parentIdReadable?: string) => string | null;
   registry: CardRegistry;
+  /** Issue id of a card id; extra cards of multi-value fields have their own ids. */
+  issueIdOf: (cardId: string) => string;
   /** The user may change or link the issue; cards of other issues cannot be dragged. */
   canDrag: (issueId: string) => boolean;
   /** The user may change at least one of the issues a group drag moves. */

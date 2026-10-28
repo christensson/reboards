@@ -20,6 +20,18 @@ type Props = {
 
 /** First-level swimlane of a two-level board: a rotated title column spanning its inner swimlanes. */
 const OuterRowComponent: React.FC<Props> = ({outer, rowsByKey, columns, collapsed, collapsedRows, collapsedGroups, onToggleOuter, onToggleRow, onToggleGroup}) => {
+  const pickerRow = outer.isPicker ? rowsByKey[outer.rowKeys[0]] : undefined;
+  if (pickerRow) {
+    // "Assign <field>…" of a dynamic first-level field: no title, no toggle, just the drop row.
+    return (
+      <div className="outer-row outer-row_picker" data-outer-key={outer.key}>
+        <div className="outer-row__header"/>
+        <div className="outer-row__body">
+          <BoardRow row={pickerRow} columns={columns} collapsed={false} collapsedGroups={collapsedGroups} onToggleRow={onToggleRow} onToggleGroup={onToggleGroup}/>
+        </div>
+      </div>
+    );
+  }
   const label = outer.color ? (
     <ValuePill label={outer.label} color={outer.color} className="outer-row__label"/>
   ) : (

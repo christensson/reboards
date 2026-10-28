@@ -1,5 +1,6 @@
-import {type BoardConfig, type RowConfig, UNCATEGORIZED_ROW_KEY, columnLabel, isTwoLevel} from '@/common/model/board-config';
+import {type BoardConfig, type RowConfig, UNCATEGORIZED_ROW_KEY, columnLabel, isDynamicKind, isTwoLevel} from '@/common/model/board-config';
 import type {YtColor} from '@/common/youtrack/types';
+import {dynamicValues, noValueLabel, shownKeys} from './dynamicValues';
 import type {FieldUniverse} from './fieldUniverse';
 import {type BoardIssue, compareIssues} from './issue';
 import {orderValues} from './sorting';
@@ -18,6 +19,46 @@ export type LayoutColumn = {
   values: string[];
   index: number;
   count: number;
+  /** Dynamic column fields: the column's value key, or null for the "No <field>" column; undefined for configured columns. */
+  columnKey?: string | null;
+  /** The rightmost "Assign <field>…" column of a dynamic field: a drop target that asks for the value. */
+  assign?: boolean;
+};
+
+/** A column a dynamic column field could show, for the column picker. */
+export type AvailableColumn = {
+  id: string;
+  /** Value key, or null for the "No <field>" column. */
+  key: string | null;
+  label: string;
+  color?: YtColor;
+  /** Issues carrying the value. */
+  count: number;
+  visible: boolean;
+};
+
+/** Id of the column of issues without a value of a dynamic column field. */
+export const NO_VALUE_COLUMN_ID = '__none__';
+
+export const dynamicColumnId = (key: string): string => `v:${key}`;
+
+/** Id of the "Assign <field>…" column, which sets a value no issue on the board has yet. */
+export const ASSIGN_COLUMN_ID = '__assign__';
+
+export const assignColumnLabel = (fieldName: string): string => `Assign ${fieldName}…`;
+
+/**
+ * Column ids to show so that the column of a value just assigned to the dynamic column field
+ * is visible: the shown columns plus that one. Null when it is shown already or the columns
+ * are configured ones.
+ */
+export const revealColumnIds = (columns: LayoutColumn[], valueKey: string | null): string[] | null => {
+  if (!columns.some(c => c.assign)) {
+    return null;
+  }
+  const id = valueKey === null ? NO_VALUE_COLUMN_ID : dynamicColumnId(valueKey);
+  const shown = columns.filter(c => !c.assign).map(c => c.id);
+  return shown.includes(id) ? null : [...shown, id];
 };
 
 /**
@@ -66,8 +107,10 @@ export type LayoutGroup = {
 
 export type LayoutRow = {
   key: string;
-  /** 'picker' rows are the "Assign other swimlane…" drop targets of two-level boards. */
+  /** 'picker' rows are the "Assign <field>…" drop targets of two-level boards. */
   kind: 'normal' | 'picker';
+  /** Picker rows: the swimlane level whose value is asked for on drop. */
+  pickLevel?: 'outer' | 'inner';
   label: string;
   /** "Outer / Inner" on two-level boards, else the label. */
   fullLabel: string;
@@ -96,6 +139,8 @@ export type LayoutOuterRow = {
   /** Keys of the inner rows (including the picker row) in display order. */
   rowKeys: string[];
   issueCount: number;
+  /** The last first-level swimlane of a dynamic field: it only holds an "Assign <field>…" row. */
+  isPicker?: boolean;
 };
 
 export type Placement = {
@@ -104,6 +149,19 @@ export type Placement = {
   /** Innermost box the issue is rendered in. */
   groupKey?: string;
 };
+
+/**
+ * One rendered card. An issue with several values of a multi-value column or
+ * swimlane field gets a card per value; the first is its primary card, whose
+ * id is the issue id, and the others get ids from `cardId`.
+ */
+export type CardPlacement = {
+  issueId: string;
+  rowKey: string;
+  columnId: string;
+};
+
+export const cardId = (issueId: string, columnId: string, rowKey: string): string => `${issueId}@${columnId}@${rowKey}`;
 
 export type BoardLayout = {
   columns: LayoutColumn[];
@@ -117,6 +175,10 @@ export type BoardLayout = {
   /** Enclosing box keys per box key, outermost first. */
   groupAncestors: Record<string, string[]>;
   hiddenIssueIds: string[];
+  /** Every column a dynamic column field could show, in sort order; empty for configured columns. */
+  availableColumns: AvailableColumn[];
+  /** Every rendered card by card id: primary cards (id = issue id) and the extra cards of multi-value fields. */
+  cards: Record<string, CardPlacement>;
 };
 
 export type LayoutInput = {
@@ -124,6 +186,8 @@ export type LayoutInput = {
   config: BoardConfig;
   universe: FieldUniverse;
   parents: Record<string, ParentInfo>;
+  /** Dynamic column fields: ids of the columns the user picked; the first `maxColumns` when missing. */
+  visibleColumnIds?: string[];
 };
 
 export const groupKey = (parentId: string, rowKey: string): string => `${parentId}::${rowKey}`;
@@ -132,19 +196,55 @@ export const groupKey = (parentId: string, rowKey: string): string => `${parentI
 export const ROW_KEY_SEPARATOR = '\u0000';
 /** Second-level part of the key of a picker row. */
 export const PICKER_ROW_SUFFIX = '__pick__';
-export const PICKER_ROW_LABEL = 'Assign other swimlane…';
 
 export const compositeRowKey = (outerKey: string, innerKey: string): string => `${outerKey}${ROW_KEY_SEPARATOR}${innerKey}`;
 
-const ROW_UNIVERSE_KINDS = new Set(['enum', 'state', 'version']);
+// Stable fields list every value of the field as a swimlane; dynamic ones only those the issues carry.
+const ROW_UNIVERSE_KINDS = new Set(['enum', 'state']);
 
 const compareReadable = (a: string, b: string): number => a.localeCompare(b, undefined, {numeric: true});
 
 type RowMeta = {key: string; label: string; ordinal?: number; color?: YtColor; avatarUrl?: string};
 
-/** Value key of a swimlane field for an issue; Uncategorized when unset or when no field is configured. */
-const rowValueKey = (issue: BoardIssue, rowConfig: RowConfig | null): string =>
-  rowConfig?.field ? (issue.fields[rowConfig.field.name]?.key ?? UNCATEGORIZED_ROW_KEY) : UNCATEGORIZED_ROW_KEY;
+const isDynamicRow = (rowConfig: RowConfig | null, universe: FieldUniverse): boolean =>
+  Boolean(rowConfig?.field && isDynamicKind(universe.byName.get(rowConfig.field.name)?.kind ?? rowConfig.field.kind));
+
+/**
+ * Value keys of a swimlane field for an issue: several for a multi-value dynamic field; Uncategorized
+ * when unset or when no field is configured. Dynamic fields skip filtered-out versions, so an issue
+ * with only those lands in "No <field>".
+ */
+const rowValueKeys = (issue: BoardIssue, rowConfig: RowConfig | null, universe: FieldUniverse): string[] => {
+  const field = rowConfig?.field;
+  if (!field) {
+    return [UNCATEGORIZED_ROW_KEY];
+  }
+  if (rowConfig && isDynamicRow(rowConfig, universe)) {
+    const keys = shownKeys(issue, field.name, universe.byName.get(field.name), rowConfig.dynamic);
+    return keys.length > 0 ? keys : [UNCATEGORIZED_ROW_KEY];
+  }
+  return [issue.fields[field.name]?.key ?? UNCATEGORIZED_ROW_KEY];
+};
+
+/** Row keys of every swimlane an issue belongs in (combinations of both levels on two-level boards). */
+const rowKeysOf = (issue: BoardIssue, config: BoardConfig, universe: FieldUniverse): string[] => {
+  const outer = rowValueKeys(issue, config.row, universe);
+  if (!isTwoLevel(config)) {
+    return outer;
+  }
+  const inner = rowValueKeys(issue, config.innerRow, universe);
+  return outer.flatMap(outerKey => inner.map(innerKey => compositeRowKey(outerKey, innerKey)));
+};
+
+/** Swimlanes of a dynamic field: the values the issues carry, sorted and filtered; "No <field>" first. */
+const dynamicMetas = (rowConfig: RowConfig, universe: FieldUniverse, issues: BoardIssue[]): RowMeta[] => {
+  const name = rowConfig.field?.name ?? '';
+  const {values, emptyCount} = dynamicValues(name, universe.byName.get(name), issues, rowConfig.dynamic);
+  return [
+    ...(emptyCount > 0 ? [{key: UNCATEGORIZED_ROW_KEY, label: noValueLabel(name)}] : []),
+    ...values.map(v => ({key: v.key, label: v.label, ...(v.color ? {color: v.color} : {}), ...(v.avatarUrl ? {avatarUrl: v.avatarUrl} : {})}))
+  ];
+};
 
 /**
  * Swimlane values for one level: the field's bundle values (when requested) plus the
@@ -158,6 +258,9 @@ const buildMetasFor = (
   uncategorizedLabel: string
 ): RowMeta[] => {
   const field = rowConfig?.field ?? null;
+  if (rowConfig && isDynamicRow(rowConfig, universe)) {
+    return dynamicMetas(rowConfig, universe, issues);
+  }
   const metas = new Map<string, RowMeta>();
   let hasUncategorized = !field;
   if (field) {
@@ -180,12 +283,23 @@ const buildMetasFor = (
 };
 
 type PlacementResult = {
+  /** Primary card of every placed issue. */
   placed: Map<string, Placement>;
   placedIssues: BoardIssue[];
   hiddenIssueIds: string[];
+  /** Further cards of issues with several values of a multi-value field, by card id. */
+  extraCards: Map<string, CardPlacement>;
 };
 
-const placeIssues = (issues: BoardIssue[], config: BoardConfig): PlacementResult => {
+/** The columns to render and, per issue, the ids of the columns it belongs in. */
+type ColumnPlan = {
+  columns: LayoutColumn[];
+  availableColumns: AvailableColumn[];
+  columnIdsOf: (issue: BoardIssue) => string[];
+};
+
+/** Configured columns of a stable field (enum, state): one column per group of values. */
+const configuredColumns = (config: BoardConfig): ColumnPlan => {
   const ignored = new Set(config.ignoredValues);
   const valueToColumn = new Map<string, string>();
   config.columns.forEach(c => c.values.forEach(v => {
@@ -193,23 +307,71 @@ const placeIssues = (issues: BoardIssue[], config: BoardConfig): PlacementResult
       valueToColumn.set(v, c.id);
     }
   }));
+  const columns = config.columns.map((c, index) => ({id: c.id, label: columnLabel(c), values: c.values, index, count: 0}));
+  return {
+    columns,
+    availableColumns: [],
+    columnIdsOf: issue => {
+      const key = issue.fields[config.columnField.name]?.key;
+      const id = key === undefined ? undefined : valueToColumn.get(key);
+      return id ? [id] : [];
+    }
+  };
+};
+
+/**
+ * Columns of a dynamic field (user, version, build): one per value the issues
+ * carry, "No <field>" first. The user's pick decides which are shown; without
+ * one, the first `maxColumns` in sort order.
+ */
+const dynamicColumns = (config: BoardConfig, universe: FieldUniverse, issues: BoardIssue[], visibleColumnIds?: string[]): ColumnPlan => {
+  const name = config.columnField.name;
+  const field = universe.byName.get(name);
+  const {values, emptyCount} = dynamicValues(name, field, issues, config.columnOptions);
+  const all: Omit<AvailableColumn, 'visible'>[] = [
+    ...(emptyCount > 0 ? [{id: NO_VALUE_COLUMN_ID, key: null, label: noValueLabel(name), count: emptyCount}] : []),
+    ...values.map(v => ({id: dynamicColumnId(v.key), key: v.key, label: v.label, count: v.count, ...(v.color ? {color: v.color} : {})}))
+  ];
+  const picked = visibleColumnIds ? all.filter(c => visibleColumnIds.includes(c.id)) : [];
+  // A pick whose columns all disappeared falls back to the default, so the board never goes blank.
+  const shown = picked.length > 0 ? picked : all.slice(0, config.columnOptions.maxColumns);
+  const shownIds = new Set(shown.map(c => c.id));
+  const assign: LayoutColumn = {id: ASSIGN_COLUMN_ID, label: assignColumnLabel(name), values: [], index: shown.length, count: 0, assign: true};
+  return {
+    columns: [...shown.map((c, index) => ({id: c.id, label: c.label, values: c.key === null ? [] : [c.key], index, count: 0, columnKey: c.key})), assign],
+    availableColumns: all.map(c => ({...c, visible: shownIds.has(c.id)})),
+    columnIdsOf: issue => {
+      const keys = shownKeys(issue, name, field, config.columnOptions);
+      const ids = keys.length > 0 ? keys.map(dynamicColumnId) : [NO_VALUE_COLUMN_ID];
+      return ids.filter(id => shownIds.has(id));
+    }
+  };
+};
+
+const planColumns = (config: BoardConfig, universe: FieldUniverse, issues: BoardIssue[], visibleColumnIds?: string[]): ColumnPlan =>
+  isDynamicKind(universe.byName.get(config.columnField.name)?.kind ?? config.columnField.kind)
+    ? dynamicColumns(config, universe, issues, visibleColumnIds)
+    : configuredColumns(config);
+
+/** Places every issue in each of its column × swimlane combinations; issues without any are hidden. */
+const placeIssues = (issues: BoardIssue[], config: BoardConfig, universe: FieldUniverse, columnIdsOf: ColumnPlan['columnIdsOf']): PlacementResult => {
   const placed = new Map<string, Placement>();
+  const extraCards = new Map<string, CardPlacement>();
   const hiddenIssueIds: string[] = [];
   const placedIssues: BoardIssue[] = [];
-  const twoLevel = isTwoLevel(config);
   [...issues].sort(compareIssues).forEach(issue => {
-    const columnValue = issue.fields[config.columnField.name]?.key;
-    const columnId = columnValue === undefined ? undefined : valueToColumn.get(columnValue);
-    if (!columnId) {
+    const rowKeys = rowKeysOf(issue, config, universe);
+    const spots = columnIdsOf(issue).flatMap(columnId => rowKeys.map(rowKey => ({columnId, rowKey})));
+    if (spots.length === 0) {
       hiddenIssueIds.push(issue.id);
       return;
     }
-    const outerKey = rowValueKey(issue, config.row);
-    const rowKey = twoLevel ? compositeRowKey(outerKey, rowValueKey(issue, config.innerRow)) : outerKey;
-    placed.set(issue.id, {rowKey, columnId});
+    const [primary, ...others] = spots;
+    placed.set(issue.id, primary);
+    others.forEach(spot => extraCards.set(cardId(issue.id, spot.columnId, spot.rowKey), {issueId: issue.id, ...spot}));
     placedIssues.push(issue);
   });
-  return {placed, placedIssues, hiddenIssueIds};
+  return {placed, placedIssues, hiddenIssueIds, extraCards};
 };
 
 type RowSkeleton = Omit<LayoutRow, 'looseByColumn' | 'groups' | 'issueCount'>;
@@ -221,10 +383,26 @@ type RowsResult = {
 
 const valueOrNull = (key: string): string | null => (key === UNCATEGORIZED_ROW_KEY ? null : key);
 
+/** "Assign <field>…" row: a drop target that asks for the swimlane value. */
+const pickerRow = (key: string, outerKey: string | null, outerValue: string | null, label: string, fullLabel: string, pickLevel: 'outer' | 'inner'): RowSkeleton => ({
+  key,
+  kind: 'picker',
+  pickLevel,
+  label,
+  fullLabel,
+  isUncategorized: false,
+  outerKey,
+  outerValue,
+  innerValue: null
+});
+
 const singleLevelRows = (config: BoardConfig, universe: FieldUniverse, placedIssues: BoardIssue[]): RowsResult => {
   const metas = buildMetasFor(config.row, universe, placedIssues, true, config.row.field ? 'Uncategorized' : 'All issues');
+  // Dynamic swimlanes only list values on the board; the picker row sets any other value.
+  const label = assignColumnLabel(config.row.field?.name ?? '');
+  const picker = isDynamicRow(config.row, universe) ? [pickerRow(PICKER_ROW_SUFFIX, null, null, label, label, 'outer')] : [];
   return {
-    rows: metas.map(meta => ({
+    rows: [...metas.map((meta): RowSkeleton => ({
       key: meta.key,
       kind: 'normal',
       label: meta.label,
@@ -235,7 +413,7 @@ const singleLevelRows = (config: BoardConfig, universe: FieldUniverse, placedIss
       outerKey: null,
       outerValue: valueOrNull(meta.key),
       innerValue: null
-    })),
+    })), ...picker],
     outerRows: []
   };
 };
@@ -244,8 +422,9 @@ const twoLevelRows = (config: BoardConfig, universe: FieldUniverse, placedIssues
   const rows: RowSkeleton[] = [];
   const outerRows: LayoutOuterRow[] = [];
   const outerMetas = buildMetasFor(config.row, universe, placedIssues, true, 'Uncategorized');
+  const innerLabel = assignColumnLabel(config.innerRow?.field?.name ?? '');
   outerMetas.forEach(outer => {
-    const issuesInOuter = placedIssues.filter(issue => rowValueKey(issue, config.row) === outer.key);
+    const issuesInOuter = placedIssues.filter(issue => rowValueKeys(issue, config.row, universe).includes(outer.key));
     const innerMetas = buildMetasFor(config.innerRow, universe, issuesInOuter, false, 'Uncategorized');
     const rowKeys: string[] = [];
     innerMetas.forEach(inner => {
@@ -266,16 +445,7 @@ const twoLevelRows = (config: BoardConfig, universe: FieldUniverse, placedIssues
     });
     const pickerKey = compositeRowKey(outer.key, PICKER_ROW_SUFFIX);
     rowKeys.push(pickerKey);
-    rows.push({
-      key: pickerKey,
-      kind: 'picker',
-      label: PICKER_ROW_LABEL,
-      fullLabel: `${outer.label} / …`,
-      isUncategorized: false,
-      outerKey: outer.key,
-      outerValue: valueOrNull(outer.key),
-      innerValue: null
-    });
+    rows.push(pickerRow(pickerKey, outer.key, valueOrNull(outer.key), innerLabel, `${outer.label} / …`, 'inner'));
     outerRows.push({
       key: outer.key,
       label: outer.label,
@@ -286,6 +456,13 @@ const twoLevelRows = (config: BoardConfig, universe: FieldUniverse, placedIssues
       issueCount: issuesInOuter.length
     });
   });
+  if (isDynamicRow(config.row, universe)) {
+    // Dynamic first-level swimlanes only list values on the board; this one sets any other value.
+    const pickerKey = compositeRowKey(PICKER_ROW_SUFFIX, PICKER_ROW_SUFFIX);
+    const label = assignColumnLabel(config.row.field?.name ?? '');
+    rows.push(pickerRow(pickerKey, PICKER_ROW_SUFFIX, null, label, label, 'outer'));
+    outerRows.push({key: PICKER_ROW_SUFFIX, label, isUncategorized: false, rowKeys: [pickerKey], issueCount: 0, isPicker: true});
+  }
   return {rows, outerRows};
 };
 
@@ -493,17 +670,11 @@ const buildGroups = (placedIssues: BoardIssue[], ctx: Omit<GroupBuildContext, 'd
 
 /* ---------- Layout ---------- */
 
-export const computeLayout = ({issues, config, universe, parents}: LayoutInput): BoardLayout => {
-  const columns: LayoutColumn[] = config.columns.map((c, index) => ({
-    id: c.id,
-    label: columnLabel(c),
-    values: c.values,
-    index,
-    count: 0
-  }));
+export const computeLayout = ({issues, config, universe, parents, visibleColumnIds}: LayoutInput): BoardLayout => {
+  const {columns, availableColumns, columnIdsOf} = planColumns(config, universe, issues, visibleColumnIds);
   const columnIndex = new Map(columns.map(c => [c.id, c.index]));
   const issuesById = new Map(issues.map(i => [i.id, i]));
-  const {placed, placedIssues, hiddenIssueIds} = placeIssues(issues, config);
+  const {placed, placedIssues, hiddenIssueIds, extraCards} = placeIssues(issues, config, universe, columnIdsOf);
   const twoLevel = isTwoLevel(config);
   const skeleton = twoLevel ? twoLevelRows(config, universe, placedIssues) : singleLevelRows(config, universe, placedIssues);
   const rowOrder = new Map(skeleton.rows.map((r, index) => [r.key, index]));
@@ -533,6 +704,27 @@ export const computeLayout = ({issues, config, universe, parents}: LayoutInput):
     }
   });
 
+  // Extra cards of multi-value fields are plain cards: subtask boxes hold primary cards only.
+  const cards: Record<string, CardPlacement> = {};
+  placed.forEach((p, issueId) => {
+    cards[issueId] = {issueId, rowKey: p.rowKey, columnId: p.columnId};
+  });
+  extraCards.forEach((card, id) => {
+    const row = rowByKey.get(card.rowKey);
+    const column = columnById.get(card.columnId);
+    if (!row || !column) {
+      return;
+    }
+    cards[id] = card;
+    row.issueCount += 1;
+    column.count += 1;
+    row.looseByColumn[card.columnId].push(id);
+  });
+  if (extraCards.size > 0) {
+    const byIssue = (a: string, b: string): number => compareIds(issuesById)(cards[a]?.issueId ?? a, cards[b]?.issueId ?? b);
+    rows.forEach(row => Object.values(row.looseByColumn).forEach(ids => ids.sort(byIssue)));
+  }
+
   return {
     columns,
     rows,
@@ -541,7 +733,9 @@ export const computeLayout = ({issues, config, universe, parents}: LayoutInput):
     outerRows: skeleton.outerRows,
     placement: Object.fromEntries(placed),
     groupAncestors: ancestors,
-    hiddenIssueIds
+    hiddenIssueIds,
+    availableColumns,
+    cards
   };
 };
 

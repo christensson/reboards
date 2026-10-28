@@ -12,6 +12,7 @@ export const fieldRefSchema = z.object({
     z.literal("enum"),
     z.literal("state"),
     z.literal("version"),
+    z.literal("build"),
     z.literal("user"),
     z.literal("integer"),
   ]),
@@ -21,6 +22,18 @@ export const columnConfigSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
   values: z.array(z.string()),
+});
+
+export const dynamicOptionsSchema = z.object({
+  sort: z.union([
+    z.literal("alphabetical"),
+    z.literal("alphabetical-desc"),
+    z.literal("date"),
+    z.literal("date-desc"),
+  ]),
+  showReleased: z.boolean(),
+  showArchived: z.boolean(),
+  maxColumns: z.number(),
 });
 
 export const rowConfigSchema = z.object({
@@ -33,6 +46,7 @@ export const rowConfigSchema = z.object({
     z.literal("numerical-desc"),
   ]),
   customOrder: z.array(z.string()),
+  dynamic: dynamicOptionsSchema,
 });
 
 export const boardDeleteReqSchema = z.object({
@@ -83,6 +97,7 @@ export const boardConfigSchema = z.object({
   sprints: sprintConfigSchema,
   columnField: fieldRefSchema,
   columns: z.array(columnConfigSchema),
+  columnOptions: dynamicOptionsSchema,
   ignoredValues: z.array(z.string()),
   row: rowConfigSchema,
   innerRow: rowConfigSchema.nullable(),

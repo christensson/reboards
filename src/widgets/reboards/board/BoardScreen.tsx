@@ -1,9 +1,9 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {DndContext, type DragEndEvent, type DragOverEvent, type DragStartEvent, DragOverlay, PointerSensor, useSensor, useSensors} from '@dnd-kit/core';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
-import {type BoardConfig, type FieldRef, isTwoLevel, swapSwimlanes} from '@/common/model/board-config';
+import {type BoardConfig, type DynamicOptions, type FieldRef, isDynamicKind, isTwoLevel, swapSwimlanes} from '@/common/model/board-config';
 import {type UserPrefs, boardView, setBoardView, toggleStar} from '@/common/storage/prefs';
-import {buildFieldUpdate} from '@/common/youtrack/fields';
+import {buildFieldUpdate, buildMultiFieldUpdate} from '@/common/youtrack/fields';
 import {errorMessage} from '@/common/youtrack/rest';
 import {issueUrl, newIssueUrl} from '@/common/youtrack/urls';
 import {youtrack} from '../data/api';
@@ -15,8 +15,8 @@ import {computeEdges} from '../model/connectors';
 import type {FieldUniverse} from '../model/fieldUniverse';
 import {sprintForDate} from '../model/sprints';
 import type {BoardIssue} from '../model/issue';
-import {type BoardLayout, type LayoutGroup, computeLayout, walkGroups} from '../model/layout';
-import {type FieldChange, type MoveTarget, applyChanges, planMove, planRowChanges} from '../model/mutations';
+import {type BoardLayout, type CardPlacement, type LayoutGroup, computeLayout, revealColumnIds, walkGroups} from '../model/layout';
+import {type FieldChange, type MoveTarget, type ValueChoice, applyChanges, keysAfter, planMove, planRowChanges} from '../model/mutations';
 import {groupDragHint, issueDragHint, linkDragHint} from '../model/dragHint';
 import {isLinkDropData} from '../model/linkTargets';
 import {computeMatchIds} from '../model/search';
@@ -27,7 +27,7 @@ import {ColumnHeaders} from './ColumnHeaders';
 import {GROUP_DRAG_PREFIX} from './GroupBox';
 import {ConnectorsOverlay} from './ConnectorsOverlay';
 import {IssueCardView} from './IssueCard';
-import {SwimlanePickerDialog} from './SwimlanePickerDialog';
+import {FieldValuePickerDialog} from './FieldValuePickerDialog';
 import {OUTER_WIDTH} from './tracks';
 import {Toolbar} from './Toolbar';
 import {ValuePickerDialog} from './ValuePickerDialog';
@@ -56,7 +56,8 @@ type PendingMove = {
   issues: BoardIssue[];
   changes: FieldChange[];
   pickColumnId?: string;
-  pickInner?: boolean;
+  /** Values still to pick, in order, after any column value. */
+  choices: ValueChoice[];
   label: string;
 };
 
@@ -69,11 +70,12 @@ const subtaskIdsOf = (group: LayoutGroup): string[] =>
 const movedIdsOf = (group: LayoutGroup): string[] =>
   group.parentInThisRow ? [...subtaskIdsOf(group), group.parentId] : subtaskIdsOf(group);
 
-type ActiveDrag = {issue?: BoardIssue; group?: LayoutGroup};
+type ActiveDrag = {issue?: BoardIssue; card?: CardPlacement; group?: LayoutGroup};
 
 const describeActiveDrag = (
   activeId: string | null,
   issuesById: Map<string, BoardIssue>,
+  cards: Record<string, CardPlacement>,
   findGroup: (key: string) => LayoutGroup | undefined
 ): ActiveDrag => {
   if (!activeId) {
@@ -82,13 +84,27 @@ const describeActiveDrag = (
   if (activeId.startsWith(GROUP_DRAG_PREFIX)) {
     return {group: findGroup(activeId.slice(GROUP_DRAG_PREFIX.length))};
   }
-  return {issue: issuesById.get(activeId)};
+  // Card ids differ from issue ids for the extra cards of multi-value fields.
+  const card = cards[activeId];
+  return {issue: issuesById.get(card?.issueId ?? activeId), card};
 };
 
 const pickedColumn = (pending: PendingMove | null, columnById: Map<string, BoardConfig['columns'][number]>) =>
   pending?.pickColumnId ? (columnById.get(pending.pickColumnId) ?? null) : null;
 
-const showInnerPicker = (pending: PendingMove | null): boolean => Boolean(pending?.pickInner && !pending.pickColumnId);
+const pendingChoice = (pending: PendingMove | null): ValueChoice | null =>
+  pending && !pending.pickColumnId ? (pending.choices[0] ?? null) : null;
+
+/** Filter and sort of the dynamic field picked on drop: the column field's or a swimlane level's. */
+const choiceOptions = (board: BoardConfig, field: FieldRef | null): DynamicOptions | undefined => {
+  if (!field) {
+    return undefined;
+  }
+  if (field.name === board.columnField.name) {
+    return board.columnOptions;
+  }
+  return field.name === board.row.field?.name ? board.row.dynamic : board.innerRow?.dynamic;
+};
 
 const DragHint: React.FC<{text: string}> = ({text}) => <div className="drag-hint">{text}</div>;
 
@@ -118,13 +134,14 @@ type PendingMoveDialogsProps = {
   universe: FieldUniverse;
   issues: BoardIssue[];
   onPickValue: (value: string) => void;
-  onPickInner: (valueKey: string | null) => void;
+  onPickChoice: (valueKey: string | null) => void;
   onCancel: () => void;
 };
 
-/** The choices a drop may still need: a column value, then a second-level swimlane value. */
-const PendingMoveDialogs: React.FC<PendingMoveDialogsProps> = ({pending, board, universe, issues, onPickValue, onPickInner, onCancel}) => {
+/** The choices a drop may still need: a column value, then values of "Assign…" columns and swimlanes. */
+const PendingMoveDialogs: React.FC<PendingMoveDialogsProps> = ({pending, board, universe, issues, onPickValue, onPickChoice, onCancel}) => {
   const columnById = new Map(board.columns.map(c => [c.id, c]));
+  const choice = pendingChoice(pending);
   return (
     <>
       <ValuePickerDialog
@@ -135,13 +152,14 @@ const PendingMoveDialogs: React.FC<PendingMoveDialogsProps> = ({pending, board, 
         onPick={onPickValue}
         onCancel={onCancel}
       />
-      <SwimlanePickerDialog
-        show={showInnerPicker(pending)}
-        field={board.innerRow?.field ?? null}
+      <FieldValuePickerDialog
+        show={Boolean(choice)}
+        field={choice?.field ?? null}
         universe={universe}
         issues={issues}
+        options={choiceOptions(board, choice?.field ?? null)}
         subjectLabel={pending?.label ?? ''}
-        onPick={onPickInner}
+        onPick={onPickChoice}
         onCancel={onCancel}
       />
     </>
@@ -168,12 +186,12 @@ const BASE_COLUMN_WIDTH: Record<string, number> = {small: 220, normal: 280};
 const COLLAPSED_COLUMN_WIDTH = 36;
 
 /** Column width: at least the base width, wider when the visible columns can share the viewport. */
-const columnWidth = (cardSize: string, availableWidth: number, visibleColumns: number, collapsedColumns: number): number => {
+const columnWidth = (cardSize: string, availableWidth: number, visibleColumns: number, narrowColumns: number): number => {
   const base = BASE_COLUMN_WIDTH[cardSize] ?? BASE_COLUMN_WIDTH.normal;
   if (visibleColumns === 0 || availableWidth === 0) {
     return base;
   }
-  return Math.max(base, Math.floor((availableWidth - collapsedColumns * COLLAPSED_COLUMN_WIDTH - 1) / visibleColumns));
+  return Math.max(base, Math.floor((availableWidth - narrowColumns * COLLAPSED_COLUMN_WIDTH - 1) / visibleColumns));
 };
 
 /** Width left for columns once the first-level swimlane column is accounted for. */
@@ -195,11 +213,11 @@ const computeDragHighlight = (active: ActiveDrag, target: MoveTarget | null): Dr
 
 const describeDragHint = (active: ActiveDrag, layout: BoardLayout, board: BoardConfig, universe: FieldUniverse, target: MoveTarget | null): string => {
   if (active.issue) {
-    const from = layout.placement[active.issue.id];
-    return from ? issueDragHint(board, universe, active.issue, from, target, layout.rowsByKey) : '';
+    const from = active.card ?? layout.placement[active.issue.id];
+    return from ? issueDragHint(board, universe, active.issue, from, target, layout.rowsByKey, layout.columns) : '';
   }
   if (active.group) {
-    return groupDragHint(active.group, subtaskIdsOf(active.group).length, layout.rows, target, board.innerRow?.field?.name ?? null);
+    return groupDragHint(active.group, subtaskIdsOf(active.group).length, layout.rows, target, board.innerRow?.field?.name ?? null, board.row.field?.name ?? null);
   }
   return '';
 };
@@ -293,8 +311,14 @@ export const BoardScreen: React.FC<Props> = ({
 
   const issuesById = useMemo(() => new Map(data.issues.map(i => [i.id, i])), [data.issues]);
   const layout = useMemo(
-    () => computeLayout({issues: data.issues, config: board, universe: reference.universe, parents: data.parents}),
-    [data.issues, board, reference.universe, data.parents]
+    () => computeLayout({
+      issues: data.issues,
+      config: board,
+      universe: reference.universe,
+      parents: data.parents,
+      visibleColumnIds: prefs.visibleColumns[board.id]
+    }),
+    [data.issues, board, reference.universe, data.parents, prefs.visibleColumns]
   );
   const collapsedRows = useMemo(() => new Set(prefs.collapsedRows[board.id] ?? []), [prefs.collapsedRows, board.id]);
   const collapsedGroups = useMemo(() => new Set(prefs.collapsedGroups[board.id] ?? []), [prefs.collapsedGroups, board.id]);
@@ -349,15 +373,14 @@ export const BoardScreen: React.FC<Props> = ({
     [issuesById, data.parents, baseUrl]
   );
 
-  const columnById = useMemo(() => new Map(board.columns.map(c => [c.id, c])), [board.columns]);
   const newIssueHref = useCallback(
     (rowKey: string, columnId: string, parentIdReadable?: string): string | null => {
       const project = board.projects[0];
-      const column = columnById.get(columnId);
-      if (!view.showNewIssue || !project || !column || column.values.length === 0) {
+      const value = layout.columns.find(c => c.id === columnId)?.values[0];
+      if (!view.showNewIssue || !project || value === undefined) {
         return null;
       }
-      const presets = [{field: board.columnField.name, value: column.values[0]}];
+      const presets = [{field: board.columnField.name, value}];
       const row = layout.rowsByKey[rowKey];
       if (board.innerRow?.field && row?.innerValue) {
         presets.unshift({field: board.innerRow.field.name, value: row.innerValue});
@@ -367,7 +390,7 @@ export const BoardScreen: React.FC<Props> = ({
       }
       return newIssueUrl(baseUrl, project.shortName, presets, parentIdReadable ? [`subtask of ${parentIdReadable}`] : []);
     },
-    [board, columnById, baseUrl, layout.rowsByKey, view.showNewIssue]
+    [board, baseUrl, layout.columns, layout.rowsByKey, view.showNewIssue]
   );
 
   const expandFor = useCallback(
@@ -423,9 +446,12 @@ export const BoardScreen: React.FC<Props> = ({
       const optimistic = applyChanges(issue, changes, reference.universe);
       data.replaceIssue(optimistic);
       try {
-        const updates = changes.map(change =>
-          buildFieldUpdate(change.field.name, change.field.kind, issue.fields[change.field.name]?.$type, change.valueKey)
-        );
+        const updates = changes.map(change => {
+          const currentType = issue.fields[change.field.name]?.$type;
+          return reference.universe.byName.get(change.field.name)?.multi
+            ? buildMultiFieldUpdate(change.field.name, change.field.kind, currentType, keysAfter(issue, change, reference.universe))
+            : buildFieldUpdate(change.field.name, change.field.kind, currentType, change.valueKey);
+        });
         await youtrack.updateIssueFields(issue.id, updates);
         await data.refetchIssue(issue.id);
       } catch (failure) {
@@ -486,14 +512,20 @@ export const BoardScreen: React.FC<Props> = ({
   /** Applies a pending move to every issue in it, or asks for the next missing choice. */
   const settlePending = useCallback(
     (pending: PendingMove) => {
-      if (pending.pickColumnId || pending.pickInner) {
+      if (pending.pickColumnId || pending.choices.length > 0) {
         setPendingMove(pending);
         return;
       }
       setPendingMove(null);
       pending.issues.forEach(issue => applyMove(issue, pending.changes));
+      // A value assigned through "Assign <field>…" may have a column that is not shown: show it.
+      const columnChange = pending.changes.find(change => change.field.name === board.columnField.name);
+      const reveal = columnChange ? revealColumnIds(layout.columns, columnChange.valueKey) : null;
+      if (reveal) {
+        updatePrefs(prev => ({visibleColumns: {...prev.visibleColumns, [board.id]: reveal}}));
+      }
     },
-    [applyMove]
+    [applyMove, board.columnField.name, board.id, layout.columns, updatePrefs]
   );
 
   /** Moves every subtask inside a box to another swimlane; the column never changes. */
@@ -504,7 +536,7 @@ export const BoardScreen: React.FC<Props> = ({
         return;
       }
       const rowPlan = planRowChanges(board, group.rowKey, target.rowKey, layout.rowsByKey);
-      if (rowPlan.changes.length === 0 && !rowPlan.pickInnerValue) {
+      if (rowPlan.changes.length === 0 && !rowPlan.choices) {
         return;
       }
       const all = movedIdsOf(group).map(id => issuesById.get(id)).filter((i): i is BoardIssue => Boolean(i));
@@ -515,7 +547,7 @@ export const BoardScreen: React.FC<Props> = ({
       if (issues.length === 0) {
         return;
       }
-      settlePending({issues, changes: rowPlan.changes, pickInner: rowPlan.pickInnerValue, label: `subtasks of ${group.parentIdReadable}`});
+      settlePending({issues, changes: rowPlan.changes, choices: rowPlan.choices ?? [], label: `subtasks of ${group.parentIdReadable}`});
     },
     [findGroup, board, layout.rowsByKey, issuesById, settlePending, canUpdateIssue]
   );
@@ -525,8 +557,10 @@ export const BoardScreen: React.FC<Props> = ({
       setActiveDragId(null);
       setDragTarget(null);
       const activeId = String(event.active.id);
+      // The card dragged: an issue's primary card (id = issue id) or an extra card of a multi-value field.
+      const card = layout.cards[activeId];
       // Ctrl / Ctrl+Shift drags change the parent or add a relation, never fields.
-      if (dropLink(activeId.startsWith(GROUP_DRAG_PREFIX) ? undefined : issuesById.get(activeId))) {
+      if (dropLink(activeId.startsWith(GROUP_DRAG_PREFIX) ? undefined : issuesById.get(card?.issueId ?? activeId))) {
         return;
       }
       const target = event.over?.data.current as MoveTarget | undefined;
@@ -536,9 +570,8 @@ export const BoardScreen: React.FC<Props> = ({
         }
         return;
       }
-      const issueId = activeId;
-      const issue = issuesById.get(issueId);
-      const from = layout.placement[issueId];
+      const issue = card && issuesById.get(card.issueId);
+      const from = card;
       if (!issue || !from || !target) {
         return;
       }
@@ -546,10 +579,10 @@ export const BoardScreen: React.FC<Props> = ({
         alertService.warning(`You do not have permission to change ${issue.idReadable}`);
         return;
       }
-      const plan = planMove(board, from, target, layout.rowsByKey);
-      settlePending({issues: [issue], changes: plan.changes, pickColumnId: plan.pickColumn?.id, pickInner: plan.pickInnerValue, label: issue.idReadable});
+      const plan = planMove(board, from, target, layout.rowsByKey, layout.columns);
+      settlePending({issues: [issue], changes: plan.changes, pickColumnId: plan.pickColumn?.id, choices: plan.choices ?? [], label: issue.idReadable});
     },
-    [issuesById, layout.placement, layout.rowsByKey, board, settlePending, moveGroup, dropLink, canUpdateIssue]
+    [issuesById, layout.cards, layout.rowsByKey, layout.columns, board, settlePending, moveGroup, dropLink, canUpdateIssue]
   );
 
   const onPickValue = useCallback(
@@ -562,14 +595,16 @@ export const BoardScreen: React.FC<Props> = ({
     [pendingMove, board.columnField, settlePending]
   );
 
-  const onPickInner = useCallback(
+  const onPickChoice = useCallback(
     (valueKey: string | null) => {
-      if (!pendingMove || !board.innerRow?.field) {
+      const [choice, ...rest] = pendingMove?.choices ?? [];
+      if (!pendingMove || !choice) {
         return;
       }
-      settlePending({...pendingMove, changes: [...pendingMove.changes, {field: board.innerRow.field, valueKey}], pickInner: false});
+      const change: FieldChange = {field: choice.field, valueKey, ...(choice.replaceKey === undefined ? {} : {replaceKey: choice.replaceKey})};
+      settlePending({...pendingMove, changes: [...pendingMove.changes, change], choices: rest});
     },
-    [pendingMove, board.innerRow, settlePending]
+    [pendingMove, settlePending]
   );
 
   const canMoveGroup = useCallback(
@@ -582,7 +617,19 @@ export const BoardScreen: React.FC<Props> = ({
 
   const columnLabelOf = useCallback((columnId: string) => layout.columns.find(c => c.id === columnId)?.label ?? '', [layout.columns]);
 
-  const activeDrag = useMemo(() => describeActiveDrag(activeDragId, issuesById, findGroup), [activeDragId, issuesById, findGroup]);
+  const issueIdOf = useCallback((id: string) => layout.cards[id]?.issueId ?? id, [layout.cards]);
+
+  /** Keeps the user's column pick for this board; an empty pick or a reset goes back to the default columns. */
+  const pickColumns = useCallback(
+    (columnIds: string[] | null) =>
+      updatePrefs(prev => {
+        const {[board.id]: _previous, ...others} = prev.visibleColumns;
+        return {visibleColumns: columnIds && columnIds.length > 0 ? {...others, [board.id]: columnIds} : others};
+      }),
+    [updatePrefs, board.id]
+  );
+
+  const activeDrag = useMemo(() => describeActiveDrag(activeDragId, issuesById, layout.cards, findGroup), [activeDragId, issuesById, layout.cards, findGroup]);
   const dragHighlight = useMemo(() => (link.mode === 'none' ? computeDragHighlight(activeDrag, dragTarget) : null), [link.mode, activeDrag, dragTarget]);
 
   const stateFieldNames = useMemo(
@@ -609,9 +656,10 @@ export const BoardScreen: React.FC<Props> = ({
       registry,
       columnLabel: columnLabelOf,
       canDrag,
-      canMoveGroup
+      canMoveGroup,
+      issueIdOf
     }),
-    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf, canDrag, canMoveGroup]
+    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf, canDrag, canMoveGroup, issueIdOf]
   );
 
   const status = useMemo(
@@ -628,7 +676,14 @@ export const BoardScreen: React.FC<Props> = ({
     [link.mode, linkTargetOf, activeDrag, layout, board, reference.universe, dragTarget]
   );
   const error = reference.error ?? data.error;
-  const colWidth = columnWidth(view.cardSize, availableWidth(scrollWidth, twoLevel), layout.columns.length - collapsedColumns.size, collapsedColumns.size);
+  // The "Assign <field>…" column is as narrow as a collapsed one.
+  const assignColumns = layout.columns.filter(c => c.assign).length;
+  const colWidth = columnWidth(
+    view.cardSize,
+    availableWidth(scrollWidth, twoLevel),
+    layout.columns.length - collapsedColumns.size - assignColumns,
+    collapsedColumns.size + assignColumns
+  );
   const layoutVersion = useMemo(
     () => [layout, view.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading],
     [layout, view.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading]
@@ -669,7 +724,7 @@ export const BoardScreen: React.FC<Props> = ({
         }}
       />
       {error && <div className="board-error">{error}</div>}
-      {board.columns.length === 0 && !error && (
+      {board.columns.length === 0 && !isDynamicKind(reference.universe.byName.get(board.columnField.name)?.kind ?? board.columnField.kind) && !error && (
         <div className="board-empty">This board has no columns yet. Open the board settings to configure columns.</div>
       )}
       <BoardContext.Provider value={contextValue}>
@@ -696,6 +751,8 @@ export const BoardScreen: React.FC<Props> = ({
                 twoLevel={twoLevel}
                 swappedSwimlanes={swapped}
                 onToggleSwappedSwimlanes={() => updatePrefs(prev => ({swappedSwimlanes: {...prev.swappedSwimlanes, [board.id]: !swapped}}))}
+                availableColumns={layout.availableColumns}
+                onPickColumns={pickColumns}
               />
               <BoardRows
                 layout={layout}
@@ -727,7 +784,7 @@ export const BoardScreen: React.FC<Props> = ({
         universe={reference.universe}
         issues={data.issues}
         onPickValue={onPickValue}
-        onPickInner={onPickInner}
+        onPickChoice={onPickChoice}
         onCancel={() => setPendingMove(null)}
       />
       <RelationPickerDialog {...link.dialog}/>

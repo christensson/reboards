@@ -115,24 +115,31 @@ IssueCardView.displayName = 'IssueCardView';
 
 type Props = {
   issueId: string;
+  /** Id of an extra card of an issue with several values of a multi-value field; the issue id for its primary card. */
+  cardId?: string;
   isParent?: boolean;
 };
 
-const IssueCardComponent: React.FC<Props> = ({issueId, isParent}) => {
+const IssueCardComponent: React.FC<Props> = ({issueId, cardId = issueId, isParent}) => {
   const ctx = useBoardContext();
   const issue = ctx.issuesById.get(issueId);
   const locked = !ctx.canDrag(issueId);
-  const {attributes, listeners, setNodeRef, isDragging} = useDraggable({id: issueId, data: {issueId}, disabled: locked});
+  // Drag and drop ids are per card: an issue may have several cards.
+  const {attributes, listeners, setNodeRef, isDragging} = useDraggable({id: cardId, data: {issueId}, disabled: locked});
   // Target for Ctrl/Ctrl+Shift drags (change parent, add relation); ignored by plain drags.
-  const {setNodeRef: setLinkDropRef} = useDroppable({id: `${LINK_CARD_PREFIX}${issueId}`, data: {kind: 'link-card', issueId}});
+  const {setNodeRef: setLinkDropRef} = useDroppable({id: `${LINK_CARD_PREFIX}${cardId}`, data: {kind: 'link-card', issueId}});
+  const primary = cardId === issueId;
 
   const setRef = useCallback(
     (element: HTMLDivElement | null) => {
       setNodeRef(element);
       setLinkDropRef(element);
-      ctx.registry.register(issueId, element);
+      // Connectors and scrolling to an issue use its primary card.
+      if (primary) {
+        ctx.registry.register(issueId, element);
+      }
     },
-    [setNodeRef, setLinkDropRef, ctx.registry, issueId]
+    [setNodeRef, setLinkDropRef, ctx.registry, issueId, primary]
   );
   const isLinkTarget = ctx.linkHighlight?.kind === 'card' && ctx.linkHighlight.id === issueId;
 

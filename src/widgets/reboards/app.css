@@ -188,6 +188,23 @@ body {
   padding: var(--ring-unit) 0;
 }
 
+.board-header__column_with-picker {
+  /* Room for the column picker placed over the right end of the last header. */
+  padding-right: calc(var(--ring-unit) * 7);
+}
+
+.board-header__picker {
+  position: absolute;
+  top: 50%;
+  right: var(--ring-unit);
+  transform: translateY(-50%);
+}
+
+.board-header__no-value {
+  color: var(--ring-secondary-color);
+  font-style: italic;
+}
+
 .board-header__collapsed-label {
   display: block;
   width: 100%;
@@ -433,7 +450,7 @@ body {
   min-height: calc(var(--ring-unit) * 3);
 }
 
-/* Swimlane without issues: "+" at the top, "Assign other swimlane…" at the bottom. */
+/* Swimlane without issues: "+" at the top, "Assign <field>…" at the bottom. */
 .board-band_picker-only .band-drop {
   min-height: calc(var(--ring-unit) * 6);
   padding: calc(var(--ring-unit) / 2) var(--ring-unit);
@@ -1291,4 +1308,116 @@ body {
 .option-indicator_selected {
   border-color: var(--ring-main-color);
   background-image: radial-gradient(circle, var(--ring-main-color) 0 3px, transparent 3.5px);
+}
+
+/* ---------- "Assign <field>…" column (dynamic column fields) ---------- */
+
+.board-header__column_assign {
+  cursor: default;
+}
+
+.board-header__column_assign:hover {
+  background: none;
+}
+
+.board-header__picker_before-assign {
+  right: calc(var(--col-c) + var(--ring-unit));
+}
+
+.board-cell_assign {
+  align-items: center;
+  padding: var(--ring-unit) 0;
+}
+
+.board-cell__assign-label {
+  max-height: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* "Assign <field>…" of a dynamic first-level field. */
+.outer-row_picker {
+  border-bottom: none;
+}
+
+.value-picker__filter {
+  margin-bottom: var(--ring-unit);
+}
+
+/* About ten values fit; longer lists scroll. */
+.value-picker__list {
+  max-height: calc(var(--ring-unit) * 4 * 10 + var(--ring-unit));
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--ring-line-color);
+  border-radius: var(--ring-border-radius);
+}
+
+.value-picker__item {
+  display: flex;
+  align-items: center;
+  gap: var(--ring-unit);
+  width: 100%;
+  min-height: calc(var(--ring-unit) * 4);
+  margin: 0;
+  padding: 0 var(--ring-unit);
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.value-picker__item:hover,
+.value-picker__item:focus-visible {
+  background-color: var(--ring-hover-background-color);
+  outline: none;
+}
+
+/* While searching: matches stand out, the rest fade; the selected one is set by Enter. */
+.value-picker__item_match .value-picker__label {
+  font-weight: bold;
+}
+
+.value-picker__item_dimmed {
+  opacity: 0.45;
+}
+
+.value-picker__item_selected,
+.value-picker__item_selected:hover {
+  background-color: var(--ring-selected-background-color);
+  box-shadow: inset 2px 0 0 var(--ring-main-color);
+}
+
+.value-picker__item_empty .value-picker__label {
+  color: var(--ring-secondary-color);
+  font-style: italic;
+}
+
+.value-picker__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.value-picker__avatar {
+  flex: none;
+  width: calc(var(--ring-unit) * 2);
+  height: calc(var(--ring-unit) * 2);
+  border-radius: 50%;
+}
+
+.value-picker__none {
+  margin: 0 0 var(--ring-unit);
+  color: var(--ring-secondary-color);
 }

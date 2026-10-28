@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {BOARD_LIMITS, columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, swapSwimlanes, validateBoardConfig} from './board-config';
+import {type BoardConfig, BOARD_LIMITS, columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, swapSwimlanes, validateBoardConfig, defaultDynamicOptions} from './board-config';
 
 describe('normalizeBoardConfig', () => {
   it('fills defaults for an empty document', () => {
@@ -14,8 +14,8 @@ describe('normalizeBoardConfig', () => {
   });
 
   it('normalizes the optional second swimlane field', () => {
-    expect(normalizeBoardConfig({innerRow: {field: {name: 'Type', kind: 'enum'}, sort: 'alphabetical', customOrder: []}}).innerRow)
-      .toEqual({field: {name: 'Type', kind: 'enum'}, sort: 'alphabetical', customOrder: []});
+    expect(normalizeBoardConfig({innerRow: {field: {name: 'Type', kind: 'enum'}, sort: 'alphabetical', customOrder: [], dynamic: defaultDynamicOptions()}}).innerRow)
+      .toEqual({field: {name: 'Type', kind: 'enum'}, sort: 'alphabetical', customOrder: [], dynamic: defaultDynamicOptions()});
     expect(normalizeBoardConfig({innerRow: 'nope'}).innerRow).toBeNull();
     expect(isTwoLevel(normalizeBoardConfig({innerRow: {field: {name: 'Type', kind: 'enum'}}}))).toBe(true);
     expect(isTwoLevel(normalizeBoardConfig({innerRow: {field: null}}))).toBe(false);
@@ -30,7 +30,7 @@ describe('normalizeBoardConfig', () => {
       bogus: 1,
       columns: [{id: 'c1', values: ['Open', 3]}, 'nope', {values: ['Done']}],
       projects: [{id: '0-1', shortName: 'DEMO'}, {id: 5}],
-      row: {field: null, sort: 'weird', customOrder: ['A']},
+      row: {field: null, sort: 'weird', customOrder: ['A'], dynamic: defaultDynamicOptions()},
       sprints: {enabled: true, field: {name: 'Sprint', kind: 'version'}},
       cardColorField: null
     });
@@ -38,7 +38,7 @@ describe('normalizeBoardConfig', () => {
     expect('bogus' in config).toBe(false);
     expect(config.columns).toEqual([{id: 'c1', values: ['Open']}, {id: 'col-1', values: ['Done']}]);
     expect(config.projects).toEqual([{id: '0-1', shortName: 'DEMO'}]);
-    expect(config.row).toEqual({field: null, sort: 'custom', customOrder: ['A']});
+    expect(config.row).toEqual({field: null, sort: 'custom', customOrder: ['A'], dynamic: defaultDynamicOptions()});
     expect(config.sprints).toEqual({enabled: true, field: {name: 'Sprint', kind: 'version'}});
   });
 
@@ -75,9 +75,9 @@ describe('validateBoardConfig', () => {
   });
 
   it('validates the second swimlane field', () => {
-    const inner = {field: {name: 'Priority', kind: 'enum' as const}, sort: 'custom' as const, customOrder: []};
+    const inner = {field: {name: 'Priority', kind: 'enum' as const}, sort: 'custom' as const, customOrder: [], dynamic: defaultDynamicOptions()};
     expect(validateBoardConfig({...valid(), innerRow: inner}).map(i => i.message)).toEqual(['The two swimlane fields must be different']);
-    expect(validateBoardConfig({...valid(), row: {field: null, sort: 'custom', customOrder: []}, innerRow: inner}).map(i => i.message))
+    expect(validateBoardConfig({...valid(), row: {field: null, sort: 'custom', customOrder: [], dynamic: defaultDynamicOptions()}, innerRow: inner}).map(i => i.message))
       .toEqual(['Set the first swimlane field before the second']);
     expect(validateBoardConfig({...valid(), innerRow: {...inner, field: {name: 'Type', kind: 'enum'}}})).toEqual([]);
   });
@@ -90,7 +90,7 @@ describe('validateBoardConfig', () => {
 
 describe('swapSwimlanes', () => {
   it('exchanges the two levels only when both are set', () => {
-    const inner = {field: {name: 'Type', kind: 'enum' as const}, sort: 'alphabetical' as const, customOrder: []};
+    const inner = {field: {name: 'Type', kind: 'enum' as const}, sort: 'alphabetical' as const, customOrder: [], dynamic: defaultDynamicOptions()};
     const board = {...createEmptyBoard('me'), innerRow: inner};
     const swapped = swapSwimlanes(board);
     expect(swapped.row).toEqual(inner);
@@ -128,3 +128,32 @@ describe('validateBoardSize', () => {
     expect(validateBoardConfig({...valid(), cardFields: fields}).map(p => p.field)).toContain('size');
   });
 });
+
+describe('dynamic column and swimlane fields', () => {
+  const board = (): BoardConfig => ({
+    ...createEmptyBoard('alice'),
+    name: 'Board',
+    projects: [{id: '0-1', shortName: 'SAN'}],
+    columnField: {name: 'Assignee', kind: 'user'}
+  });
+
+  it('fills dynamic defaults for stored boards without them', () => {
+    const config = normalizeBoardConfig({row: {field: {name: 'Fix versions', kind: 'version'}}});
+    expect(config.columnOptions).toEqual({sort: 'alphabetical', showReleased: true, showArchived: false, maxColumns: 5});
+    expect(config.row.dynamic.showArchived).toBe(false);
+    expect(normalizeBoardConfig({columnField: {name: 'Fixed in build', kind: 'build'}}).columnField.kind).toBe('build');
+  });
+
+  it('needs no explicit columns for a dynamic column field', () => {
+    expect(validateBoardConfig(board())).toEqual([]);
+    expect(validateBoardConfig({...board(), columnOptions: {...board().columnOptions, maxColumns: 0}}).map(p => p.field)).toEqual(['columns']);
+  });
+
+  it('keeps the sprint field out of columns and swimlanes', () => {
+    const sprintBoard = {...board(), sprints: {enabled: true, field: {name: 'Sprints', kind: 'version' as const}}};
+    expect(validateBoardConfig(sprintBoard)).toEqual([]);
+    expect(validateBoardConfig({...sprintBoard, columnField: {name: 'Sprints', kind: 'version'}}).map(p => p.field)).toEqual(['sprints']);
+    expect(validateBoardConfig({...sprintBoard, row: {...sprintBoard.row, field: {name: 'Sprints', kind: 'version'}}}).map(p => p.field)).toEqual(['sprints']);
+  });
+});
+

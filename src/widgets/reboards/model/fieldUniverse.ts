@@ -1,4 +1,4 @@
-import type {BoardConfig, ColumnConfig, FieldKind, FieldRef} from '@/common/model/board-config';
+import {type BoardConfig, type ColumnConfig, type FieldKind, type FieldRef, emptyRow} from '@/common/model/board-config';
 import {describeFieldType} from '@/common/youtrack/fields';
 import type {YtColor, YtProjectCustomField} from '@/common/youtrack/types';
 
@@ -12,6 +12,11 @@ export type UniverseValue = {
   /** Version values: sprint range in epoch milliseconds. */
   startDate?: number;
   releaseDate?: number;
+  /** Version values: released and archived flags. */
+  released?: boolean;
+  archived?: boolean;
+  /** Build values: when the build was assembled, in epoch milliseconds. */
+  assembleDate?: number;
 };
 
 export type ResolvedField = {
@@ -54,7 +59,10 @@ const bundleValues = (field: YtProjectCustomField): UniverseValue[] => {
     ...(v.color ? {color: v.color} : {}),
     ...(v.isResolved !== undefined ? {isResolved: v.isResolved} : {}),
     ...(typeof v.startDate === 'number' ? {startDate: v.startDate} : {}),
-    ...(typeof v.releaseDate === 'number' ? {releaseDate: v.releaseDate} : {})
+    ...(typeof v.releaseDate === 'number' ? {releaseDate: v.releaseDate} : {}),
+    ...(typeof v.released === 'boolean' ? {released: v.released} : {}),
+    ...(typeof v.archived === 'boolean' ? {archived: v.archived} : {}),
+    ...(typeof v.assembleDate === 'number' ? {assembleDate: v.assembleDate} : {})
   }));
 };
 
@@ -106,18 +114,21 @@ export const emptyUniverse = (): FieldUniverse => ({fields: [], byName: new Map(
 export type FieldFilter = {
   kinds: FieldKind[];
   singleOnly?: boolean;
+  /** Kinds allowed with several values even when `singleOnly` is set. */
+  multiKinds?: FieldKind[];
 };
 
+const multiAllowed = (field: ResolvedField, filter: FieldFilter): boolean =>
+  !filter.singleOnly || !field.multi || (field.kind !== 'other' && (filter.multiKinds ?? []).includes(field.kind));
+
 export const fieldsMatching = (universe: FieldUniverse, filter: FieldFilter): ResolvedField[] =>
-  universe.fields.filter(
-    f => f.kind !== 'other' && filter.kinds.includes(f.kind) && !f.inconsistent && (!filter.singleOnly || !f.multi)
-  );
+  universe.fields.filter(f => f.kind !== 'other' && filter.kinds.includes(f.kind) && !f.inconsistent && multiAllowed(f, filter));
 
 export const toFieldRef = (field: ResolvedField): FieldRef | null =>
   field.kind === 'other' ? null : {name: field.name, kind: field.kind};
 
-export const COLUMN_FIELD_KINDS: FieldKind[] = ['state', 'enum'];
-export const ROW_FIELD_KINDS: FieldKind[] = ['enum', 'version', 'user', 'integer'];
+export const COLUMN_FIELD_KINDS: FieldKind[] = ['state', 'enum', 'user', 'version', 'build'];
+export const ROW_FIELD_KINDS: FieldKind[] = ['enum', 'version', 'build', 'user', 'integer'];
 export const SPRINT_FIELD_KINDS: FieldKind[] = ['version', 'enum'];
 export const CARD_COLOR_FIELD_KINDS: FieldKind[] = ['enum', 'state'];
 
@@ -154,6 +165,7 @@ export const applyUniverseDefaults = (config: BoardConfig, universe: FieldUniver
     columnField: columnField ?? config.columnField,
     columns: columnField ? defaultColumns(universe, columnField.name) : [],
     row: {
+      ...emptyRow(),
       field: rowField,
       sort: 'custom',
       customOrder: rowField ? (universe.byName.get(rowField.name)?.values ?? []).map(v => v.key) : []

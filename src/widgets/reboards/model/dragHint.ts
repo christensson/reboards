@@ -1,7 +1,7 @@
 import {type BoardConfig, UNCATEGORIZED_ROW_KEY} from '@/common/model/board-config';
 import type {FieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
-import type {LayoutGroup, LayoutRow} from './layout';
+import type {LayoutColumn, LayoutGroup, LayoutRow} from './layout';
 import type {LinkMode, LinkTargetResult} from './linkTargets';
 import {type FieldChange, type MoveTarget, type RowsByKey, planMove} from './mutations';
 
@@ -22,16 +22,15 @@ export const issueDragHint = (
   issue: BoardIssue,
   from: MoveTarget,
   target: MoveTarget | null,
-  rowsByKey: RowsByKey = {}
+  rowsByKey: RowsByKey = {},
+  columns?: LayoutColumn[]
 ): string => {
   if (!target) {
     return `Drop ${issue.idReadable} on a cell`;
   }
-  const plan = planMove(board, from, target, rowsByKey);
+  const plan = planMove(board, from, target, rowsByKey, columns);
   const parts = plan.changes.map(change => describeChange(universe, change));
-  if (plan.pickInnerValue && board.innerRow?.field) {
-    parts.push(`${board.innerRow.field.name} to a value you choose on drop`);
-  }
+  (plan.choices ?? []).forEach(choice => parts.push(`${choice.field.name} to a value you choose on drop`));
   if (plan.pickColumn) {
     const options = plan.pickColumn.values.map(v => valueLabel(universe, board.columnField.name, v)).join(' / ');
     parts.push(`${board.columnField.name} to one of ${options} (choose on drop)`);
@@ -51,7 +50,8 @@ export const groupDragHint = (
   subtaskCount: number,
   rows: LayoutRow[],
   target: MoveTarget | null,
-  innerFieldName: string | null = null
+  innerFieldName: string | null = null,
+  outerFieldName: string | null = null
 ): string => {
   const what = group.parentInThisRow
     ? `${group.parentIdReadable} and its ${subtaskCount} subtasks`
@@ -60,6 +60,9 @@ export const groupDragHint = (
     return `Drop on another swimlane to move ${what}`;
   }
   const targetRow = rows.find(r => r.key === target.rowKey);
+  if (targetRow?.kind === 'picker' && targetRow.pickLevel === 'outer') {
+    return `Move ${what} to the ${outerFieldName ?? 'swimlane'} you choose on drop`;
+  }
   if (targetRow?.kind === 'picker') {
     const outerLabel = targetRow.fullLabel.replace(/ \/ …$/u, '');
     return `Move ${what} to ${outerLabel}, choosing the ${innerFieldName ?? 'swimlane'} on drop`;

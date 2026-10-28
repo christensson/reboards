@@ -3,9 +3,9 @@ import type {LayoutColumn} from '../model/layout';
 /** Horizontal inset of a group box inside its track: margin plus border, in px. */
 export const BOX_INSET = 5;
 
-/** CSS width of one column track; collapsed columns use the narrow width. */
+/** CSS width of one column track; collapsed columns and the "Assign <field>…" column use the narrow width. */
 export const trackWidth = (column: LayoutColumn, collapsed: Set<string>): string =>
-  collapsed.has(column.id) ? 'var(--col-c)' : 'var(--col-w)';
+  column.assign || collapsed.has(column.id) ? 'var(--col-c)' : 'var(--col-w)';
 
 /** Width of the first-level swimlane column on two-level boards, in px. */
 export const OUTER_WIDTH = 48;

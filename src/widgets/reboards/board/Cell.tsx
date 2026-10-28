@@ -2,6 +2,7 @@ import React, {memo} from 'react';
 import {useDroppable} from '@dnd-kit/core';
 import Icon from '@jetbrains/ring-ui-built/components/icon/icon';
 import addIcon from '@jetbrains/icons/add-12px';
+import {ASSIGN_COLUMN_ID} from '../model/layout';
 import {cellDroppableId, isHighlightedCell, useBoardContext} from './BoardContext';
 import {IssueCard} from './IssueCard';
 import {IssueDot} from './IssueDot';
@@ -43,11 +44,20 @@ const CellComponent: React.FC<Props> = ({rowKey, columnId, issueIds, groupKey, p
   const href = addSubtaskOf || showAdd ? ctx.newIssueHref(rowKey, columnId, addSubtaskOf) : null;
   // Only background cells light up; cells inside a box never do.
   const isOver = !groupKey && isHighlightedCell(ctx.dragHighlight, rowKey, columnId);
+  if (columnId === ASSIGN_COLUMN_ID) {
+    // Never holds cards: dropping here asks for the value to set.
+    const label = ctx.columnLabel(columnId);
+    return (
+      <div ref={setNodeRef} className={`board-cell board-cell_assign${isOver ? ' board-cell_over' : ''}`} title={`Drop an issue here to choose its value. ${label}`}>
+        <span className="board-cell__assign-label">{label}</span>
+      </div>
+    );
+  }
   if (ctx.collapsedColumns.has(columnId)) {
     return (
       <div ref={setNodeRef} className={`board-cell board-cell_collapsed${isOver ? ' board-cell_over' : ''}${groupKey ? ' board-cell_group' : ''}`}>
         {parentId && <IssueDot issueId={parentId} parent/>}
-        {issueIds.map(id => <IssueDot key={id} issueId={id}/>)}
+        {issueIds.map(id => <IssueDot key={id} issueId={ctx.issueIdOf(id)}/>)}
       </div>
     );
   }
@@ -57,7 +67,7 @@ const CellComponent: React.FC<Props> = ({rowKey, columnId, issueIds, groupKey, p
       className={cellClasses(isOver, groupKey, issueIds.length === 0 && !parentId)}
     >
       {parentId && <IssueCard issueId={parentId} isParent/>}
-      {issueIds.map(id => <IssueCard key={id} issueId={id}/>)}
+      {issueIds.map(id => <IssueCard key={id} issueId={ctx.issueIdOf(id)} cardId={id}/>)}
       {href && (addSubtaskOf ? <AddIssueLink href={href} label="New subtask…" title={`New subtask of ${addSubtaskOf}…`}/> : <AddIssueLink href={href}/>)}
     </div>
   );

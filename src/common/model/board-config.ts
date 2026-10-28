@@ -12,10 +12,28 @@
  */
 export type FieldRef = {
   name: string;
-  kind: 'enum' | 'state' | 'version' | 'user' | 'integer';
+  kind: 'enum' | 'state' | 'version' | 'build' | 'user' | 'integer';
 };
 
 export type FieldKind = FieldRef['kind'];
+
+// How the values of a dynamic field (user, version, build) become columns or
+// swimlanes. Their value sets change all the time, so they are taken from the
+// issues on the board instead of being configured one by one.
+/**
+ * @zod-to-schema
+ */
+export type DynamicOptions = {
+  sort: 'alphabetical' | 'alphabetical-desc' | 'date' | 'date-desc';
+  /** Versions only: show released versions. */
+  showReleased: boolean;
+  /** Versions only: show archived versions. */
+  showArchived: boolean;
+  /** Columns only: how many columns are shown until the user picks others. */
+  maxColumns: number;
+};
+
+export type DynamicSortMode = DynamicOptions['sort'];
 
 /**
  * @zod-to-schema
@@ -38,6 +56,8 @@ export type RowConfig = {
   sort: 'custom' | 'alphabetical' | 'alphabetical-desc' | 'numerical' | 'numerical-desc';
   /** Value names in display order; only used when sort === 'custom'. */
   customOrder: string[];
+  /** Sorting and filtering when the field is dynamic (user, version, build); `sort` then does not apply. */
+  dynamic: DynamicOptions;
 };
 
 export type RowSortMode = RowConfig['sort'];
@@ -74,7 +94,10 @@ export type BoardConfig = {
   query: string;
   sprints: SprintConfig;
   columnField: FieldRef;
+  /** Explicit columns of a stable column field (enum, state); empty for a dynamic one. */
   columns: ColumnConfig[];
+  /** Sorting, filtering and the default column count of a dynamic column field. */
+  columnOptions: DynamicOptions;
   ignoredValues: string[];
   /** First swimlane field; shown as a left column when a second field is configured. */
   row: RowConfig;
@@ -102,6 +125,15 @@ const ID_RANDOM_LENGTH = 6;
 export const generateId = (): string =>
   Date.now().toString(ID_RADIX) + Math.random().toString(ID_RADIX).slice(2, 2 + ID_RANDOM_LENGTH);
 
+/** Columns shown for a dynamic column field until the user picks others. */
+export const DEFAULT_MAX_COLUMNS = 5;
+
+/** Released versions shown, archived ones hidden, like YouTrack itself. */
+export const defaultDynamicOptions = (): DynamicOptions => ({sort: 'alphabetical', showReleased: true, showArchived: false, maxColumns: DEFAULT_MAX_COLUMNS});
+
+/** A swimlane level without a field. */
+export const emptyRow = (): RowConfig => ({field: null, sort: 'custom', customOrder: [], dynamic: defaultDynamicOptions()});
+
 export const createEmptyBoard = (owner: string): BoardConfig => ({
   id: '',
   name: '',
@@ -113,8 +145,9 @@ export const createEmptyBoard = (owner: string): BoardConfig => ({
   sprints: {enabled: false, field: null},
   columnField: {name: 'State', kind: 'state'},
   columns: [],
+  columnOptions: defaultDynamicOptions(),
   ignoredValues: [],
-  row: {field: {name: 'Priority', kind: 'enum'}, sort: 'custom', customOrder: []},
+  row: {...emptyRow(), field: {name: 'Priority', kind: 'enum'}},
   innerRow: null,
   cardFields: [...DEFAULT_CARD_FIELDS],
   linkTypes: [...DEFAULT_LINK_TYPES],
@@ -130,7 +163,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const stringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 
-const FIELD_KINDS: FieldKind[] = ['enum', 'state', 'version', 'user', 'integer'];
+const FIELD_KINDS: FieldKind[] = ['enum', 'state', 'version', 'build', 'user', 'integer'];
 
 const fieldRef = (value: unknown): FieldRef | null => {
   if (!isRecord(value) || typeof value.name !== 'string') {
@@ -161,12 +194,26 @@ const normalizeProjects = (value: unknown): ProjectRef[] =>
       .map(p => ({id: p.id as string, shortName: p.shortName as string}))
     : [];
 
+const DYNAMIC_SORT_MODES: DynamicSortMode[] = ['alphabetical', 'alphabetical-desc', 'date', 'date-desc'];
+
+const normalizeDynamic = (value: unknown): DynamicOptions => {
+  const options = isRecord(value) ? value : {};
+  const base = defaultDynamicOptions();
+  return {
+    sort: DYNAMIC_SORT_MODES.includes(options.sort as DynamicSortMode) ? (options.sort as DynamicSortMode) : base.sort,
+    showReleased: typeof options.showReleased === 'boolean' ? options.showReleased : base.showReleased,
+    showArchived: typeof options.showArchived === 'boolean' ? options.showArchived : base.showArchived,
+    maxColumns: typeof options.maxColumns === 'number' && options.maxColumns >= 1 ? Math.floor(options.maxColumns) : base.maxColumns
+  };
+};
+
 const normalizeRow = (value: unknown, fallback: RowConfig): RowConfig => {
   const row = isRecord(value) ? value : {};
   return {
     field: 'field' in row ? fieldRef(row.field) : fallback.field,
     sort: SORT_MODES.includes(row.sort as RowSortMode) ? (row.sort as RowSortMode) : 'custom',
-    customOrder: stringArray(row.customOrder)
+    customOrder: stringArray(row.customOrder),
+    dynamic: normalizeDynamic(row.dynamic)
   };
 };
 
@@ -196,9 +243,10 @@ export const normalizeBoardConfig = (raw: unknown, fallbackOwner = ''): BoardCon
     sprints: normalizeSprints(input.sprints),
     columnField: fieldRef(input.columnField) ?? base.columnField,
     columns: normalizeColumns(input.columns),
+    columnOptions: normalizeDynamic(input.columnOptions),
     ignoredValues: stringArray(input.ignoredValues),
     row: normalizeRow(input.row, base.row),
-    innerRow: isRecord(input.innerRow) ? normalizeRow(input.innerRow, {field: null, sort: 'custom', customOrder: []}) : null,
+    innerRow: isRecord(input.innerRow) ? normalizeRow(input.innerRow, emptyRow()) : null,
     cardFields: 'cardFields' in input ? stringArray(input.cardFields) : base.cardFields,
     linkTypes: 'linkTypes' in input ? stringArray(input.linkTypes) : base.linkTypes,
     cardColorField: 'cardColorField' in input ? fieldRef(input.cardColorField) : base.cardColorField,
@@ -228,7 +276,9 @@ export const BOARD_LIMITS = {
   /** Card fields and link types. */
   listItems: 50,
   /** The whole board as stored JSON, in characters. */
-  serializedLength: 100_000
+  serializedLength: 100_000,
+  /** Upper bound of the default column count of a dynamic column field. */
+  dynamicColumns: 50
 } as const;
 
 const tooLong = (value: string, max: number): boolean => value.length > max;
@@ -280,18 +330,19 @@ export const validateBoardSize = (config: BoardConfig): ValidationIssue[] => {
   return issues;
 };
 
-/** Validates a config before saving. Returns an empty array when valid. */
-export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
-  const issues: ValidationIssue[] = [...validateBoardSize(config)];
-  if (!config.name.trim()) {
-    issues.push({field: 'name', message: 'Board name is required'});
+/** Fields whose values change all the time; columns and swimlanes come from the issues on the board. */
+export const DYNAMIC_KINDS: FieldKind[] = ['user', 'version', 'build'];
+
+export const isDynamicKind = (kind: FieldKind | 'other' | undefined): boolean => DYNAMIC_KINDS.includes(kind as FieldKind);
+
+const validateColumns = (config: BoardConfig): ValidationIssue[] => {
+  if (isDynamicKind(config.columnField.kind)) {
+    const max = config.columnOptions.maxColumns;
+    return max >= 1 && max <= BOARD_LIMITS.dynamicColumns
+      ? []
+      : [{field: 'columns', message: `Show between 1 and ${BOARD_LIMITS.dynamicColumns} columns by default`}];
   }
-  if (config.projects.length === 0) {
-    issues.push({field: 'projects', message: 'Select at least one project'});
-  }
-  if (!config.columnField.name) {
-    issues.push({field: 'columnField', message: 'Select a column field'});
-  }
+  const issues: ValidationIssue[] = [];
   if (config.columns.length === 0) {
     issues.push({field: 'columns', message: 'Add at least one column'});
   }
@@ -310,17 +361,45 @@ export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
       }
     });
   });
-  if (config.sprints.enabled && !config.sprints.field) {
-    issues.push({field: 'sprints', message: 'Select a sprint field or disable sprints'});
-  }
-  if (config.innerRow?.field) {
-    if (!config.row.field) {
-      issues.push({field: 'innerRow', message: 'Set the first swimlane field before the second'});
-    } else if (config.innerRow.field.name === config.row.field.name) {
-      issues.push({field: 'innerRow', message: 'The two swimlane fields must be different'});
-    }
-  }
   return issues;
+};
+
+const validateSwimlanes = (config: BoardConfig): ValidationIssue[] => {
+  if (!config.innerRow?.field) {
+    return [];
+  }
+  if (!config.row.field) {
+    return [{field: 'innerRow', message: 'Set the first swimlane field before the second'}];
+  }
+  return config.innerRow.field.name === config.row.field.name ? [{field: 'innerRow', message: 'The two swimlane fields must be different'}] : [];
+};
+
+/** On a sprint board the sprint field selects the issues, so it cannot also be a column or swimlane field. */
+const validateSprints = (config: BoardConfig): ValidationIssue[] => {
+  if (!config.sprints.enabled) {
+    return [];
+  }
+  const sprintField = config.sprints.field?.name;
+  if (!sprintField) {
+    return [{field: 'sprints', message: 'Select a sprint field or disable sprints'}];
+  }
+  const used = [config.columnField.name, config.row.field?.name, config.innerRow?.field?.name];
+  return used.includes(sprintField) ? [{field: 'sprints', message: `The sprint field ${sprintField} cannot also be a column or swimlane field`}] : [];
+};
+
+/** Validates a config before saving. Returns an empty array when valid. */
+export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
+  const issues: ValidationIssue[] = [...validateBoardSize(config)];
+  if (!config.name.trim()) {
+    issues.push({field: 'name', message: 'Board name is required'});
+  }
+  if (config.projects.length === 0) {
+    issues.push({field: 'projects', message: 'Select at least one project'});
+  }
+  if (!config.columnField.name) {
+    issues.push({field: 'columnField', message: 'Select a column field'});
+  }
+  return [...issues, ...validateColumns(config), ...validateSprints(config), ...validateSwimlanes(config)];
 };
 
 /** The same board with its two swimlane levels exchanged; unchanged unless both are configured. */

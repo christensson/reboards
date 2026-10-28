@@ -7,6 +7,8 @@ type Props = {
   universe: FieldUniverse;
   kinds: FieldKind[];
   singleOnly?: boolean;
+  /** Kinds offered with several values even when `singleOnly` is set. */
+  multiKinds?: FieldKind[];
   value: FieldRef | null;
   onChange: (field: FieldRef | null) => void;
   allowNone?: boolean;
@@ -35,6 +37,7 @@ export const FieldSelect: React.FC<Props> = ({
   universe,
   kinds,
   singleOnly,
+  multiKinds,
   value,
   onChange,
   allowNone,
@@ -45,7 +48,7 @@ export const FieldSelect: React.FC<Props> = ({
 }) => {
   const data = useMemo<SelectItem[]>(() => {
     const excluded = new Set(excludeNames ?? []);
-    const items: SelectItem[] = fieldsMatching(universe, {kinds, singleOnly}).filter(field => !excluded.has(field.name)).map(field => ({
+    const items: SelectItem[] = fieldsMatching(universe, {kinds, singleOnly, multiKinds}).filter(field => !excluded.has(field.name)).map(field => ({
       key: field.name,
       label: field.name,
       description: describe(field, universe.projectCount)
@@ -54,7 +57,7 @@ export const FieldSelect: React.FC<Props> = ({
       items.unshift({key: NONE_KEY, label: noneLabel});
     }
     return items;
-  }, [universe, kinds, singleOnly, allowNone, noneLabel, excludeNames]);
+  }, [universe, kinds, singleOnly, multiKinds, allowNone, noneLabel, excludeNames]);
 
   const selected = useMemo<SelectItem | null>(() => {
     if (!value) {

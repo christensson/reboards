@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {buildFieldUpdate, describeFieldType, toFieldValue} from './fields';
+import {buildFieldUpdate, buildMultiFieldUpdate, describeFieldType, toFieldValue} from './fields';
 
 describe('describeFieldType', () => {
   it('classifies known field types', () => {
@@ -10,6 +10,7 @@ describe('describeFieldType', () => {
     expect(describeFieldType('user[1]')).toEqual({kind: 'user', multi: false});
     expect(describeFieldType('integer')).toEqual({kind: 'integer', multi: false});
     expect(describeFieldType('ownedField[1]')).toEqual({kind: 'enum', multi: false});
+    expect(describeFieldType('build[1]')).toEqual({kind: 'build', multi: false});
   });
 
   it('marks unsupported types as other', () => {
@@ -22,15 +23,15 @@ describe('describeFieldType', () => {
 describe('toFieldValue', () => {
   it('handles enum, state, user, number and multi values', () => {
     expect(toFieldValue({id: '1', name: 'Priority', $type: 'SingleEnumIssueCustomField', value: {name: 'Major', color: {background: '#f', foreground: '#0'}}}))
-      .toEqual({$type: 'SingleEnumIssueCustomField', key: 'Major', label: 'Major', color: {background: '#f', foreground: '#0'}, labels: ['Major']});
+      .toEqual({$type: 'SingleEnumIssueCustomField', key: 'Major', label: 'Major', color: {background: '#f', foreground: '#0'}, labels: ['Major'], keys: ['Major']});
     expect(toFieldValue({id: '1', name: 'State', $type: 'StateIssueCustomField', value: {name: 'Done', isResolved: true}}))
       .toMatchObject({key: 'Done', isResolved: true});
     expect(toFieldValue({id: '1', name: 'Assignee', $type: 'SingleUserIssueCustomField', value: {login: 'jdoe', fullName: 'John Doe', avatarUrl: '/a'}}))
-      .toEqual({$type: 'SingleUserIssueCustomField', key: 'jdoe', label: 'John Doe', avatarUrl: '/a', labels: ['John Doe']});
+      .toEqual({$type: 'SingleUserIssueCustomField', key: 'jdoe', label: 'John Doe', avatarUrl: '/a', labels: ['John Doe'], keys: ['jdoe']});
     expect(toFieldValue({id: '1', name: 'Story points', $type: 'SimpleIssueCustomField', value: 5}))
-      .toEqual({$type: 'SimpleIssueCustomField', key: '5', label: '5', labels: ['5']});
+      .toEqual({$type: 'SimpleIssueCustomField', key: '5', label: '5', labels: ['5'], keys: ['5']});
     expect(toFieldValue({id: '1', name: 'Sprints', $type: 'MultiVersionIssueCustomField', value: [{name: 'Sprint 1'}, {name: 'Sprint 2'}]}))
-      .toMatchObject({key: 'Sprint 1', labels: ['Sprint 1', 'Sprint 2']});
+      .toMatchObject({key: 'Sprint 1', labels: ['Sprint 1', 'Sprint 2'], keys: ['Sprint 1', 'Sprint 2']});
   });
 
   it('returns null for unset values', () => {
@@ -47,3 +48,14 @@ describe('buildFieldUpdate', () => {
     expect(buildFieldUpdate('Priority', 'enum', undefined, null)).toEqual({name: 'Priority', $type: 'SingleEnumIssueCustomField', value: null});
   });
 });
+
+describe('buildMultiFieldUpdate', () => {
+  it('sends every value of a multi-value field', () => {
+    expect(buildMultiFieldUpdate('Fix versions', 'version', undefined, ['v1', 'v2']))
+      .toEqual({name: 'Fix versions', $type: 'MultiVersionIssueCustomField', value: [{name: 'v1'}, {name: 'v2'}]});
+    expect(buildMultiFieldUpdate('Reviewers', 'user', 'MultiUserIssueCustomField', ['ann']))
+      .toEqual({name: 'Reviewers', $type: 'MultiUserIssueCustomField', value: [{login: 'ann'}]});
+    expect(buildMultiFieldUpdate('Fix versions', 'version', 'MultiVersionIssueCustomField', []).value).toEqual([]);
+  });
+});
+

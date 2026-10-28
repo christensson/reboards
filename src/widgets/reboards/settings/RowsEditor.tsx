@@ -3,9 +3,10 @@ import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/selec
 import {FieldSelect} from '@/common/components/FieldSelect';
 import {SortableValueList} from '@/common/components/SortableValueList';
 import {ValuePill} from '@/common/components/ValuePill';
-import type {RowConfig, RowSortMode} from '@/common/model/board-config';
-import {type FieldUniverse, ROW_FIELD_KINDS} from '../model/fieldUniverse';
+import {DYNAMIC_KINDS, type FieldRef, type RowConfig, type RowSortMode, isDynamicKind} from '@/common/model/board-config';
+import {type FieldUniverse, ROW_FIELD_KINDS, type UniverseValue} from '../model/fieldUniverse';
 import {orderValues} from '../model/sorting';
+import {DynamicOptionsEditor} from './DynamicOptionsEditor';
 
 type Props = {
   universe: FieldUniverse;
@@ -27,46 +28,29 @@ const SORT_ITEMS: SelectItem[] = [
   {key: 'numerical-desc', label: 'Numerical, descending'}
 ];
 
-export const RowsEditor: React.FC<Props> = ({universe, row, onChange, disabled, fieldLabel = 'Swimlane field', noneLabel = 'No swimlanes', excludeNames}) => {
-  const field = row.field ? universe.byName.get(row.field.name) : undefined;
-  const orderedValues = useMemo(() => {
-    const values = field?.values ?? [];
-    return orderValues(values, 'custom', row.customOrder);
-  }, [field, row.customOrder]);
+type StableProps = {
+  row: RowConfig;
+  values: UniverseValue[];
+  onChange: (row: RowConfig) => void;
+  disabled?: boolean;
+};
 
+/** Sorting of a stable swimlane field (enum, integer): a sort mode, or a custom order of its values. */
+const StableRowOptions: React.FC<StableProps> = ({row, values, onChange, disabled}) => {
+  const orderedValues = useMemo(() => orderValues(values, 'custom', row.customOrder), [values, row.customOrder]);
   return (
-    <div className="rows-editor">
+    <>
       <div className="settings-field">
-        <span className="settings-field__label">{fieldLabel}</span>
-        <FieldSelect
-          universe={universe}
-          kinds={ROW_FIELD_KINDS}
-          singleOnly
-          allowNone
-          noneLabel={noneLabel}
-          excludeNames={excludeNames}
-          value={row.field}
+        <span className="settings-field__label">Sort swimlanes</span>
+        <Select
+          type={Select.Type.BUTTON}
           disabled={disabled}
-          onChange={fieldRef => {
-            const values = fieldRef ? (universe.byName.get(fieldRef.name)?.values ?? []) : [];
-            const sort: RowSortMode = fieldRef?.kind === 'integer' ? 'numerical' : 'custom';
-            onChange({field: fieldRef, sort, customOrder: values.map(v => v.key)});
-          }}
+          data={SORT_ITEMS}
+          selected={SORT_ITEMS.find(item => item.key === row.sort) ?? SORT_ITEMS[0]}
+          onChange={(item: SelectItem | null) => item && onChange({...row, sort: item.key as RowSortMode})}
         />
       </div>
-      {row.field && (
-        <div className="settings-field">
-          <span className="settings-field__label">Sort swimlanes</span>
-          <Select
-            type={Select.Type.BUTTON}
-            disabled={disabled}
-            data={SORT_ITEMS}
-            selected={SORT_ITEMS.find(item => item.key === row.sort) ?? SORT_ITEMS[0]}
-            onChange={(item: SelectItem | null) => item && onChange({...row, sort: item.key as RowSortMode})}
-          />
-        </div>
-      )}
-      {row.field && row.sort === 'custom' && (
+      {row.sort === 'custom' && (
         <div className="settings-field">
           <span className="settings-field__label">Swimlane order</span>
           {orderedValues.length > 0 ? (
@@ -82,6 +66,42 @@ export const RowsEditor: React.FC<Props> = ({universe, row, onChange, disabled, 
           )}
         </div>
       )}
+    </>
+  );
+};
+
+const NO_VALUES: UniverseValue[] = [];
+
+/** The swimlane level after choosing another field: numbers sort numerically, other values start in field order. */
+const rowForField = (row: RowConfig, universe: FieldUniverse, fieldRef: FieldRef | null): RowConfig => {
+  const values = fieldRef ? (universe.byName.get(fieldRef.name)?.values ?? []) : [];
+  const sort: RowSortMode = fieldRef?.kind === 'integer' ? 'numerical' : 'custom';
+  return {...row, field: fieldRef, sort, customOrder: values.map(v => v.key)};
+};
+
+export const RowsEditor: React.FC<Props> = ({universe, row, onChange, disabled, fieldLabel = 'Swimlane field', noneLabel = 'No swimlanes', excludeNames}) => {
+  const field = row.field ? universe.byName.get(row.field.name) : undefined;
+  const kind = field?.kind ?? row.field?.kind ?? 'other';
+  return (
+    <div className="rows-editor">
+      <div className="settings-field">
+        <span className="settings-field__label">{fieldLabel}</span>
+        <FieldSelect
+          universe={universe}
+          kinds={ROW_FIELD_KINDS}
+          singleOnly
+          multiKinds={DYNAMIC_KINDS}
+          allowNone
+          noneLabel={noneLabel}
+          excludeNames={excludeNames}
+          value={row.field}
+          disabled={disabled}
+          onChange={fieldRef => onChange(rowForField(row, universe, fieldRef))}
+        />
+      </div>
+      {row.field && (isDynamicKind(kind)
+        ? <DynamicOptionsEditor kind={kind} options={row.dynamic} disabled={disabled} onChange={next => onChange({...row, dynamic: next})}/>
+        : <StableRowOptions row={row} values={field?.values ?? NO_VALUES} disabled={disabled} onChange={onChange}/>)}
     </div>
   );
 };

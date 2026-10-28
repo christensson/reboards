@@ -27,7 +27,7 @@ describe('search', () => {
   });
 
   it('combines the text term with an unset-field quick filter', () => {
-    const withAssignee = {...issue('4', 'SP-4', 'Crash again'), fields: {Assignee: {$type: 'x', key: 'u', label: 'U', labels: ['U']}}};
+    const withAssignee = {...issue('4', 'SP-4', 'Crash again'), fields: {Assignee: {$type: 'x', key: 'u', label: 'U', labels: ['U'], keys: ['u']}}};
     const all = [...issues, withAssignee];
     expect(computeMatchIds(all, '', null)).toEqual(new Set());
     expect(computeMatchIds(all, '', 'Assignee')).toEqual(new Set(['1', '2', '3']));

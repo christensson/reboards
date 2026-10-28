@@ -21,8 +21,9 @@ export const describeFieldType = (typeId: string): FieldTypeInfo => {
     case 'state':
       return {kind: 'state', multi};
     case 'version':
-    case 'build':
       return {kind: 'version', multi};
+    case 'build':
+      return {kind: 'build', multi};
     case 'user':
       return {kind: 'user', multi};
     case 'integer':
@@ -45,6 +46,8 @@ export type FieldValue = {
   avatarUrl?: string;
   /** For multi-value fields: all labels; otherwise [label]. */
   labels: string[];
+  /** For multi-value fields: all keys, in field order; otherwise [key]. */
+  keys: string[];
 };
 
 const objectValue = (value: YtFieldValueObject): {key: string; label: string; color?: YtColor; isResolved?: boolean; avatarUrl?: string} => {
@@ -68,32 +71,52 @@ export const toFieldValue = (field: YtIssueCustomField): FieldValue | null => {
   }
   if (typeof value === 'number' || typeof value === 'string') {
     const text = String(value);
-    return {$type: field.$type, key: text, label: text, labels: [text]};
+    return {$type: field.$type, key: text, label: text, labels: [text], keys: [text]};
   }
   if (Array.isArray(value)) {
     if (value.length === 0) {
       return null;
     }
     const first = objectValue(value[0]);
-    return {$type: field.$type, ...first, labels: value.map(v => objectValue(v).label)};
+    const all = value.map(objectValue);
+    return {$type: field.$type, ...first, labels: all.map(v => v.label), keys: all.map(v => v.key)};
   }
   const single = objectValue(value);
-  return {$type: field.$type, ...single, labels: [single.label]};
+  return {$type: field.$type, ...single, labels: [single.label], keys: [single.key]};
 };
 
 const DEFAULT_ISSUE_FIELD_TYPES: Record<FieldKind, string> = {
   enum: 'SingleEnumIssueCustomField',
   state: 'StateIssueCustomField',
   version: 'SingleVersionIssueCustomField',
+  build: 'SingleBuildIssueCustomField',
   user: 'SingleUserIssueCustomField',
   integer: 'SimpleIssueCustomField'
 };
 
+type ValueRef = {name: string} | {login: string};
+
 export type IssueFieldUpdate = {
   name: string;
   $type: string;
-  value: {name: string} | {login: string} | number | null;
+  value: ValueRef | ValueRef[] | number | null;
 };
+
+const MULTI_ISSUE_FIELD_TYPES: Partial<Record<FieldKind, string>> = {
+  enum: 'MultiEnumIssueCustomField',
+  version: 'MultiVersionIssueCustomField',
+  build: 'MultiBuildIssueCustomField',
+  user: 'MultiUserIssueCustomField'
+};
+
+const valueRef = (kind: FieldKind, key: string): ValueRef => (kind === 'user' ? {login: key} : {name: key});
+
+/** The custom field entry of an issue update that sets every value of a multi-value field. */
+export const buildMultiFieldUpdate = (name: string, kind: FieldKind, currentType: string | undefined, keys: string[]): IssueFieldUpdate => ({
+  name,
+  $type: currentType || MULTI_ISSUE_FIELD_TYPES[kind] || DEFAULT_ISSUE_FIELD_TYPES[kind],
+  value: keys.map(key => valueRef(kind, key))
+});
 
 /** Builds the custom field entry of an issue update body for the given kind and value key. */
 export const buildFieldUpdate = (
@@ -106,11 +129,8 @@ export const buildFieldUpdate = (
   if (valueKey === null) {
     return {name, $type, value: null};
   }
-  if (kind === 'user') {
-    return {name, $type, value: {login: valueKey}};
-  }
   if (kind === 'integer') {
     return {name, $type, value: Number(valueKey)};
   }
-  return {name, $type, value: {name: valueKey}};
+  return {name, $type, value: valueRef(kind, valueKey)};
 };

@@ -30,9 +30,9 @@ const BoardRowComponent: React.FC<Props> = ({row, columns, collapsed, collapsedG
       <div className="board-row board-row_picker" data-row-key={row.key}>
         <div className={`board-band board-band_picker${pickerOnly ? ' board-band_picker-only' : ''}`} style={bandStyle}>
           {columns.map(column => (
-            <BandDropCell key={column.id} rowKey={row.key} columnId={column.id} columnIndex={column.index} bandKey="picker" showAdd={pickerOnly}/>
+            <BandDropCell key={column.id} rowKey={row.key} columnId={column.id} columnIndex={column.index} bandKey="picker" showAdd={pickerOnly && row.pickLevel !== 'outer'}/>
           ))}
-          <span className="board-row__picker-label" title="Drop an issue here to choose its swimlane">{row.label}</span>
+          <span className="board-row__picker-label" title="Drop an issue here to choose the value">{row.label}</span>
         </div>
       </div>
     );

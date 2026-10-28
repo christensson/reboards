@@ -12,7 +12,7 @@ export const MERGE_GROUPS = {
   projects: {label: 'Projects', keys: ['projects']},
   query: {label: 'Query', keys: ['query']},
   sprints: {label: 'Sprints', keys: ['sprints']},
-  columns: {label: 'Columns', keys: ['columnField', 'columns', 'ignoredValues']},
+  columns: {label: 'Columns', keys: ['columnField', 'columns', 'columnOptions', 'ignoredValues']},
   swimlanes: {label: 'Swimlanes', keys: ['row', 'innerRow']},
   cardFields: {label: 'Card fields', keys: ['cardFields']},
   cardColorField: {label: 'Card color', keys: ['cardColorField']},

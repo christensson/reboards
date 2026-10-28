@@ -29,6 +29,11 @@ export type YtBundleValue = {
   /** Version values only: sprint start and release dates in epoch milliseconds. */
   startDate?: number | null;
   releaseDate?: number | null;
+  /** Version values only. */
+  released?: boolean;
+  archived?: boolean;
+  /** Build values only: assembly date in epoch milliseconds. */
+  assembleDate?: number | null;
   isResolved?: boolean;
   color?: YtColor | null;
 };
