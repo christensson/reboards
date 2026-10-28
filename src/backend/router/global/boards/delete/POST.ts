@@ -1,5 +1,6 @@
 import {HTTP_FORBIDDEN, HTTP_NOT_FOUND, respondError} from '@/backend/boards/http';
-import {ADMIN_PERMISSION, canEdit, readBoards, writeBoards} from '@/backend/boards/store';
+import {projectAccessFor} from '@/backend/boards/access';
+import {ADMIN_PERMISSION, canEdit, isVisibleTo, readBoards, writeBoards} from '@/backend/boards/store';
 
 /**
  * @zod-to-schema
@@ -21,7 +22,8 @@ export default function handle(ctx: CtxPost<BoardDeleteReq, BoardDeleteRes, neve
   const {id} = ctx.request.json();
   const doc = readBoards(ctx.globalStorage);
   const index = doc.boards.findIndex(b => b.id === id);
-  if (index === -1) {
+  // A board the user cannot see is reported as missing, so its existence is not revealed.
+  if (index === -1 || !isVisibleTo(doc.boards[index], login, projectAccessFor(ctx.currentUser))) {
     respondError(ctx.response, HTTP_NOT_FOUND, 'Board not found');
     return;
   }

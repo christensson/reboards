@@ -1,4 +1,5 @@
 import type {BoardConfig} from '@/common/model/board-config';
+import {projectAccessFor} from '@/backend/boards/access';
 import {ADMIN_PERMISSION, canEdit, readBoards, visibleBoards} from '@/backend/boards/store';
 
 /**
@@ -22,7 +23,7 @@ export type BoardsListRes = {
 export default function handle(ctx: CtxGet<BoardsListRes, never, 'global'>): void {
   const login = ctx.currentUser.login;
   const isAdmin = ctx.currentUser.hasPermission(ADMIN_PERMISSION);
-  const boards = visibleBoards(readBoards(ctx.globalStorage), login);
+  const boards = visibleBoards(readBoards(ctx.globalStorage), login, projectAccessFor(ctx.currentUser));
   ctx.response.json({
     boards,
     editableIds: boards.filter(board => canEdit(board, login, isAdmin)).map(board => board.id),

@@ -2,7 +2,15 @@ import {describe, expect, it} from 'vitest';
 import {createEmptyBoard} from '@/common/model/board-config';
 import {canEdit, parseBoardsDocument, readBoards, serializeBoardsDocument, visibleBoards, writeBoards} from './store';
 
-const board = (id: string, owner: string, shared: boolean) => ({...createEmptyBoard(owner), id, name: id, shared});
+const board = (id: string, owner: string, shared: boolean, projects = ['SAN']) => ({
+  ...createEmptyBoard(owner),
+  id,
+  name: id,
+  shared,
+  projects: projects.map(shortName => ({id: `id-${shortName}`, shortName}))
+});
+
+const readsAll = () => true;
 
 describe('boards store', () => {
   it('parses empty and invalid storage into an empty document', () => {
@@ -27,8 +35,19 @@ describe('boards store', () => {
 
   it('hides personal boards from other users', () => {
     const doc = {version: 1 as const, boards: [board('s', 'alice', true), board('p', 'alice', false), board('q', 'bob', false)]};
-    expect(visibleBoards(doc, 'bob').map(b => b.id)).toEqual(['s', 'q']);
-    expect(visibleBoards(doc, 'alice').map(b => b.id)).toEqual(['s', 'p']);
+    expect(visibleBoards(doc, 'bob', readsAll).map(b => b.id)).toEqual(['s', 'q']);
+    expect(visibleBoards(doc, 'alice', readsAll).map(b => b.id)).toEqual(['s', 'p']);
+  });
+
+  it('hides shared boards with a project the user cannot read', () => {
+    const doc = {version: 1 as const, boards: [board('open', 'alice', true, ['SAN']), board('mixed', 'alice', true, ['SAN', 'SP'])]};
+    const readsSan = (p: {shortName: string}) => p.shortName === 'SAN';
+    expect(visibleBoards(doc, 'bob', readsSan).map(b => b.id)).toEqual(['open']);
+  });
+
+  it('always shows owners their own boards', () => {
+    const doc = {version: 1 as const, boards: [board('s', 'alice', true, ['SP']), board('p', 'alice', false, ['SP'])]};
+    expect(visibleBoards(doc, 'alice', () => false).map(b => b.id)).toEqual(['s', 'p']);
   });
 
   it('lets owners and admins of shared boards edit', () => {

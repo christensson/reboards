@@ -1,6 +1,7 @@
 import {type BoardConfig, generateId, normalizeBoardConfig, validateBoardConfig} from '@/common/model/board-config';
-import {HTTP_BAD_REQUEST, HTTP_CONFLICT, HTTP_FORBIDDEN, respondError} from '@/backend/boards/http';
-import {ADMIN_PERMISSION, canEdit, readBoards, writeBoards} from '@/backend/boards/store';
+import {projectAccessFor} from '@/backend/boards/access';
+import {HTTP_BAD_REQUEST, HTTP_CONFLICT, HTTP_FORBIDDEN, HTTP_NOT_FOUND, respondError} from '@/backend/boards/http';
+import {ADMIN_PERMISSION, canEdit, isVisibleTo, readBoards, writeBoards} from '@/backend/boards/store';
 
 /**
  * @zod-to-schema
@@ -40,6 +41,11 @@ export default function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, '
     doc.boards.push(stored);
   } else {
     const existing = doc.boards[existingIndex];
+    // Same response as delete: a board the user cannot see does not exist for them.
+    if (!isVisibleTo(existing, login, projectAccessFor(ctx.currentUser))) {
+      respondError(ctx.response, HTTP_NOT_FOUND, 'Board not found');
+      return;
+    }
     if (!canEdit(existing, login, isAdmin)) {
       respondError(ctx.response, HTTP_FORBIDDEN, 'Only the board owner or a system administrator can change this board');
       return;
