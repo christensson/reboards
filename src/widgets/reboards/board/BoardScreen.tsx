@@ -15,7 +15,7 @@ import {computeEdges} from '../model/connectors';
 import type {FieldUniverse} from '../model/fieldUniverse';
 import {sprintForDate} from '../model/sprints';
 import type {BoardIssue} from '../model/issue';
-import {type BoardLayout, type CardPlacement, type LayoutGroup, computeLayout, revealColumnIds, walkGroups} from '../model/layout';
+import {type BoardLayout, type CardPlacement, type LayoutGroup, type Placement, cardLocation, computeLayout, revealColumnIds, walkGroups} from '../model/layout';
 import {type FieldChange, type MoveTarget, type ValueChoice, applyChanges, keysAfter, planMove, planRowChanges} from '../model/mutations';
 import {groupDragHint, issueDragHint, linkDragHint} from '../model/dragHint';
 import {isLinkDropData} from '../model/linkTargets';
@@ -395,12 +395,9 @@ export const BoardScreen: React.FC<Props> = ({
     [board, baseUrl, layout.columns, layout.rowsByKey, view.showNewIssue]
   );
 
-  const expandFor = useCallback(
-    (issueId: string) => {
-      const p = layout.placement[issueId];
-      if (!p) {
-        return;
-      }
+  /** Expands the swimlanes, column and boxes that hide a card at this placement. */
+  const expandPlacement = useCallback(
+    (p: Placement) => {
       const toExpand = new Set([...(layout.groupAncestors[p.groupKey ?? ''] ?? []), p.groupKey ?? '']);
       const outerKey = layout.rowsByKey[p.rowKey]?.outerKey;
       updatePrefs(prev => {
@@ -416,8 +413,44 @@ export const BoardScreen: React.FC<Props> = ({
         };
       });
     },
-    [layout.placement, layout.groupAncestors, layout.rowsByKey, updatePrefs, board.id]
+    [layout.groupAncestors, layout.rowsByKey, updatePrefs, board.id]
   );
+
+  const expandFor = useCallback(
+    (issueId: string) => {
+      const p = layout.placement[issueId];
+      if (p) {
+        expandPlacement(p);
+      }
+    },
+    [layout.placement, expandPlacement]
+  );
+
+  const showCard = useCallback(
+    (cardId: string) => {
+      const card = layout.cards[cardId];
+      if (!card) {
+        return;
+      }
+      // A primary card may sit in a subtask box; its placement knows which.
+      expandPlacement(layout.placement[cardId] ?? card);
+      // Scroll once whatever was collapsed has rendered.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const element = contentRef.current?.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(cardId)}"]`);
+        if (!element) {
+          return;
+        }
+        element.scrollIntoView({block: 'center', inline: 'center', behavior: 'smooth'});
+        element.classList.remove('issue-card_flash');
+        // Reading the layout restarts the flash animation when the same card is shown again.
+        element.getBoundingClientRect();
+        element.classList.add('issue-card_flash');
+      }));
+    },
+    [layout.cards, layout.placement, expandPlacement]
+  );
+  const cardCopies = useCallback((issueId: string) => layout.copiesByIssue[issueId] ?? [], [layout.copiesByIssue]);
+  const locateCard = useCallback((cardId: string) => cardLocation(layout, cardId), [layout]);
 
   /** Selects the current matches, expands what hides them and scrolls to the first; returns whether anything was selected. */
   const selectMatches = useCallback((): boolean => {
@@ -659,9 +692,12 @@ export const BoardScreen: React.FC<Props> = ({
       columnLabel: columnLabelOf,
       canDrag,
       canMoveGroup,
-      issueIdOf
+      issueIdOf,
+      cardCopies,
+      cardLocation: locateCard,
+      showCard
     }),
-    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf, canDrag, canMoveGroup, issueIdOf]
+    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf, canDrag, canMoveGroup, issueIdOf, cardCopies, locateCard, showCard]
   );
 
   const status = useMemo(

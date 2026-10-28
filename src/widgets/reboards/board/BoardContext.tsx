@@ -45,6 +45,12 @@ export type BoardContextValue = {
   /** The user may change at least one of the issues a group drag moves. */
   canMoveGroup: (group: LayoutGroup) => boolean;
   columnLabel: (columnId: string) => string;
+  /** Card ids of an issue shown more than once (multi-value fields), in display order; empty otherwise. */
+  cardCopies: (issueId: string) => string[];
+  /** Column and swimlane of a card, for tooltips. */
+  cardLocation: (cardId: string) => string;
+  /** Expands what hides a card and scrolls it into view. */
+  showCard: (cardId: string) => void;
 };
 
 export const BoardContext = createContext<BoardContextValue | null>(null);

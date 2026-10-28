@@ -1,6 +1,8 @@
 import React, {memo, useCallback} from 'react';
 import {useDraggable, useDroppable} from '@dnd-kit/core';
 import Avatar from '@jetbrains/ring-ui-built/components/avatar/avatar';
+import Icon from '@jetbrains/ring-ui-built/components/icon/icon';
+import artifactsIcon from '@jetbrains/icons/artifacts-12px';
 import {Size as AvatarSize} from '@jetbrains/ring-ui-built/components/avatar/avatar-size';
 import {ValuePill} from '@/common/components/ValuePill';
 import type {FieldValue} from '@/common/youtrack/fields';
@@ -24,6 +26,8 @@ type ViewProps = {
   searchTerm?: string;
   dragging?: boolean;
   isParent?: boolean;
+  /** Rendered in the lower right corner. */
+  corner?: React.ReactNode;
 };
 
 const Highlighted: React.FC<{text: string; words: string[]}> = ({text, words}) => {
@@ -70,7 +74,7 @@ const FieldChip: React.FC<{name: string; value: FieldValue | null}> = ({name, va
 
 /** Pure card rendering, also used for the drag overlay. */
 export const IssueCardView = React.forwardRef<HTMLDivElement, ViewProps & React.HTMLAttributes<HTMLDivElement>>(
-  ({issue, size, cardFields, cardColorField, selected, highlighted, resolved, searchTerm = '', dragging, isParent, className, style, ...rest}, ref) => {
+  ({issue, size, cardFields, cardColorField, selected, highlighted, resolved, searchTerm = '', dragging, isParent, corner, className, style, ...rest}, ref) => {
     const color = cardColorField ? issue.fields[cardColorField]?.color : undefined;
     const colorStyle: React.CSSProperties | undefined = color
       ? ({'--card-color': color.background} as React.CSSProperties)
@@ -107,11 +111,45 @@ export const IssueCardView = React.forwardRef<HTMLDivElement, ViewProps & React.
             {cardFields.map(name => <FieldChip key={name} name={name} value={issue.fields[name] ?? null}/>)}
           </div>
         )}
+        {corner}
       </div>
     );
   }
 );
 IssueCardView.displayName = 'IssueCardView';
+
+/** Shown on a card whose issue has other cards (multi-value fields): lists them, a click goes to the next. */
+const CopiesBadge: React.FC<{cardId: string; copies: string[]}> = ({cardId, copies}) => {
+  const ctx = useBoardContext();
+  const others = copies.filter(id => id !== cardId);
+  const next = copies[(copies.indexOf(cardId) + 1) % copies.length];
+  const title = ['Also shown in:', ...others.map(id => `• ${ctx.cardLocation(id)}`), 'Click to scroll to the next one'].join('\n');
+  const go = (event: React.SyntheticEvent) => {
+    event.stopPropagation();
+    ctx.showCard(next);
+  };
+  return (
+    <span
+      className="issue-card__copies"
+      role="button"
+      tabIndex={0}
+      title={title}
+      aria-label={title}
+      // Keep the press from starting a card drag or selecting the card.
+      onPointerDown={event => event.stopPropagation()}
+      onClick={go}
+      onDoubleClick={event => event.stopPropagation()}
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          go(event);
+        }
+      }}
+    >
+      <Icon glyph={artifactsIcon}/>
+    </span>
+  );
+};
 
 type Props = {
   issueId: string;
@@ -129,6 +167,7 @@ const IssueCardComponent: React.FC<Props> = ({issueId, cardId = issueId, isParen
   // Target for Ctrl/Ctrl+Shift drags (change parent, add relation); ignored by plain drags.
   const {setNodeRef: setLinkDropRef} = useDroppable({id: `${LINK_CARD_PREFIX}${cardId}`, data: {kind: 'link-card', issueId}});
   const primary = cardId === issueId;
+  const copies = ctx.cardCopies(issueId);
 
   const setRef = useCallback(
     (element: HTMLDivElement | null) => {
@@ -179,6 +218,8 @@ const IssueCardComponent: React.FC<Props> = ({issueId, cardId = issueId, isParen
       title={locked ? 'You do not have permission to change this issue' : undefined}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      data-card-id={cardId}
+      corner={copies.length > 1 ? <CopiesBadge cardId={cardId} copies={copies}/> : undefined}
       {...attributes}
       {...listeners}
     />

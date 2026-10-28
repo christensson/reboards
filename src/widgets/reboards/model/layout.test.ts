@@ -3,7 +3,7 @@ import {type BoardConfig, UNCATEGORIZED_ROW_KEY, createEmptyBoard, defaultDynami
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
-import {ASSIGN_COLUMN_ID, type BoardLayout, type LayoutGroup, NO_VALUE_COLUMN_ID, PICKER_ROW_SUFFIX, revealColumnIds, cardId, compositeRowKey, computeLayout, dynamicColumnId, groupKey, packGroups} from './layout';
+import {ASSIGN_COLUMN_ID, type BoardLayout, type LayoutGroup, NO_VALUE_COLUMN_ID, PICKER_ROW_SUFFIX, cardLocation, revealColumnIds, cardId, compositeRowKey, computeLayout, dynamicColumnId, groupKey, packGroups} from './layout';
 
 const rowOf = (layout: BoardLayout, key: string) => {
   const row = layout.rows.find(r => r.key === key);
@@ -297,6 +297,13 @@ describe('computeLayout with a multi-value column field', () => {
     expect(layout.cards[extra]).toEqual({issueId: '1', rowKey: 'Major', columnId: dynamicColumnId('v2')});
     expect(rowOf(layout, 'Major').looseByColumn[dynamicColumnId('v2')]).toEqual([extra, '2']);
     expect(rowOf(layout, 'Major').issueCount).toBe(3);
+  });
+
+  it('lists the cards of an issue shown more than once in display order, with their locations', () => {
+    const layout = computeLayout({issues: [withVersions('1', ['v2', 'v1']), withVersions('2', ['v2'])], config: board(), universe: versionUniverse, parents: {}});
+    const extra = cardId('1', dynamicColumnId('v1'), 'Major');
+    expect(layout.copiesByIssue).toEqual({'1': [extra, '1']});
+    expect(cardLocation(layout, extra)).toBe('v1');
   });
 });
 

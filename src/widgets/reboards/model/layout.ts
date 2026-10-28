@@ -179,6 +179,8 @@ export type BoardLayout = {
   availableColumns: AvailableColumn[];
   /** Every rendered card by card id: primary cards (id = issue id) and the extra cards of multi-value fields. */
   cards: Record<string, CardPlacement>;
+  /** Issues with several cards: their card ids in display order (swimlane, then column). */
+  copiesByIssue: Record<string, string[]>;
 };
 
 export type LayoutInput = {
@@ -670,6 +672,36 @@ const buildGroups = (placedIssues: BoardIssue[], ctx: Omit<GroupBuildContext, 'd
 
 /* ---------- Layout ---------- */
 
+/** Card ids per issue with more than one card, in display order. */
+const copiesOf = (cards: Record<string, CardPlacement>, rowOrder: Map<string, number>, columnIndex: Map<string, number>): Record<string, string[]> => {
+  const byIssue = new Map<string, string[]>();
+  Object.entries(cards).forEach(([id, card]) => byIssue.set(card.issueId, [...(byIssue.get(card.issueId) ?? []), id]));
+  const position = (id: string): [number, number] => [rowOrder.get(cards[id].rowKey) ?? 0, columnIndex.get(cards[id].columnId) ?? 0];
+  const copies: Record<string, string[]> = {};
+  byIssue.forEach((ids, issueId) => {
+    if (ids.length > 1) {
+      copies[issueId] = ids.sort((a, b) => {
+        const [rowA, columnA] = position(a);
+        const [rowB, columnB] = position(b);
+        return rowA - rowB || columnA - columnB;
+      });
+    }
+  });
+  return copies;
+};
+
+/** Where a card is, for tooltips: "Column" or "Column · Swimlane" when the board has swimlanes. */
+export const cardLocation = (layout: BoardLayout, id: string): string => {
+  const card = layout.cards[id];
+  if (!card) {
+    return '';
+  }
+  const column = layout.columns.find(c => c.id === card.columnId)?.label ?? card.columnId;
+  const row = layout.rowsByKey[card.rowKey];
+  const hasSwimlanes = layout.twoLevel || layout.rows.length > 1;
+  return row && hasSwimlanes ? `${column} · ${row.fullLabel}` : column;
+};
+
 export const computeLayout = ({issues, config, universe, parents, visibleColumnIds}: LayoutInput): BoardLayout => {
   const {columns, availableColumns, columnIdsOf} = planColumns(config, universe, issues, visibleColumnIds);
   const columnIndex = new Map(columns.map(c => [c.id, c.index]));
@@ -728,6 +760,7 @@ export const computeLayout = ({issues, config, universe, parents, visibleColumnI
   return {
     columns,
     rows,
+    copiesByIssue: copiesOf(cards, rowOrder, columnIndex),
     rowsByKey: Object.fromEntries(rowByKey),
     twoLevel,
     outerRows: skeleton.outerRows,

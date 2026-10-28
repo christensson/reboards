@@ -1421,3 +1421,50 @@ body {
   margin: 0 0 var(--ring-unit);
   color: var(--ring-secondary-color);
 }
+
+/* ---------- Cards shown more than once (multi-value fields) ---------- */
+
+.issue-card:has(> .issue-card__copies) {
+  padding-right: calc(var(--ring-unit) * 2.5);
+}
+
+.issue-card__copies {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--ring-border-radius);
+  color: var(--ring-secondary-color);
+  line-height: 0;
+  cursor: pointer;
+}
+
+.issue-card__copies:hover,
+.issue-card__copies:focus-visible {
+  background-color: var(--ring-hover-background-color);
+  color: var(--ring-link-hover-color, var(--ring-main-color));
+  outline: none;
+}
+
+/* The card a click on the copies icon scrolled to. */
+.issue-card_flash {
+  animation: reboards-card-flash 1.2s ease-out;
+}
+
+@keyframes reboards-card-flash {
+  0%, 30% {
+    box-shadow: 0 0 0 3px var(--ring-main-color);
+  }
+
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .issue-card_flash {
+    animation: none;
+    outline: 2px solid var(--ring-main-color);
+  }
+}
