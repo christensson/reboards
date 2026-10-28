@@ -376,11 +376,13 @@ export const BoardScreen: React.FC<Props> = ({
   const newIssueHref = useCallback(
     (rowKey: string, columnId: string, parentIdReadable?: string): string | null => {
       const project = board.projects[0];
-      const value = layout.columns.find(c => c.id === columnId)?.values[0];
-      if (!view.showNewIssue || !project || value === undefined) {
+      const column = layout.columns.find(c => c.id === columnId);
+      // The "Assign <field>…" column never holds issues; the "No <field>" column presets nothing.
+      if (!view.showNewIssue || !project || !column || column.assign) {
         return null;
       }
-      const presets = [{field: board.columnField.name, value}];
+      const value = column.values[0];
+      const presets = value === undefined ? [] : [{field: board.columnField.name, value}];
       const row = layout.rowsByKey[rowKey];
       if (board.innerRow?.field && row?.innerValue) {
         presets.unshift({field: board.innerRow.field.name, value: row.innerValue});
