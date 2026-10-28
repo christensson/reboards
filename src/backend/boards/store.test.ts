@@ -53,18 +53,17 @@ describe('boards store', () => {
     expect(visibleBoards(doc, as('alice'), () => false).map(b => b.id)).toEqual(['s', 'p']);
   });
 
-  it('lets owners and admins of shared boards edit', () => {
-    expect(canEdit(board('s', 'alice', true), as('alice'), false)).toBe(true);
-    expect(canEdit(board('s', 'alice', true), as('bob'), false)).toBe(false);
-    expect(canEdit(board('s', 'alice', true), as('bob'), true)).toBe(true);
-    expect(canEdit(board('p', 'alice', false), as('bob'), true)).toBe(false);
-  });
-
-  it('lets admins of every board project delete shared boards', () => {
+  it('lets owners, system admins and admins of every project of a shared board edit and delete it', () => {
+    const none = () => false;
     const adminOfSan = (p: {shortName: string}) => p.shortName === 'SAN';
-    expect(canDelete(board('s', 'alice', true, ['SAN']), as('bob'), false, adminOfSan)).toBe(true);
-    expect(canDelete(board('m', 'alice', true, ['SAN', 'SP']), as('bob'), false, adminOfSan)).toBe(false);
-    expect(canDelete(board('p', 'alice', false, ['SAN']), as('bob'), false, adminOfSan)).toBe(false);
+    expect(canEdit(board('s', 'alice', true), as('alice'), false, none)).toBe(true);
+    expect(canEdit(board('s', 'alice', true), as('bob'), false, none)).toBe(false);
+    expect(canEdit(board('s', 'alice', true), as('bob'), true, none)).toBe(true);
+    expect(canEdit(board('p', 'alice', false), as('bob'), true, none)).toBe(false);
+    expect(canEdit(board('s', 'alice', true, ['SAN']), as('bob'), false, adminOfSan)).toBe(true);
+    expect(canEdit(board('m', 'alice', true, ['SAN', 'SP']), as('bob'), false, adminOfSan)).toBe(false);
+    expect(canEdit(board('p', 'alice', false, ['SAN']), as('bob'), false, adminOfSan)).toBe(false);
+    expect(canDelete).toBe(canEdit);
   });
 
   it('lets only system admins and admins of every board project share', () => {

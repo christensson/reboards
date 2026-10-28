@@ -77,8 +77,8 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
       respondError(ctx.response, HTTP_NOT_FOUND, 'Board not found');
       return;
     }
-    if (!canEdit(existing, viewer, isAdmin)) {
-      respondError(ctx.response, HTTP_FORBIDDEN, 'Only the board owner or a system administrator can change this board');
+    if (!canEdit(existing, viewer, isAdmin, isProjectAdmin)) {
+      respondError(ctx.response, HTTP_FORBIDDEN, 'Only the board owner, a system administrator or an admin of all its projects can change this board');
       return;
     }
     if (!versionMatches(existing, body.baseVersion)) {
@@ -98,7 +98,7 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
   writeBoards(ctx.globalStorage, doc);
   ctx.response.json({
     board: stored,
-    canEdit: canEdit(stored, viewer, isAdmin),
+    canEdit: canEdit(stored, viewer, isAdmin, isProjectAdmin),
     canDelete: canDelete(stored, viewer, isAdmin, isProjectAdmin)
   });
 }

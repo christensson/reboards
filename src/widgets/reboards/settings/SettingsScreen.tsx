@@ -284,7 +284,7 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelet
     <div className="settings-screen" ref={rootRef}>
       <div className="settings-header">
         <h2 className="settings-title">{screenTitle(isNew, duplicating, board.name)}</h2>
-        {readOnly && <span className="settings-readonly">Read only: only the owner or a system administrator can change this board.</span>}
+        {readOnly && <span className="settings-readonly">Read only: only the owner, a system administrator or an admin of all its projects can change this board.</span>}
       </div>
 
       <Section title="General">

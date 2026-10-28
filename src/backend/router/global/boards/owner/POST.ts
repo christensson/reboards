@@ -63,7 +63,7 @@ function handle(ctx: CtxPost<BoardOwnerReq, BoardOwnerRes, never, 'global'>): vo
   ctx.response.json({
     board: stored,
     visible: isVisibleTo(stored, viewer, projectAccessFor(ctx.currentUser)),
-    canEdit: canEdit(stored, viewer, isAdmin),
+    canEdit: canEdit(stored, viewer, isAdmin, isProjectAdmin),
     canDelete: canDelete(stored, viewer, isAdmin, isProjectAdmin)
   });
 }

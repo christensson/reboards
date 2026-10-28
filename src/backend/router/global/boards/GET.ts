@@ -31,7 +31,7 @@ function handle(ctx: CtxGet<BoardsListRes, never, 'global'>): void {
   const boards = visibleBoards(loadBoards(ctx.globalStorage), viewer, projectAccessFor(ctx.currentUser));
   ctx.response.json({
     boards,
-    editableIds: boards.filter(board => canEdit(board, viewer, isAdmin)).map(board => board.id),
+    editableIds: boards.filter(board => canEdit(board, viewer, isAdmin, isProjectAdmin)).map(board => board.id),
     deletableIds: boards.filter(board => canDelete(board, viewer, isAdmin, isProjectAdmin)).map(board => board.id),
     me: {login: viewer.login, isAdmin}
   });

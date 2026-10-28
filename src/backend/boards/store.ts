@@ -55,18 +55,21 @@ export const isOwner = (board: BoardConfig, viewer: Viewer): boolean =>
 export const isVisibleTo = (board: BoardConfig, viewer: Viewer, canReadProject: ProjectAccess): boolean =>
   isOwner(board, viewer) || (board.shared && board.projects.every(canReadProject));
 
-export const canEdit = (board: BoardConfig, viewer: Viewer, isAdmin: boolean): boolean =>
-  isOwner(board, viewer) || (board.shared && isAdmin);
-
 const adminOfAll = (board: BoardConfig, isProjectAdmin: ProjectAccess): boolean =>
   board.projects.length > 0 && board.projects.every(isProjectAdmin);
 
-/** Project admins may also delete shared boards whose projects they all administer. */
-export const canDelete = (board: BoardConfig, viewer: Viewer, isAdmin: boolean, isProjectAdmin: ProjectAccess): boolean =>
-  canEdit(board, viewer, isAdmin) || (board.shared && adminOfAll(board, isProjectAdmin));
+/**
+ * Owners manage their boards. Shared boards may also be managed by system
+ * admins and by whoever administers every one of the board's projects.
+ */
+export const canEdit = (board: BoardConfig, viewer: Viewer, isAdmin: boolean, isProjectAdmin: ProjectAccess): boolean =>
+  isOwner(board, viewer) || (board.shared && (isAdmin || adminOfAll(board, isProjectAdmin)));
 
-/** Whoever may delete a board may also hand it over to another user. */
-export const canTransfer = canDelete;
+/** Whoever may change a board may also delete it. */
+export const canDelete = canEdit;
+
+/** Whoever may change a board may also hand it over to another user. */
+export const canTransfer = canEdit;
 
 /** Only system admins and admins of every project of a board may share it. */
 export const canShare = (board: BoardConfig, isAdmin: boolean, isProjectAdmin: ProjectAccess): boolean =>
