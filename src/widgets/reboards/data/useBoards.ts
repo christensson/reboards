@@ -6,19 +6,24 @@ import {api} from './api';
 export type BoardsState = {
   boards: BoardConfig[];
   editableIds: Set<string>;
+  deletableIds: Set<string>;
   me: {login: string; isAdmin: boolean} | null;
   loading: boolean;
   error: string | null;
 };
 
 export const useBoards = () => {
-  const [state, setState] = useState<BoardsState>({boards: [], editableIds: new Set(), me: null, loading: true, error: null});
+  const [state, setState] = useState<BoardsState>({boards: [], editableIds: new Set(), deletableIds: new Set(), me: null, loading: true, error: null});
 
   const reload = useCallback(async () => {
     setState(prev => ({...prev, loading: true, error: null}));
     try {
       const res = await api.global.boards.GET();
-      setState({boards: res.boards, editableIds: new Set(res.editableIds), me: res.me, loading: false, error: null});
+      setState({
+        boards: res.boards,
+        editableIds: new Set(res.editableIds),
+        deletableIds: new Set(res.deletableIds),
+        me: res.me, loading: false, error: null});
     } catch (error) {
       setState(prev => ({...prev, loading: false, error: errorMessage(error)}));
     }
@@ -33,10 +38,14 @@ export const useBoards = () => {
     setState(prev => {
       const others = prev.boards.filter(b => b.id !== res.board.id);
       const editableIds = new Set(prev.editableIds);
+      const deletableIds = new Set(prev.deletableIds);
       if (res.canEdit) {
         editableIds.add(res.board.id);
       }
-      return {...prev, boards: [...others, res.board].sort((a, b) => a.name.localeCompare(b.name)), editableIds};
+      if (res.canDelete) {
+        deletableIds.add(res.board.id);
+      }
+      return {...prev, boards: [...others, res.board].sort((a, b) => a.name.localeCompare(b.name)), editableIds, deletableIds};
     });
     return res.board;
   }, []);

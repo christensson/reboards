@@ -127,6 +127,8 @@ export const ReBoardsApp: React.FC = () => {
       board={board}
       isNew={isNew}
       canEdit={isNew || boardsState.editableIds.has(board.id)}
+      canDelete={!isNew && boardsState.deletableIds.has(board.id)}
+      isAdmin={Boolean(boardsState.me?.isAdmin)}
       onSave={boardsState.save}
       onDelete={boardsState.remove}
       onCancel={() => (isNew && boards.length === 0 ? navigate({kind: 'home'}) : navigate(isNew ? {kind: 'home'} : {kind: 'board', boardId: board.id, sprint: null}))}

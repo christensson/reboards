@@ -52,6 +52,14 @@ export const contextResSchema = z.object({
   baseUrl: z.string().nullable(),
 });
 
+export const projectsAdminReqSchema = z.object({
+  shortNames: z.array(z.string()),
+});
+
+export const projectsAdminResSchema = z.object({
+  adminShortNames: z.array(z.string()),
+});
+
 export const sprintConfigSchema = z.object({
   enabled: z.boolean(),
   field: fieldRefSchema.nullable(),
@@ -85,11 +93,13 @@ export const boardSaveReqSchema = z.object({
 export const boardSaveResSchema = z.object({
   board: boardConfigSchema,
   canEdit: z.boolean(),
+  canDelete: z.boolean(),
 });
 
 export const boardsListResSchema = z.object({
   boards: z.array(boardConfigSchema),
   editableIds: z.array(z.string()),
+  deletableIds: z.array(z.string()),
   me: currentUserInfoSchema,
 });
 
@@ -116,6 +126,14 @@ export const schema = {
     context: {
       GET: {
         Res: contextResSchema
+      }
+    },
+    projects: {
+      admin: {
+        POST: {
+          Req: projectsAdminReqSchema,
+          Res: projectsAdminResSchema
+        }
       }
     }
   }

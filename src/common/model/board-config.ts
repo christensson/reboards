@@ -66,7 +66,7 @@ export type BoardConfig = {
   name: string;
   /** Login of the user who created the board. */
   owner: string;
-  /** Shared boards are visible to everyone; personal boards only to the owner. */
+  /** Shared boards are visible to everyone who can read all their projects; personal boards only to the owner. */
   shared: boolean;
   projects: ProjectRef[];
   query: string;
@@ -102,7 +102,7 @@ export const createEmptyBoard = (owner: string): BoardConfig => ({
   id: '',
   name: '',
   owner,
-  shared: true,
+  shared: false,
   projects: [],
   query: '',
   sprints: {enabled: false, field: null},

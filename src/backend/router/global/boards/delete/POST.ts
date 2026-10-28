@@ -1,7 +1,7 @@
 import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
 import {HTTP_FORBIDDEN, HTTP_NOT_FOUND, respondError} from '@/backend/boards/http';
-import {projectAccessFor} from '@/backend/boards/access';
-import {ADMIN_PERMISSION, GUEST_LOGIN, canEdit, isVisibleTo, readBoards, writeBoards} from '@/backend/boards/store';
+import {projectAccessFor, projectAdminFor} from '@/backend/boards/access';
+import {ADMIN_PERMISSION, GUEST_LOGIN, canDelete, isVisibleTo, readBoards, writeBoards} from '@/backend/boards/store';
 
 /**
  * @zod-to-schema
@@ -32,8 +32,8 @@ function handle(ctx: CtxPost<BoardDeleteReq, BoardDeleteRes, never, 'global'>): 
     respondError(ctx.response, HTTP_NOT_FOUND, 'Board not found');
     return;
   }
-  if (!canEdit(doc.boards[index], login, isAdmin)) {
-    respondError(ctx.response, HTTP_FORBIDDEN, 'Only the board owner or a system administrator can delete this board');
+  if (!canDelete(doc.boards[index], login, isAdmin, projectAdminFor(ctx.currentUser))) {
+    respondError(ctx.response, HTTP_FORBIDDEN, 'Only the board owner, a system administrator or an admin of all its projects can delete this board');
     return;
   }
   doc.boards.splice(index, 1);

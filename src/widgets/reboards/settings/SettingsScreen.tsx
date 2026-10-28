@@ -14,7 +14,7 @@ import {currentUserLogin} from '@/common/youtrack/host';
 import {composeQuery} from '@/common/youtrack/query';
 import {errorMessage} from '@/common/youtrack/rest';
 import type {YtProject} from '@/common/youtrack/types';
-import {youtrack} from '../data/api';
+import {api, youtrack} from '../data/api';
 import {useBoardReference} from '../data/useBoardReference';
 import {CARD_COLOR_FIELD_KINDS, COLUMN_FIELD_KINDS, SPRINT_FIELD_KINDS, applyUniverseDefaults, defaultColumns} from '../model/fieldUniverse';
 import {ColumnsEditor} from './ColumnsEditor';
@@ -25,6 +25,9 @@ type Props = {
   board: BoardConfig;
   isNew: boolean;
   canEdit: boolean;
+  canDelete: boolean;
+  /** System administrator: may share any board. */
+  isAdmin: boolean;
   onSave: (board: BoardConfig, expectedUpdatedAt?: number) => Promise<BoardConfig>;
   onDelete: (id: string) => Promise<void>;
   onCancel: () => void;
@@ -42,6 +45,7 @@ type FooterProps = {
   creating: boolean;
   duplicating: boolean;
   readOnly: boolean;
+  canDelete: boolean;
   saving: boolean;
   onSave: () => void;
   onCancel: () => void;
@@ -49,7 +53,7 @@ type FooterProps = {
   onDelete: () => void;
 };
 
-const SettingsFooter: React.FC<FooterProps> = ({creating, duplicating, readOnly, saving, onSave, onCancel, onDuplicate, onDelete}) => (
+const SettingsFooter: React.FC<FooterProps> = ({creating, duplicating, readOnly, canDelete, saving, onSave, onCancel, onDuplicate, onDelete}) => (
   <div className="settings-footer">
     <Button primary disabled={readOnly || saving} loader={saving} onClick={onSave}>{creating ? 'Create board' : 'Save'}</Button>
     <Button onClick={onCancel}>{readOnly ? 'Back' : 'Cancel'}</Button>
@@ -58,10 +62,42 @@ const SettingsFooter: React.FC<FooterProps> = ({creating, duplicating, readOnly,
         Duplicate
       </Button>
     )}
-    {!creating && <Button danger disabled={readOnly || saving} onClick={onDelete}>Delete board</Button>}
+    {!creating && <Button danger disabled={!canDelete || saving} onClick={onDelete}>Delete board</Button>}
     {duplicating && <span className="settings-footer__note">The copy is not stored until you create it.</span>}
   </div>
 );
+
+type ShareFieldProps = {
+  shared: boolean;
+  /** Only system admins and project admins see the switch. */
+  showToggle: boolean;
+  /** The user administers every board project (or is a system admin). */
+  canShare: boolean;
+  readOnly: boolean;
+  onChange: (shared: boolean) => void;
+};
+
+/** Sharing needs admin rights in every board project, unless the user is a system admin. */
+const canShareProjects = (projects: BoardConfig['projects'], isAdmin: boolean, adminProjects: Set<string>): boolean =>
+  isAdmin || (projects.length > 0 && projects.every(p => adminProjects.has(p.shortName)));
+
+const ShareField: React.FC<ShareFieldProps> = ({shared, showToggle, canShare, readOnly, onChange}) => {
+  if (!showToggle) {
+    return shared ? <span className="settings-field__help">Shared with everyone who can read all of its projects.</span> : null;
+  }
+  return (
+    <div className="settings-field">
+      <Toggle checked={shared} disabled={readOnly || (!shared && !canShare)} onChange={event => onChange(event.target.checked)}>
+        Shared with all users
+      </Toggle>
+      <span className="settings-field__help">
+        {canShare || shared
+          ? 'Shared boards are visible to everyone who can read all of their projects. Personal boards are visible only to you.'
+          : 'To share this board you need admin rights in all of its projects.'}
+      </span>
+    </div>
+  );
+};
 
 const screenTitle = (isNew: boolean, duplicating: boolean, name: string): string => {
   if (isNew) {
@@ -70,10 +106,11 @@ const screenTitle = (isNew: boolean, duplicating: boolean, name: string): string
   return duplicating ? `New board (copy of ${name})` : `Board settings: ${name}`;
 };
 
-export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, onDelete, onCancel, onSaved}) => {
+export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelete, isAdmin, onSave, onDelete, onCancel, onSaved}) => {
   const [draft, setDraft] = useState<BoardConfig>(board);
   const [projects, setProjects] = useState<YtProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [adminProjects, setAdminProjects] = useState<Set<string>>(() => new Set());
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [duplicating, setDuplicating] = useState(false);
@@ -81,12 +118,18 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const reference = useBoardReference(draft.projects);
   const readOnly = !canEdit && !duplicating;
+  const showShareToggle = isAdmin || adminProjects.size > 0;
+  const canShareDraft = canShareProjects(draft.projects, isAdmin, adminProjects);
   const [defaultsApplied, setDefaultsApplied] = useState(!isNew);
 
   useEffect(() => {
     youtrack
       .getProjects()
-      .then(list => setProjects([...list].sort((a, b) => a.name.localeCompare(b.name))))
+      .then(async list => {
+        setProjects([...list].sort((a, b) => a.name.localeCompare(b.name)));
+        const res = await api.global.projects.admin.POST({shortNames: list.map(p => p.shortName)});
+        setAdminProjects(new Set(res.adminShortNames));
+      })
       .catch(error => alertService.error(`Could not load projects: ${errorMessage(error)}`))
       .finally(() => setProjectsLoading(false));
   }, []);
@@ -154,7 +197,8 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, 
 
   // Copies the current values into a new, unsaved board; only "Create board" stores it.
   const duplicate = useCallback(() => {
-    setDraft(prev => ({...prev, id: '', name: `${prev.name} (copy)`, owner: currentUserLogin() || prev.owner, createdAt: 0, updatedAt: 0}));
+    // The copy starts personal: sharing it is a separate decision, and may need admin rights.
+    setDraft(prev => ({...prev, id: '', name: `${prev.name} (copy)`, owner: currentUserLogin() || prev.owner, shared: false, createdAt: 0, updatedAt: 0}));
     setDuplicating(true);
     setErrors([]);
     rootRef.current?.scrollIntoView({block: 'start'});
@@ -208,12 +252,13 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, 
           <ProjectsSelect projects={projects} loading={projectsLoading} disabled={readOnly} value={draft.projects} onChange={list => patch({projects: list})}/>
           <span className="settings-field__help">Only issues from these projects are shown; fields are resolved against them.</span>
         </div>
-        <div className="settings-field">
-          <Toggle checked={draft.shared} disabled={readOnly} onChange={event => patch({shared: event.target.checked})}>
-            Shared with all users
-          </Toggle>
-          <span className="settings-field__help">Personal boards are visible only to you.</span>
-        </div>
+        <ShareField
+          shared={draft.shared}
+          showToggle={showShareToggle}
+          canShare={canShareDraft}
+          readOnly={readOnly}
+          onChange={shared => patch({shared})}
+        />
       </Section>
 
       <Section title="Issues">
@@ -298,6 +343,7 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, onSave, 
         creating={creating}
         duplicating={duplicating}
         readOnly={readOnly}
+        canDelete={canDelete && !creating}
         saving={saving}
         onSave={save}
         onCancel={cancel}

@@ -48,6 +48,17 @@ export const isVisibleTo = (board: BoardConfig, login: string, canReadProject: P
 export const canEdit = (board: BoardConfig, login: string, isAdmin: boolean): boolean =>
   board.owner === login || (board.shared && isAdmin);
 
+const adminOfAll = (board: BoardConfig, isProjectAdmin: ProjectAccess): boolean =>
+  board.projects.length > 0 && board.projects.every(isProjectAdmin);
+
+/** Project admins may also delete shared boards whose projects they all administer. */
+export const canDelete = (board: BoardConfig, login: string, isAdmin: boolean, isProjectAdmin: ProjectAccess): boolean =>
+  canEdit(board, login, isAdmin) || (board.shared && adminOfAll(board, isProjectAdmin));
+
+/** Only system admins and admins of every project of a board may share it. */
+export const canShare = (board: BoardConfig, isAdmin: boolean, isProjectAdmin: ProjectAccess): boolean =>
+  isAdmin || adminOfAll(board, isProjectAdmin);
+
 export const visibleBoards = (doc: BoardsDocument, login: string, canReadProject: ProjectAccess): BoardConfig[] =>
   doc.boards.filter(b => isVisibleTo(b, login, canReadProject));
 

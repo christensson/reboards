@@ -1,8 +1,8 @@
 import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
 import {type BoardConfig, generateId, normalizeBoardConfig, validateBoardConfig} from '@/common/model/board-config';
-import {projectAccessFor} from '@/backend/boards/access';
+import {projectAccessFor, projectAdminFor} from '@/backend/boards/access';
 import {HTTP_BAD_REQUEST, HTTP_CONFLICT, HTTP_FORBIDDEN, HTTP_NOT_FOUND, respondError} from '@/backend/boards/http';
-import {ADMIN_PERMISSION, GUEST_LOGIN, canEdit, isVisibleTo, readBoards, writeBoards} from '@/backend/boards/store';
+import {ADMIN_PERMISSION, GUEST_LOGIN, canDelete, canEdit, canShare, isVisibleTo, readBoards, writeBoards} from '@/backend/boards/store';
 
 /**
  * @zod-to-schema
@@ -19,6 +19,7 @@ export type BoardSaveReq = {
 export type BoardSaveRes = {
   board: BoardConfig;
   canEdit: boolean;
+  canDelete: boolean;
 };
 
 function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void {
@@ -33,6 +34,12 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
   const problems = validateBoardConfig(incoming);
   if (problems.length > 0) {
     respondError(ctx.response, HTTP_BAD_REQUEST, problems.map(p => p.message).join('; '));
+    return;
+  }
+
+  const isProjectAdmin = projectAdminFor(ctx.currentUser);
+  if (incoming.shared && !canShare(incoming, isAdmin, isProjectAdmin)) {
+    respondError(ctx.response, HTTP_FORBIDDEN, 'Only admins of all the board\'s projects can share it');
     return;
   }
 
@@ -64,7 +71,11 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
   }
 
   writeBoards(ctx.globalStorage, doc);
-  ctx.response.json({board: stored, canEdit: canEdit(stored, login, isAdmin)});
+  ctx.response.json({
+    board: stored,
+    canEdit: canEdit(stored, login, isAdmin),
+    canDelete: canDelete(stored, login, isAdmin, isProjectAdmin)
+  });
 }
 
 // Only users who can read issues somewhere may call this endpoint.

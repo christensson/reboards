@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {createEmptyBoard} from '@/common/model/board-config';
-import {canEdit, parseBoardsDocument, readBoards, serializeBoardsDocument, visibleBoards, writeBoards} from './store';
+import {canDelete, canEdit, canShare, parseBoardsDocument, readBoards, serializeBoardsDocument, visibleBoards, writeBoards} from './store';
 
 const board = (id: string, owner: string, shared: boolean, projects = ['SAN']) => ({
   ...createEmptyBoard(owner),
@@ -55,5 +55,19 @@ describe('boards store', () => {
     expect(canEdit(board('s', 'alice', true), 'bob', false)).toBe(false);
     expect(canEdit(board('s', 'alice', true), 'bob', true)).toBe(true);
     expect(canEdit(board('p', 'alice', false), 'bob', true)).toBe(false);
+  });
+
+  it('lets admins of every board project delete shared boards', () => {
+    const adminOfSan = (p: {shortName: string}) => p.shortName === 'SAN';
+    expect(canDelete(board('s', 'alice', true, ['SAN']), 'bob', false, adminOfSan)).toBe(true);
+    expect(canDelete(board('m', 'alice', true, ['SAN', 'SP']), 'bob', false, adminOfSan)).toBe(false);
+    expect(canDelete(board('p', 'alice', false, ['SAN']), 'bob', false, adminOfSan)).toBe(false);
+  });
+
+  it('lets only system admins and admins of every board project share', () => {
+    const adminOfSan = (p: {shortName: string}) => p.shortName === 'SAN';
+    expect(canShare(board('s', 'bob', true, ['SAN']), false, adminOfSan)).toBe(true);
+    expect(canShare(board('m', 'bob', true, ['SAN', 'SP']), false, adminOfSan)).toBe(false);
+    expect(canShare(board('m', 'bob', true, ['SAN', 'SP']), true, () => false)).toBe(true);
   });
 });

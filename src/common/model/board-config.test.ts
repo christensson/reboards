@@ -8,7 +8,7 @@ describe('normalizeBoardConfig', () => {
     expect(config.columnField).toEqual({name: 'State', kind: 'state'});
     expect(config.row.field).toEqual({name: 'Priority', kind: 'enum'});
     expect(config.linkTypes).toEqual(['Subtask']);
-    expect(config.shared).toBe(true);
+    expect(config.shared).toBe(false);
     expect(config.cardColorField).toEqual({name: 'Type', kind: 'enum'});
     expect(config.innerRow).toBeNull();
   });

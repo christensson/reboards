@@ -3,6 +3,7 @@ import * as globalBoardsDeletePOSTHandler from "../backend/router/global/boards/
 import * as globalBoardsGETHandler from "../backend/router/global/boards/GET";
 import * as globalBoardsSavePOSTHandler from "../backend/router/global/boards/save/POST";
 import * as globalContextGETHandler from "../backend/router/global/context/GET";
+import * as globalProjectsAdminPOSTHandler from "../backend/router/global/projects/admin/POST";
 
 export type ApiRouter = {
     global: {
@@ -17,6 +18,11 @@ export type ApiRouter = {
         };
         context: {
             GET: ExtractRPCFromHandler<globalContextGETHandler.Handle>;
+        };
+        projects: {
+            admin: {
+                POST: ExtractRPCFromHandler<globalProjectsAdminPOSTHandler.Handle>;
+            };
         };
     };
 };
