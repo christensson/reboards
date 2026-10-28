@@ -1,3 +1,4 @@
+import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
 import type {BoardConfig} from '@/common/model/board-config';
 import {projectAccessFor} from '@/backend/boards/access';
 import {ADMIN_PERMISSION, canEdit, readBoards, visibleBoards} from '@/backend/boards/store';
@@ -20,7 +21,7 @@ export type BoardsListRes = {
   me: CurrentUserInfo;
 };
 
-export default function handle(ctx: CtxGet<BoardsListRes, never, 'global'>): void {
+function handle(ctx: CtxGet<BoardsListRes, never, 'global'>): void {
   const login = ctx.currentUser.login;
   const isAdmin = ctx.currentUser.hasPermission(ADMIN_PERMISSION);
   const boards = visibleBoards(readBoards(ctx.globalStorage), login, projectAccessFor(ctx.currentUser));
@@ -30,5 +31,8 @@ export default function handle(ctx: CtxGet<BoardsListRes, never, 'global'>): voi
     me: {login, isAdmin}
   });
 }
+
+// Only users who can read issues somewhere may call this endpoint.
+export default withPermissions(handle, ['READ_ISSUE']);
 
 export type Handle = typeof handle;

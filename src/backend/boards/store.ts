@@ -50,3 +50,6 @@ export const canEdit = (board: BoardConfig, login: string, isAdmin: boolean): bo
 
 export const visibleBoards = (doc: BoardsDocument, login: string, canReadProject: ProjectAccess): BoardConfig[] =>
   doc.boards.filter(b => isVisibleTo(b, login, canReadProject));
+
+/** Login of the anonymous user; every visitor shares it, so it must not own boards. */
+export const GUEST_LOGIN = 'guest';

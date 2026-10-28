@@ -1,7 +1,8 @@
+import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
 import {type BoardConfig, generateId, normalizeBoardConfig, validateBoardConfig} from '@/common/model/board-config';
 import {projectAccessFor} from '@/backend/boards/access';
 import {HTTP_BAD_REQUEST, HTTP_CONFLICT, HTTP_FORBIDDEN, HTTP_NOT_FOUND, respondError} from '@/backend/boards/http';
-import {ADMIN_PERMISSION, canEdit, isVisibleTo, readBoards, writeBoards} from '@/backend/boards/store';
+import {ADMIN_PERMISSION, GUEST_LOGIN, canEdit, isVisibleTo, readBoards, writeBoards} from '@/backend/boards/store';
 
 /**
  * @zod-to-schema
@@ -20,8 +21,12 @@ export type BoardSaveRes = {
   canEdit: boolean;
 };
 
-export default function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void {
+function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void {
   const login = ctx.currentUser.login;
+  if (login === GUEST_LOGIN) {
+    respondError(ctx.response, HTTP_FORBIDDEN, 'Log in to save boards');
+    return;
+  }
   const isAdmin = ctx.currentUser.hasPermission(ADMIN_PERMISSION);
   const body = ctx.request.json();
   const incoming = normalizeBoardConfig(body.board, login);
@@ -61,5 +66,8 @@ export default function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, '
   writeBoards(ctx.globalStorage, doc);
   ctx.response.json({board: stored, canEdit: canEdit(stored, login, isAdmin)});
 }
+
+// Only users who can read issues somewhere may call this endpoint.
+export default withPermissions(handle, ['READ_ISSUE']);
 
 export type Handle = typeof handle;

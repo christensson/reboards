@@ -1,6 +1,7 @@
+import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
 import {HTTP_FORBIDDEN, HTTP_NOT_FOUND, respondError} from '@/backend/boards/http';
 import {projectAccessFor} from '@/backend/boards/access';
-import {ADMIN_PERMISSION, canEdit, isVisibleTo, readBoards, writeBoards} from '@/backend/boards/store';
+import {ADMIN_PERMISSION, GUEST_LOGIN, canEdit, isVisibleTo, readBoards, writeBoards} from '@/backend/boards/store';
 
 /**
  * @zod-to-schema
@@ -16,8 +17,12 @@ export type BoardDeleteRes = {
   ok: boolean;
 };
 
-export default function handle(ctx: CtxPost<BoardDeleteReq, BoardDeleteRes, never, 'global'>): void {
+function handle(ctx: CtxPost<BoardDeleteReq, BoardDeleteRes, never, 'global'>): void {
   const login = ctx.currentUser.login;
+  if (login === GUEST_LOGIN) {
+    respondError(ctx.response, HTTP_FORBIDDEN, 'Log in to delete boards');
+    return;
+  }
   const isAdmin = ctx.currentUser.hasPermission(ADMIN_PERMISSION);
   const {id} = ctx.request.json();
   const doc = readBoards(ctx.globalStorage);
@@ -35,5 +40,8 @@ export default function handle(ctx: CtxPost<BoardDeleteReq, BoardDeleteRes, neve
   writeBoards(ctx.globalStorage, doc);
   ctx.response.json({ok: true});
 }
+
+// Only users who can read issues somewhere may call this endpoint.
+export default withPermissions(handle, ['READ_ISSUE']);
 
 export type Handle = typeof handle;
