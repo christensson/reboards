@@ -1,7 +1,8 @@
 import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
 import type {BoardConfig} from '@/common/model/board-config';
 import {projectAccessFor, projectAdminFor} from '@/backend/boards/access';
-import {ADMIN_PERMISSION, canDelete, canEdit, readBoards, visibleBoards} from '@/backend/boards/store';
+import {loadBoards, viewerOf} from '@/backend/boards/owners';
+import {ADMIN_PERMISSION, canDelete, canEdit, visibleBoards} from '@/backend/boards/store';
 
 /**
  * @zod-to-schema
@@ -18,21 +19,21 @@ export type BoardsListRes = {
   boards: BoardConfig[];
   /** Ids of the boards the current user may change or delete. */
   editableIds: string[];
-  /** Ids of the boards the current user may delete. */
+  /** Ids of the boards the current user may delete or hand over to another user. */
   deletableIds: string[];
   me: CurrentUserInfo;
 };
 
 function handle(ctx: CtxGet<BoardsListRes, never, 'global'>): void {
-  const login = ctx.currentUser.login;
+  const viewer = viewerOf(ctx.currentUser);
   const isAdmin = ctx.currentUser.hasPermission(ADMIN_PERMISSION);
   const isProjectAdmin = projectAdminFor(ctx.currentUser);
-  const boards = visibleBoards(readBoards(ctx.globalStorage), login, projectAccessFor(ctx.currentUser));
+  const boards = visibleBoards(loadBoards(ctx.globalStorage), viewer, projectAccessFor(ctx.currentUser));
   ctx.response.json({
     boards,
-    editableIds: boards.filter(board => canEdit(board, login, isAdmin)).map(board => board.id),
-    deletableIds: boards.filter(board => canDelete(board, login, isAdmin, isProjectAdmin)).map(board => board.id),
-    me: {login, isAdmin}
+    editableIds: boards.filter(board => canEdit(board, viewer, isAdmin)).map(board => board.id),
+    deletableIds: boards.filter(board => canDelete(board, viewer, isAdmin, isProjectAdmin)).map(board => board.id),
+    me: {login: viewer.login, isAdmin}
   });
 }
 

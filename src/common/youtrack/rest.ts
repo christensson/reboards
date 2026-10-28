@@ -1,6 +1,6 @@
 import type {HostAPI} from '../../../@types/globals';
 import type {IssueFieldUpdate} from './fields';
-import type {YtIssue, YtIssueLinkType, YtProject, YtProjectCustomField, YtSearchAssist} from './types';
+import type {YtIssue, YtIssueLinkType, YtProject, YtProjectCustomField, YtSearchAssist, YtUser} from './types';
 
 export const ISSUE_FIELDS = [
   'id',
@@ -23,6 +23,7 @@ export const ASSIST_FIELDS =
 export const ISSUE_PAGE_SIZE = 100;
 export const ISSUE_LIMIT = 3000;
 const PROJECTS_TOP = 500;
+const USERS_TOP = 20;
 
 export type IssueSearchResult = {
   issues: YtIssue[];
@@ -41,6 +42,12 @@ export const createYouTrackClient = (host: HostAPI) => {
       get<YtProjectCustomField[]>(`admin/projects/${encodeURIComponent(projectId)}/customFields`, {
         fields: PROJECT_FIELD_FIELDS
       }),
+
+    /** Active users matching a login or name fragment. */
+    searchUsers: async (query: string): Promise<YtUser[]> => {
+      const users = await get<YtUser[]>('users', {query, fields: 'id,login,fullName,avatarUrl,banned', $top: USERS_TOP});
+      return users.filter(user => !user.banned);
+    },
 
     getLinkTypes: (): Promise<YtIssueLinkType[]> => get<YtIssueLinkType[]>('issueLinkTypes', {fields: LINK_TYPE_FIELDS}),
 

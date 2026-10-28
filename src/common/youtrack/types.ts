@@ -32,6 +32,7 @@ export type YtUser = {
   login: string;
   fullName: string;
   avatarUrl?: string;
+  banned?: boolean;
 };
 
 export type YtBundle = {

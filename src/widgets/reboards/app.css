@@ -937,6 +937,12 @@ body {
   font-size: var(--ring-font-size-smaller);
 }
 
+.settings-owner {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .settings-hint {
   margin: var(--ring-unit) 0;
   color: var(--ring-secondary-color);

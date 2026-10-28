@@ -50,10 +50,30 @@ export const useBoards = () => {
     return res.board;
   }, []);
 
+  /** Hands a board over to another user; resolves to false when the current user can no longer see it. */
+  const transfer = useCallback(async (id: string, login: string): Promise<boolean> => {
+    const res = await api.global.boards.owner.POST({id, login});
+    setState(prev => {
+      const editableIds = new Set(prev.editableIds);
+      const deletableIds = new Set(prev.deletableIds);
+      editableIds.delete(id);
+      deletableIds.delete(id);
+      if (res.canEdit) {
+        editableIds.add(id);
+      }
+      if (res.canDelete) {
+        deletableIds.add(id);
+      }
+      const others = prev.boards.filter(b => b.id !== id);
+      return {...prev, boards: res.visible ? prev.boards.map(b => (b.id === id ? res.board : b)) : others, editableIds, deletableIds};
+    });
+    return res.visible;
+  }, []);
+
   const remove = useCallback(async (id: string): Promise<void> => {
     await api.global.boards.delete.POST({id});
     setState(prev => ({...prev, boards: prev.boards.filter(b => b.id !== id)}));
   }, []);
 
-  return {...state, reload, save, remove};
+  return {...state, reload, save, remove, transfer};
 };

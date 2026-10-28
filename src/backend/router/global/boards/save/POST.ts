@@ -2,7 +2,8 @@ import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
 import {type BoardConfig, generateId, normalizeBoardConfig, validateBoardConfig} from '@/common/model/board-config';
 import {projectAccessFor, projectAdminFor} from '@/backend/boards/access';
 import {HTTP_BAD_REQUEST, HTTP_CONFLICT, HTTP_FORBIDDEN, HTTP_NOT_FOUND, respondError} from '@/backend/boards/http';
-import {ADMIN_PERMISSION, GUEST_LOGIN, canDelete, canEdit, canShare, isVisibleTo, readBoards, writeBoards} from '@/backend/boards/store';
+import {loadBoards, viewerOf} from '@/backend/boards/owners';
+import {ADMIN_PERMISSION, GUEST_LOGIN, canDelete, canEdit, canShare, isOwner, isVisibleTo, writeBoards} from '@/backend/boards/store';
 
 /**
  * @zod-to-schema
@@ -23,14 +24,14 @@ export type BoardSaveRes = {
 };
 
 function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void {
-  const login = ctx.currentUser.login;
-  if (login === GUEST_LOGIN) {
+  const viewer = viewerOf(ctx.currentUser);
+  if (viewer.login === GUEST_LOGIN) {
     respondError(ctx.response, HTTP_FORBIDDEN, 'Log in to save boards');
     return;
   }
   const isAdmin = ctx.currentUser.hasPermission(ADMIN_PERMISSION);
   const body = ctx.request.json();
-  const incoming = normalizeBoardConfig(body.board, login);
+  const incoming = normalizeBoardConfig(body.board, viewer.login);
   const problems = validateBoardConfig(incoming);
   if (problems.length > 0) {
     respondError(ctx.response, HTTP_BAD_REQUEST, problems.map(p => p.message).join('; '));
@@ -43,22 +44,22 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
     return;
   }
 
-  const doc = readBoards(ctx.globalStorage);
+  const doc = loadBoards(ctx.globalStorage);
   const now = Date.now();
   const existingIndex = incoming.id ? doc.boards.findIndex(b => b.id === incoming.id) : -1;
 
   let stored: BoardConfig;
   if (existingIndex === -1) {
-    stored = {...incoming, id: incoming.id || generateId(), owner: login, createdAt: now, updatedAt: now};
+    stored = {...incoming, id: incoming.id || generateId(), owner: viewer.login, ownerId: viewer.id, createdAt: now, updatedAt: now};
     doc.boards.push(stored);
   } else {
     const existing = doc.boards[existingIndex];
     // Same response as delete: a board the user cannot see does not exist for them.
-    if (!isVisibleTo(existing, login, projectAccessFor(ctx.currentUser))) {
+    if (!isVisibleTo(existing, viewer, projectAccessFor(ctx.currentUser))) {
       respondError(ctx.response, HTTP_NOT_FOUND, 'Board not found');
       return;
     }
-    if (!canEdit(existing, login, isAdmin)) {
+    if (!canEdit(existing, viewer, isAdmin)) {
       respondError(ctx.response, HTTP_FORBIDDEN, 'Only the board owner or a system administrator can change this board');
       return;
     }
@@ -66,15 +67,17 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
       respondError(ctx.response, HTTP_CONFLICT, 'The board was changed by someone else. Reload and try again');
       return;
     }
-    stored = {...incoming, id: existing.id, owner: existing.owner, createdAt: existing.createdAt, updatedAt: now};
+    // The owner's save refreshes the stored login, which may have been renamed since.
+    const owner = isOwner(existing, viewer) ? viewer.login : existing.owner;
+    stored = {...incoming, id: existing.id, owner, ownerId: existing.ownerId, createdAt: existing.createdAt, updatedAt: now};
     doc.boards[existingIndex] = stored;
   }
 
   writeBoards(ctx.globalStorage, doc);
   ctx.response.json({
     board: stored,
-    canEdit: canEdit(stored, login, isAdmin),
-    canDelete: canDelete(stored, login, isAdmin, isProjectAdmin)
+    canEdit: canEdit(stored, viewer, isAdmin),
+    canDelete: canDelete(stored, viewer, isAdmin, isProjectAdmin)
   });
 }
 

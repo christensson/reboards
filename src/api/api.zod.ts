@@ -43,6 +43,11 @@ export const boardDeleteResSchema = z.object({
   ok: z.boolean(),
 });
 
+export const boardOwnerReqSchema = z.object({
+  id: z.string(),
+  login: z.string(),
+});
+
 export const currentUserInfoSchema = z.object({
   login: z.string(),
   isAdmin: z.boolean(),
@@ -69,6 +74,7 @@ export const boardConfigSchema = z.object({
   id: z.string(),
   name: z.string(),
   owner: z.string(),
+  ownerId: z.string(),
   shared: z.boolean(),
   projects: z.array(projectRefSchema),
   query: z.string(),
@@ -83,6 +89,13 @@ export const boardConfigSchema = z.object({
   cardColorField: fieldRefSchema.nullable(),
   createdAt: z.number(),
   updatedAt: z.number(),
+});
+
+export const boardOwnerResSchema = z.object({
+  board: boardConfigSchema,
+  visible: z.boolean(),
+  canEdit: z.boolean(),
+  canDelete: z.boolean(),
 });
 
 export const boardSaveReqSchema = z.object({
@@ -115,6 +128,12 @@ export const schema = {
       },
       GET: {
         Res: boardsListResSchema
+      },
+      owner: {
+        POST: {
+          Req: boardOwnerReqSchema,
+          Res: boardOwnerResSchema
+        }
       },
       save: {
         POST: {

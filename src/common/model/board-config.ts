@@ -64,8 +64,10 @@ export type SprintConfig = {
 export type BoardConfig = {
   id: string;
   name: string;
-  /** Login of the user who created the board. */
+  /** Login of the owner, for display; it can change, so access checks use `ownerId`. */
   owner: string;
+  /** Stable (Hub) id of the owner; empty for boards stored before it was recorded. */
+  ownerId: string;
   /** Shared boards are visible to everyone who can read all their projects; personal boards only to the owner. */
   shared: boolean;
   projects: ProjectRef[];
@@ -102,6 +104,7 @@ export const createEmptyBoard = (owner: string): BoardConfig => ({
   id: '',
   name: '',
   owner,
+  ownerId: '',
   shared: false,
   projects: [],
   query: '',
@@ -183,6 +186,7 @@ export const normalizeBoardConfig = (raw: unknown, fallbackOwner = ''): BoardCon
     ...base,
     id: str(input.id),
     name: str(input.name),
+    ownerId: str(input.ownerId),
     shared: typeof input.shared === 'boolean' ? input.shared : base.shared,
     projects: normalizeProjects(input.projects),
     query: str(input.query),

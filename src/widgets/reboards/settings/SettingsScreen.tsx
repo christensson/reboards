@@ -19,6 +19,7 @@ import {useBoardReference} from '../data/useBoardReference';
 import {CARD_COLOR_FIELD_KINDS, COLUMN_FIELD_KINDS, SPRINT_FIELD_KINDS, applyUniverseDefaults, defaultColumns} from '../model/fieldUniverse';
 import {ColumnsEditor} from './ColumnsEditor';
 import {ListEditor} from './ListEditor';
+import {OwnerField} from './OwnerField';
 import {SwimlanesSection} from './SwimlanesSection';
 
 type Props = {
@@ -30,6 +31,8 @@ type Props = {
   isAdmin: boolean;
   onSave: (board: BoardConfig, expectedUpdatedAt?: number) => Promise<BoardConfig>;
   onDelete: (id: string) => Promise<void>;
+  /** Hands the board over; whoever may delete a board may also transfer it. */
+  onTransfer: (id: string, login: string) => Promise<void>;
   onCancel: () => void;
   onSaved: (board: BoardConfig) => void;
 };
@@ -106,7 +109,7 @@ const screenTitle = (isNew: boolean, duplicating: boolean, name: string): string
   return duplicating ? `New board (copy of ${name})` : `Board settings: ${name}`;
 };
 
-export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelete, isAdmin, onSave, onDelete, onCancel, onSaved}) => {
+export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelete, isAdmin, onSave, onDelete, onTransfer, onCancel, onSaved}) => {
   const [draft, setDraft] = useState<BoardConfig>(board);
   const [projects, setProjects] = useState<YtProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
@@ -252,6 +255,7 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelet
           <ProjectsSelect projects={projects} loading={projectsLoading} disabled={readOnly} value={draft.projects} onChange={list => patch({projects: list})}/>
           <span className="settings-field__help">Only issues from these projects are shown; fields are resolved against them.</span>
         </div>
+        {!creating && <OwnerField owner={board.owner} canTransfer={canDelete} onTransfer={login => onTransfer(board.id, login)}/>}
         <ShareField
           shared={draft.shared}
           showToggle={showShareToggle}

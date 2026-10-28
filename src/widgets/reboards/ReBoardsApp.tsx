@@ -131,6 +131,11 @@ export const ReBoardsApp: React.FC = () => {
       isAdmin={Boolean(boardsState.me?.isAdmin)}
       onSave={boardsState.save}
       onDelete={boardsState.remove}
+      onTransfer={async (id, login) => {
+        if (!(await boardsState.transfer(id, login))) {
+          navigate({kind: 'home'});
+        }
+      }}
       onCancel={() => (isNew && boards.length === 0 ? navigate({kind: 'home'}) : navigate(isNew ? {kind: 'home'} : {kind: 'board', boardId: board.id, sprint: null}))}
       onSaved={saved => openBoard(saved.id)}
     />
