@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, swapSwimlanes, validateBoardConfig} from './board-config';
+import {BOARD_LIMITS, columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, swapSwimlanes, validateBoardConfig} from './board-config';
 
 describe('normalizeBoardConfig', () => {
   it('fills defaults for an empty document', () => {
@@ -103,5 +103,28 @@ describe('columnLabel', () => {
   it('prefers the custom name and falls back to joined values', () => {
     expect(columnLabel({id: 'a', name: 'Doing', values: ['In Progress']})).toBe('Doing');
     expect(columnLabel({id: 'a', values: ['In Progress', 'Review']})).toBe('In Progress / Review');
+  });
+});
+
+describe('validateBoardSize', () => {
+  const valid = (): ReturnType<typeof createEmptyBoard> => ({
+    ...createEmptyBoard('alice'),
+    name: 'Board',
+    projects: [{id: '0-1', shortName: 'SAN'}],
+    columns: [{id: 'c1', values: ['Open']}]
+  });
+
+  it('accepts a normal board', () => {
+    expect(validateBoardConfig(valid())).toEqual([]);
+  });
+
+  it('rejects long texts, long queries and too many entries', () => {
+    const long = 'x'.repeat(BOARD_LIMITS.textLength + 1);
+    expect(validateBoardConfig({...valid(), name: long}).map(p => p.field)).toContain('size');
+    expect(validateBoardConfig({...valid(), query: 'x'.repeat(BOARD_LIMITS.queryLength + 1)}).map(p => p.field)).toContain('query');
+    const values = Array.from({length: BOARD_LIMITS.values + 1}, (_, i) => `v${i}`);
+    expect(validateBoardConfig({...valid(), ignoredValues: values}).map(p => p.field)).toContain('size');
+    const fields = Array.from({length: BOARD_LIMITS.listItems + 1}, (_, i) => `f${i}`);
+    expect(validateBoardConfig({...valid(), cardFields: fields}).map(p => p.field)).toContain('size');
   });
 });

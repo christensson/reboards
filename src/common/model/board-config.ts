@@ -209,9 +209,76 @@ export type ValidationIssue = {
   message: string;
 };
 
+/**
+ * Size limits for one board. Every board shares one stored document, so the
+ * limits keep a single board from bloating it for everyone.
+ */
+export const BOARD_LIMITS = {
+  /** Length of the name, query excluded. */
+  textLength: 200,
+  queryLength: 2000,
+  projects: 50,
+  columns: 100,
+  /** Values listed in columns, ignored values and each swimlane order. */
+  values: 1000,
+  /** Card fields and link types. */
+  listItems: 50,
+  /** The whole board as stored JSON, in characters. */
+  serializedLength: 100_000
+} as const;
+
+const tooLong = (value: string, max: number): boolean => value.length > max;
+
+const allTexts = (config: BoardConfig): string[] => [
+  config.name,
+  config.id,
+  config.owner,
+  config.columnField.name,
+  ...config.projects.flatMap(p => [p.id, p.shortName]),
+  ...config.columns.flatMap(c => [c.id, c.name ?? '', ...c.values]),
+  ...config.ignoredValues,
+  ...config.row.customOrder,
+  ...(config.innerRow?.customOrder ?? []),
+  ...config.cardFields,
+  ...config.linkTypes,
+  config.row.field?.name ?? '',
+  config.innerRow?.field?.name ?? '',
+  config.sprints.field?.name ?? '',
+  config.cardColorField?.name ?? ''
+];
+
+/** Checks the size limits; problems are reported per limit, not per value. */
+export const validateBoardSize = (config: BoardConfig): ValidationIssue[] => {
+  const issues: ValidationIssue[] = [];
+  const {textLength, queryLength, projects, columns, values, listItems, serializedLength} = BOARD_LIMITS;
+  if (allTexts(config).some(text => tooLong(text, textLength))) {
+    issues.push({field: 'size', message: `Names and values can be at most ${textLength} characters`});
+  }
+  if (tooLong(config.query, queryLength)) {
+    issues.push({field: 'query', message: `The query can be at most ${queryLength} characters`});
+  }
+  if (config.projects.length > projects) {
+    issues.push({field: 'projects', message: `A board can have at most ${projects} projects`});
+  }
+  if (config.columns.length > columns) {
+    issues.push({field: 'columns', message: `A board can have at most ${columns} columns`});
+  }
+  const valueLists = [config.columns.flatMap(c => c.values), config.ignoredValues, config.row.customOrder, config.innerRow?.customOrder ?? []];
+  if (valueLists.some(list => list.length > values)) {
+    issues.push({field: 'size', message: `Columns, ignored values and swimlane orders can hold at most ${values} values each`});
+  }
+  if (config.cardFields.length > listItems || config.linkTypes.length > listItems) {
+    issues.push({field: 'size', message: `Card fields and link types are limited to ${listItems} each`});
+  }
+  if (issues.length === 0 && JSON.stringify(config).length > serializedLength) {
+    issues.push({field: 'size', message: 'The board configuration is too large'});
+  }
+  return issues;
+};
+
 /** Validates a config before saving. Returns an empty array when valid. */
 export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
-  const issues: ValidationIssue[] = [];
+  const issues: ValidationIssue[] = [...validateBoardSize(config)];
   if (!config.name.trim()) {
     issues.push({field: 'name', message: 'Board name is required'});
   }

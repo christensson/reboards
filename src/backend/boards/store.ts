@@ -75,5 +75,13 @@ export const canShare = (board: BoardConfig, isAdmin: boolean, isProjectAdmin: P
 export const visibleBoards = (doc: BoardsDocument, viewer: Viewer, canReadProject: ProjectAccess): BoardConfig[] =>
   doc.boards.filter(b => isVisibleTo(b, viewer, canReadProject));
 
+/** Boards one user may own, so nobody can fill the shared document on their own. */
+export const MAX_BOARDS_PER_OWNER = 100;
+
+/** Upper bound of the stored document, in characters; saves that would exceed it are rejected. */
+export const MAX_DOCUMENT_LENGTH = 4_000_000;
+
+export const ownedBy = (doc: BoardsDocument, viewer: Viewer): number => doc.boards.filter(b => isOwner(b, viewer)).length;
+
 /** Login of the anonymous user; every visitor shares it, so it must not own boards. */
 export const GUEST_LOGIN = 'guest';

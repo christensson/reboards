@@ -3,7 +3,20 @@ import {type BoardConfig, generateId, normalizeBoardConfig, validateBoardConfig}
 import {projectAccessFor, projectAdminFor} from '@/backend/boards/access';
 import {HTTP_BAD_REQUEST, HTTP_CONFLICT, HTTP_FORBIDDEN, HTTP_NOT_FOUND, respondError} from '@/backend/boards/http';
 import {loadBoards, viewerOf} from '@/backend/boards/owners';
-import {ADMIN_PERMISSION, GUEST_LOGIN, canDelete, canEdit, canShare, isOwner, isVisibleTo, writeBoards} from '@/backend/boards/store';
+import {
+  ADMIN_PERMISSION,
+  GUEST_LOGIN,
+  MAX_BOARDS_PER_OWNER,
+  MAX_DOCUMENT_LENGTH,
+  canDelete,
+  canEdit,
+  canShare,
+  isOwner,
+  isVisibleTo,
+  ownedBy,
+  serializeBoardsDocument,
+  writeBoards
+} from '@/backend/boards/store';
 
 /**
  * @zod-to-schema
@@ -50,6 +63,10 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
 
   let stored: BoardConfig;
   if (existingIndex === -1) {
+    if (ownedBy(doc, viewer) >= MAX_BOARDS_PER_OWNER) {
+      respondError(ctx.response, HTTP_BAD_REQUEST, `You can own at most ${MAX_BOARDS_PER_OWNER} boards. Delete one first`);
+      return;
+    }
     stored = {...incoming, id: incoming.id || generateId(), owner: viewer.login, ownerId: viewer.id, createdAt: now, updatedAt: now};
     doc.boards.push(stored);
   } else {
@@ -73,6 +90,10 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
     doc.boards[existingIndex] = stored;
   }
 
+  if (serializeBoardsDocument(doc).length > MAX_DOCUMENT_LENGTH) {
+    respondError(ctx.response, HTTP_BAD_REQUEST, 'The board storage is full. Delete unused boards first');
+    return;
+  }
   writeBoards(ctx.globalStorage, doc);
   ctx.response.json({
     board: stored,
