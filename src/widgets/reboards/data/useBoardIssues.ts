@@ -1,7 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {BoardConfig} from '@/common/model/board-config';
-import {boardSearchField} from '@/common/model/agileSource';
-import {composeAgileQuery, composeQuery} from '@/common/youtrack/query';
+import {effectiveQuery} from '@/common/youtrack/query';
 import {errorMessage} from '@/common/youtrack/rest';
 import {type BoardIssue, normalizeIssue} from '../model/issue';
 import type {ParentInfo} from '../model/layout';
@@ -38,28 +37,6 @@ const fetchParents = async (ids: string[]): Promise<Record<string, ParentInfo>> 
   };
   await Promise.all(Array.from({length: Math.min(PARENT_FETCH_CONCURRENCY, ids.length)}, worker));
   return result;
-};
-
-/**
- * The board's search query. A board linked to an agile board shows that board's issues (by its
- * live name, else the one saved), with the board's own query as an extra filter.
- */
-export const effectiveQuery = (config: BoardConfig, sprint: string | null, agile?: {name: string; sprintsEnabled: boolean}): string => {
-  if (config.agileSource) {
-    return composeAgileQuery({
-      boardField: boardSearchField(agile?.name ?? config.agileSource.name),
-      sprintsEnabled: agile?.sprintsEnabled ?? true,
-      sprint,
-      query: config.query,
-      projects: config.projects.map(p => p.shortName)
-    });
-  }
-  return composeQuery({
-    projects: config.projects.map(p => p.shortName),
-    query: config.query,
-    sprintField: config.sprints.enabled ? config.sprints.field?.name : null,
-    sprint: config.sprints.enabled ? sprint : null
-  });
 };
 
 /** The query to load, or why there is none yet: a linked agile board still loading, or not readable. */

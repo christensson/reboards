@@ -13,12 +13,11 @@ import {type BoardConfig, DYNAMIC_KINDS, ownSprintField, type FieldKind, type Fi
 import {type MergeChoice, type MergeGroup, mergeBoards, resolveMerge} from '@/common/model/board-merge';
 import {currentUserLogin} from '@/common/youtrack/host';
 import {isPersonalAgile} from '@/common/model/agileSource';
-import {composeQuery} from '@/common/youtrack/query';
+import {composeQuery, effectiveQuery} from '@/common/youtrack/query';
 import {errorMessage} from '@/common/youtrack/rest';
 import type {YtAgile, YtProject} from '@/common/youtrack/types';
 import {api, youtrack} from '../data/api';
 import {useBoardReference} from '../data/useBoardReference';
-import {effectiveQuery} from '../data/useBoardIssues';
 import type {SaveResult} from '../data/useBoards';
 import {
   CARD_COLOR_FIELD_KINDS,

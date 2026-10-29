@@ -1,3 +1,8 @@
+import type {BoardConfig} from '@/common/model/board-config';
+
+/** The search name of an agile board, as used in `{Board <name>}: {<sprint>}`. */
+export const boardSearchField = (agileName: string): string => `Board ${agileName}`;
+
 export type ComposeQueryInput = {
   projects: string[];
   query: string;
@@ -53,3 +58,26 @@ export const composeAgileQuery = ({boardField, sprintsEnabled, sprint, query, pr
   const trimmed = query.trim();
   return trimmed ? `${board} and (${trimmed})` : board;
 };
+
+/**
+ * The board's search query. A board linked to an agile board shows that board's issues (by its
+ * live name, else the one saved), with the board's own query as an extra filter.
+ */
+export const effectiveQuery = (config: BoardConfig, sprint: string | null, agile?: {name: string; sprintsEnabled: boolean}): string => {
+  if (config.agileSource) {
+    return composeAgileQuery({
+      boardField: boardSearchField(agile?.name ?? config.agileSource.name),
+      sprintsEnabled: agile?.sprintsEnabled ?? true,
+      sprint,
+      query: config.query,
+      projects: config.projects.map(p => p.shortName)
+    });
+  }
+  return composeQuery({
+    projects: config.projects.map(p => p.shortName),
+    query: config.query,
+    sprintField: config.sprints.enabled ? config.sprints.field?.name : null,
+    sprint: config.sprints.enabled ? sprint : null
+  });
+};
+

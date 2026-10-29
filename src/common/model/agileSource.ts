@@ -18,5 +18,4 @@ export const sprintValues = (sprints: YtSprint[]) =>
       ...(typeof sprint.finish === 'number' ? {releaseDate: sprint.finish} : {})
     }));
 
-/** The search name of an agile board, as used in `{Board <name>}: {<sprint>}`. */
-export const boardSearchField = (agileName: string): string => `Board ${agileName}`;
+export {boardSearchField} from '@/common/youtrack/query';

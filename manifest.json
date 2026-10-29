@@ -5,6 +5,7 @@
   "description": "Revamped agile boards: see and create relations, group subtasks under their parent, use one or two swimlane levels and plan in time",
   "version": "0.1.0",
   "minYouTrackVersion": "2026.2.0",
+  "aiToolPrefix": "reboards",
   "vendor": {
     "name": "Marcus Christensson",
     "url": "https://github.com/marcuschristensson"

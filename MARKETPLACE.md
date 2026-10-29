@@ -30,6 +30,11 @@ issues, far more insight.
 - Sprints from any version or enum field, with dates, the current sprint and an "Unscheduled" view.
 - Highlights for cards with a missing field.
 
+**Works with AI assistants (MCP)**
+- Three read-only tools for YouTrack's MCP server: **`reboards_list_boards`** lists your boards with their sprints, **`reboards_get_board`** describes a board's columns, swimlanes and sprints and which field to change to move an issue, and **`reboards_list_board_issues`** lists a board's issues with the column and swimlane each one is in.
+- An assistant can then move issues with YouTrack's own `update_issue` tool, for example "move ST-8 to In Progress".
+- Enable them by adding `?customToolPackages=reboards` to the MCP address, for example `https://<your-youtrack>/mcp?customToolPackages=reboards`. The tools see only what the connected user can see.
+
 **Built for teams**
 - Personal or shared boards, with owner and admin rights and transferable ownership.
 - Related boards for one-click switching. Conflicting edits are merged instead of overwritten.
