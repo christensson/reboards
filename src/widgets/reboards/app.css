@@ -1161,6 +1161,12 @@ body {
   background-color: color-mix(in srgb, var(--ring-main-color) 8%, transparent);
 }
 
+/* Twice Ring UI's default dialog width, so long issue summaries fit. */
+.ring-dialog-content.relation-picker-dialog {
+  width: calc(116 * var(--ring-unit));
+  max-width: calc(100vw - var(--ring-unit) * 4);
+}
+
 .relation-picker__groups {
   display: flex;
   flex-direction: column;

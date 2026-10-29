@@ -43,7 +43,7 @@ export const RelationPickerDialog: React.FC<Props> = ({from, to, options, onAdd,
   useEffect(() => setSelectedKey(null), [from?.id, to?.id]);
   const selected = options.find(o => o.key === selectedKey && !o.existing) ?? null;
   return (
-    <Dialog show={from !== null && to !== null} onCloseAttempt={onCancel} label="Add a relation" trapFocus>
+    <Dialog show={from !== null && to !== null} onCloseAttempt={onCancel} label="Add a relation" contentClassName="relation-picker-dialog" trapFocus>
       <Header>{from && to ? `Add a relation between ${from.idReadable} and ${to.idReadable}` : ''}</Header>
       <Content>
         <p className="value-picker__hint">Choose how the dragged issue relates to the issue it was dropped on:</p>
