@@ -16,7 +16,7 @@
     "lint:fix": "eslint --fix",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "pack": "rm -rf reboards.zip && npx --yes bestzip reboards.zip dist/*",
+    "pack": "rm -rf reboards.zip && cd dist/ && npx --yes bestzip ../reboards.zip *",
     "upload": "youtrack-app app upload",
     "upload-local": "set -a && . ./.env && set +a && youtrack-app app upload --host $YOUTRACK_HOST --token $YOUTRACK_TOKEN",
     "update": "npm run build && npm run upload-local",
