@@ -7,6 +7,8 @@ import type {TimingNote} from '../model/timeline';
 export type CardRegistry = {
   register: (issueId: string, element: HTMLElement | null) => void;
   get: (issueId: string) => HTMLElement | undefined;
+  /** Issue ids whose primary card is rendered. */
+  ids: () => string[];
 };
 
 /** Cells to highlight while dragging: one cell for an issue, a whole swimlane (columnId null) for a group. */
@@ -54,6 +56,8 @@ export type BoardContextValue = {
   showCard: (cardId: string) => void;
   /** Time layout: the timing problems of an issue, for its card icons; empty otherwise. */
   timingNotes: (issueId: string) => TimingNote[];
+  /** A card being moved with Ctrl+arrows: the cell its shadow is in and what the move would change. */
+  keyMove: {issueId: string; rowKey: string; columnId: string; hint: string} | null;
 };
 
 export const BoardContext = createContext<BoardContextValue | null>(null);

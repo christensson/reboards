@@ -85,6 +85,7 @@ const RELATION_OPTIONS: {mode: ConnectorsMode; label: string}[] = [
 
 const NEW_ISSUE_KEY = 'new-issue';
 const GROUP_BY_PARENT_KEY = 'group-by-parent';
+const SHORTCUTS_KEY = 'shortcuts';
 
 const boardName = (board: BoardConfig): string => board.name || 'Untitled board';
 
@@ -124,16 +125,19 @@ type ShowMenuProps = {
   onConnectorsMode: (mode: ConnectorsMode) => void;
   onShowNewIssue: (show: boolean) => void;
   onGroupByParent: (group: boolean) => void;
+  onShowShortcuts: () => void;
 };
 
 /** "Show" menu: which relation connectors to draw, whether cells offer "New issue…", and whether subtasks are boxed. */
-const ShowMenu: React.FC<ShowMenuProps> = ({connectorsMode, showNewIssue, groupByParent, onConnectorsMode, onShowNewIssue, onGroupByParent}) => {
+const ShowMenu: React.FC<ShowMenuProps> = ({connectorsMode, showNewIssue, groupByParent, onConnectorsMode, onShowNewIssue, onGroupByParent, onShowShortcuts}) => {
   const items: SelectItem[] = [
     {key: 'relations-title', label: 'Relations', rgItemType: List.ListProps.Type.TITLE},
     ...RELATION_OPTIONS.map(option => ({key: option.mode, label: option.label, checkbox: connectorsMode === option.mode})),
     {key: 'separator', rgItemType: List.ListProps.Type.SEPARATOR},
     {key: NEW_ISSUE_KEY, label: 'New issue controls', checkbox: showNewIssue},
-    {key: GROUP_BY_PARENT_KEY, label: 'Group by parent', checkbox: groupByParent}
+    {key: GROUP_BY_PARENT_KEY, label: 'Group by parent', checkbox: groupByParent},
+    {key: 'shortcuts-separator', rgItemType: List.ListProps.Type.SEPARATOR},
+    {key: SHORTCUTS_KEY, label: 'Keyboard shortcuts…', rgItemType: List.ListProps.Type.LINK}
   ];
   const relationLabel = RELATION_OPTIONS.find(option => option.mode === connectorsMode)?.label.toLowerCase() ?? '';
   return (
@@ -152,6 +156,8 @@ const ShowMenu: React.FC<ShowMenuProps> = ({connectorsMode, showNewIssue, groupB
         onSelect={(item: SelectItem) => {
           if (item.key === NEW_ISSUE_KEY) {
             onShowNewIssue(!showNewIssue);
+          } else if (item.key === SHORTCUTS_KEY) {
+            onShowShortcuts();
           } else if (item.key === GROUP_BY_PARENT_KEY) {
             onGroupByParent(!groupByParent);
           } else if (RELATION_OPTIONS.some(option => option.mode === item.key)) {
@@ -192,6 +198,8 @@ type Props = {
   onShowNewIssue: (show: boolean) => void;
   groupByParent: boolean;
   onGroupByParent: (group: boolean) => void;
+  /** Opens the list of keyboard shortcuts. */
+  onShowShortcuts: () => void;
   onToggleStar: (boardId: string) => void;
   /** Row layouts the board has set up; with both, the toolbar switches between them. */
   rowModes: ('swimlanes' | 'time')[];
@@ -328,6 +336,7 @@ export const Toolbar: React.FC<Props> = ({
   onShowNewIssue,
   groupByParent,
   onGroupByParent,
+  onShowShortcuts,
   onToggleStar,
   rowModes,
   rowMode,
@@ -407,6 +416,7 @@ export const Toolbar: React.FC<Props> = ({
           onConnectorsMode={onConnectorsMode}
           onShowNewIssue={onShowNewIssue}
           onGroupByParent={onGroupByParent}
+          onShowShortcuts={onShowShortcuts}
         />
       </div>
       <div className="toolbar__group toolbar__group_status">

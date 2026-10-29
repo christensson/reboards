@@ -1668,3 +1668,70 @@ body {
   flex: 1 1 calc(var(--card-w) + var(--ring-unit) * 2);
   pointer-events: auto;
 }
+
+/* ---------- Keyboard ---------- */
+
+/* Shadow of a card moved with Ctrl+arrows: its own line at the top of the target cell, with what the move changes on its first line and the keys on its last. */
+.key-move {
+  position: relative;
+  grid-column: 1 / -1;
+  max-width: calc(var(--card-w) * 1.5);
+}
+
+.key-move > .issue-card {
+  /* Tall enough for both labels (2 × 16px line, 4px margins, a gap), even for small cards. */
+  min-height: calc(var(--ring-unit) * 4 + 12px);
+  outline: 2px dashed var(--ring-main-color);
+  outline-offset: 1px;
+  opacity: 0.85;
+}
+
+.key-move__label {
+  position: absolute;
+  right: 4px;
+  max-width: calc(100% - 8px);
+  padding: 0 calc(var(--ring-unit) / 2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--ring-border-radius);
+  background-color: var(--ring-main-color);
+  color: var(--ring-white-text-color, #fff);
+  font-size: var(--ring-font-size-smaller);
+  line-height: calc(var(--ring-unit) * 2);
+  pointer-events: none;
+}
+
+.key-move__label_change {
+  top: 4px;
+}
+
+.key-move__label_keys {
+  bottom: 4px;
+  opacity: 0.9;
+}
+
+.shortcuts {
+  border-collapse: collapse;
+}
+
+.shortcuts td {
+  padding: calc(var(--ring-unit) / 2) var(--ring-unit);
+  vertical-align: top;
+}
+
+.shortcuts__keys {
+  white-space: nowrap;
+}
+
+.shortcuts__key {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-right: 2px;
+  padding: 0 4px;
+  border: 1px solid var(--ring-borders-color);
+  border-radius: 3px;
+  background-color: var(--ring-sidebar-background-color, var(--ring-content-background-color));
+  font-family: inherit;
+  text-align: center;
+}

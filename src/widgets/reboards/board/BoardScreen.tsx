@@ -1,8 +1,9 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {DndContext, type DragEndEvent, type DragOverEvent, type DragStartEvent, DragOverlay, PointerSensor, useSensor, useSensors} from '@dnd-kit/core';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
+import confirm from '@jetbrains/ring-ui-built/components/confirm-service/confirm-service';
 import {type BoardConfig, type DynamicOptions, type FieldRef, availableRowModes, effectiveRowMode, isDynamicField, swapSwimlanes} from '@/common/model/board-config';
-import {type UserPrefs, boardView, setBoardView, toggleStar} from '@/common/storage/prefs';
+import {type ConnectorsMode, type UserPrefs, boardView, setBoardView, toggleStar} from '@/common/storage/prefs';
 import {buildFieldUpdate, buildMultiFieldUpdate} from '@/common/youtrack/fields';
 import {errorMessage} from '@/common/youtrack/rest';
 import {issueUrl, newIssueUrl} from '@/common/youtrack/urls';
@@ -38,6 +39,8 @@ import {useLinkDrag} from './useLinkDrag';
 import {useProjectPermissions} from '../data/useProjectPermissions';
 import {QuickFind} from './QuickFind';
 import {orderMatches, useQuickFind} from './useQuickFind';
+import {useBoardKeys} from './useBoardKeys';
+import {KeyboardHelpDialog} from './KeyboardHelpDialog';
 
 type Props = {
   board: BoardConfig;
@@ -66,6 +69,10 @@ type PendingMove = {
 const DRAG_ACTIVATION_DISTANCE = 6;
 
 const NO_NOTES: TimingNote[] = [];
+
+/** The find box or a dialog is open: board keys are theirs. */
+const hasOverlay = (findTerm: string | null, pendingMove: unknown, relationFrom: unknown, shortcuts: boolean): boolean =>
+  findTerm !== null || pendingMove !== null || relationFrom !== null || shortcuts;
 
 /** 1-based position of the match cycled to, in board order; null before cycling. */
 const findPositionOf = (cursor: string | null, matchIds: Set<string>, registry: CardRegistry): number | null =>
@@ -312,7 +319,8 @@ const useCardRegistry = (): CardRegistry => {
           map.current.delete(issueId);
         }
       },
-      get: issueId => map.current.get(issueId)
+      get: issueId => map.current.get(issueId),
+      ids: () => Array.from(map.current.keys())
     }),
     []
   );
@@ -407,15 +415,6 @@ export const BoardScreen: React.FC<Props> = ({
   );
   const edges = useMemo(() => computeEdges(data.issues, visibleIds, board.linkTypes), [data.issues, visibleIds, board.linkTypes]);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setSelectedIds(new Set());
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   const onSelect = useCallback((issueId: string, additive: boolean) => {
     setSelectedIds(prev => {
@@ -702,6 +701,112 @@ export const BoardScreen: React.FC<Props> = ({
     [findGroup, board, layout.rowsByKey, issuesById, settlePending, canUpdateIssue]
   );
 
+  /** Moves a card from one cell to another, by drag and drop or with Ctrl+arrows. */
+  const moveCard = useCallback(
+    (issue: BoardIssue, from: MoveTarget, target: MoveTarget) => {
+      if (!canUpdateIssue(issue)) {
+        alertService.warning(`You do not have permission to change ${issue.idReadable}`);
+        return;
+      }
+      const plan = planMove(board, from, target, layout.rowsByKey, layout.columns);
+      settlePending({issues: [issue], changes: plan.changes, pickColumnId: plan.pickColumn?.id, choices: plan.choices ?? [], label: issue.idReadable});
+    },
+    [layout.rowsByKey, layout.columns, board, settlePending, canUpdateIssue]
+  );
+
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  // "R" shows the connectors as they were last shown, or all of them.
+  const lastConnectors = useRef<ConnectorsMode>('all');
+  const toggleConnectors = useCallback(() => {
+    const mode = view.connectorsMode;
+    if (mode !== 'none') {
+      lastConnectors.current = mode;
+    }
+    updatePrefs(prev => setBoardView(prev, board.id, {connectorsMode: mode === 'none' ? lastConnectors.current : 'none'}));
+  }, [view.connectorsMode, updatePrefs, board.id]);
+
+  // Subtasks "P" went up from, most recent last, each with the parent it went to.
+  const parentTrail = useRef<{child: string; parent: string}[]>([]);
+
+  /** "P": select the parent on the board, or offer to open it when it is not on the board. */
+  const goToParent = useCallback((issueId: string) => {
+    const issue = issuesById.get(issueId);
+    if (!issue || issue.parentIds.length === 0) {
+      alertService.message(`${issue?.idReadable ?? 'The issue'} has no parent`);
+      return;
+    }
+    const onBoard = issue.parentIds.find(id => layout.placement[id]);
+    if (onBoard) {
+      parentTrail.current.push({child: issueId, parent: onBoard});
+      setSelectedIds(new Set([onBoard]));
+      expandFor(onBoard);
+      const SCROLL_DELAY = 50;
+      window.setTimeout(() => registry.get(onBoard)?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'}), SCROLL_DELAY);
+      return;
+    }
+    const parentId = issue.parentIds[0];
+    const idReadable = data.parents[parentId]?.idReadable ?? issuesById.get(parentId)?.idReadable ?? 'the parent';
+    confirm({text: `The parent of ${issue.idReadable}, ${idReadable}, is not on this board.`, confirmLabel: `Open ${idReadable}…`, rejectLabel: 'Cancel'})
+      .then(() => onOpen(parentId))
+      .catch(() => undefined);
+  }, [issuesById, layout.placement, expandFor, registry, data.parents, onOpen]);
+
+  /** Shift+P: back down to the subtask "P" came from, while its parent is still the one selected. */
+  const backToChild = useCallback((issueId: string) => {
+    const last = parentTrail.current[parentTrail.current.length - 1];
+    if (!last || last.parent !== issueId) {
+      // The user went elsewhere since: the trail no longer leads anywhere.
+      parentTrail.current = [];
+      return;
+    }
+    parentTrail.current.pop();
+    if (!layout.placement[last.child]) {
+      return;
+    }
+    setSelectedIds(new Set([last.child]));
+    expandFor(last.child);
+    const SCROLL_DELAY = 50;
+    window.setTimeout(() => registry.get(last.child)?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'}), SCROLL_DELAY);
+  }, [layout.placement, expandFor, registry]);
+
+  const {keyMove} = useBoardKeys({
+    enabled: !hasOverlay(quickFindTerm, pendingMove, link.dialog.from, showShortcuts),
+    layout,
+    registry,
+    selectedIds,
+    setSelectedIds,
+    collapsed: {rows: collapsedRows, columns: collapsedColumns, outerRows: collapsedOuterRows},
+    canMove: issueId => {
+      const issue = issuesById.get(issueId);
+      return Boolean(issue && canUpdateIssue(issue));
+    },
+    onOpen,
+    onParent: goToParent,
+    onBackToChild: backToChild,
+    onToggleConnectors: toggleConnectors,
+    onHelp: () => setShowShortcuts(true),
+    onCommitMove: move => {
+      const issue = issuesById.get(move.issueId);
+      if (issue) {
+        moveCard(issue, move.from, move.to);
+      }
+    }
+  });
+  // What a Ctrl+arrow move would change, shown over the card's shadow.
+  const keyMoveView = useMemo(() => {
+    const issue = keyMove ? issuesById.get(keyMove.issueId) : undefined;
+    if (!keyMove || !issue) {
+      return null;
+    }
+    const hint = issueDragHint(board, reference.universe, issue, keyMove.from, keyMove.to, layout.rowsByKey, layout.columns);
+    return {issueId: issue.id, rowKey: keyMove.to.rowKey, columnId: keyMove.to.columnId, hint};
+  }, [keyMove, issuesById, board, reference.universe, layout.rowsByKey, layout.columns]);
+  useEffect(() => {
+    if (keyMoveView) {
+      requestAnimationFrame(() => document.querySelector('[data-key-move]')?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'}));
+    }
+  }, [keyMoveView]);
+
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
       setActiveDragId(null);
@@ -721,18 +826,11 @@ export const BoardScreen: React.FC<Props> = ({
         return;
       }
       const issue = card && issuesById.get(card.issueId);
-      const from = card;
-      if (!issue || !from || !target) {
-        return;
+      if (issue && card && target) {
+        moveCard(issue, card, target);
       }
-      if (!canUpdateIssue(issue)) {
-        alertService.warning(`You do not have permission to change ${issue.idReadable}`);
-        return;
-      }
-      const plan = planMove(board, from, target, layout.rowsByKey, layout.columns);
-      settlePending({issues: [issue], changes: plan.changes, pickColumnId: plan.pickColumn?.id, choices: plan.choices ?? [], label: issue.idReadable});
     },
-    [issuesById, layout.cards, layout.rowsByKey, layout.columns, board, settlePending, moveGroup, dropLink, canUpdateIssue]
+    [issuesById, layout.cards, moveGroup, dropLink, moveCard]
   );
 
   const onPickValue = useCallback(
@@ -824,9 +922,10 @@ export const BoardScreen: React.FC<Props> = ({
       cardCopies,
       cardLocation: locateCard,
       showCard,
-      timingNotes: timingNotesOf
+      timingNotes: timingNotesOf,
+      keyMove: keyMoveView
     }),
-    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf, canDrag, canMoveGroup, issueIdOf, cardCopies, locateCard, showCard, timingNotesOf]
+    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf, canDrag, canMoveGroup, issueIdOf, cardCopies, locateCard, showCard, timingNotesOf, keyMoveView]
   );
 
   const status = useMemo(
@@ -887,6 +986,7 @@ export const BoardScreen: React.FC<Props> = ({
         showNewIssue={view.showNewIssue}
         onShowNewIssue={show => updatePrefs(prev => setBoardView(prev, board.id, {showNewIssue: show}))}
         groupByParent={view.groupByParent}
+        onShowShortcuts={() => setShowShortcuts(true)}
         onGroupByParent={group => updatePrefs(prev => setBoardView(prev, board.id, {groupByParent: group}))}
         starredBoards={prefs.starredBoards}
         onToggleStar={boardId => updatePrefs(prev => toggleStar(prev, boardId))}
@@ -973,6 +1073,7 @@ export const BoardScreen: React.FC<Props> = ({
         onCancel={() => setPendingMove(null)}
       />
       <RelationPickerDialog {...link.dialog}/>
+      <KeyboardHelpDialog show={showShortcuts} onClose={() => setShowShortcuts(false)}/>
       {quickFindTerm !== null && (
         <QuickFind
           term={quickFindTerm}

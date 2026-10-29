@@ -1,11 +1,11 @@
 import {useEffect} from 'react';
 import type {CardRegistry} from './BoardContext';
 
-const isTypingTarget = (element: Element | null): boolean =>
+export const isTypingTarget = (element: Element | null): boolean =>
   element instanceof HTMLElement &&
   (['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName) || element.isContentEditable);
 
-const isDialogOpen = (): boolean => document.querySelector('[data-test~="ring-dialog"]') !== null;
+export const isDialogOpen = (): boolean => document.querySelector('[data-test~="ring-dialog"]') !== null;
 
 /** The rendered match closest to the top (then left) of the board. */
 const topMatch = (matchIds: Set<string>, registry: CardRegistry): HTMLElement | null => {
