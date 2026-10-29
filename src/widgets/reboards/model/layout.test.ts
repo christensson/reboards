@@ -135,6 +135,8 @@ describe('computeLayout', () => {
     const layout = computeLayout({issues: [issue({id: '1', state: 'Open', priority: 'Major'})], config: cfg, universe, parents: {}});
     expect(layout.rows.map(r => r.label)).toEqual(['All issues']);
     expect(layout.rows[0].looseByColumn.open).toEqual(['1']);
+    expect(layout.noSwimlanes).toBe(true);
+    expect(computeLayout({issues: [], config: config(), universe, parents: {}}).noSwimlanes).toBe(false);
   });
 
   it('groups subtasks per parent and row with counts and group index', () => {

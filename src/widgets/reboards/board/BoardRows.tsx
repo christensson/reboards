@@ -42,7 +42,9 @@ const BoardRowsComponent: React.FC<Props> = ({layout, collapsedRows, collapsedOu
           key={row.key}
           row={row}
           columns={layout.columns}
-          collapsed={collapsedRows.has(row.key)}
+          // Without a swimlane field the single row needs no header, and so cannot be collapsed.
+          headless={layout.noSwimlanes}
+          collapsed={!layout.noSwimlanes && collapsedRows.has(row.key)}
           collapsedGroups={collapsedGroups}
           onToggleRow={onToggleRow}
           onToggleGroup={onToggleGroup}

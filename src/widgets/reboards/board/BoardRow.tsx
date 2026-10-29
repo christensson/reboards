@@ -19,9 +19,31 @@ type Props = {
   onToggleGroup: (groupKey: string) => void;
   /** The picker row is the only row of its first-level swimlane, which has no issues. */
   pickerOnly?: boolean;
+  /** No swimlane header: the board has no swimlane field. */
+  headless?: boolean;
 };
 
-const BoardRowComponent: React.FC<Props> = ({row, columns, collapsed, collapsedGroups, onToggleRow, onToggleGroup, pickerOnly = false}) => {
+/** Title band of a swimlane: collapse toggle, label and issue count. */
+const RowHeader: React.FC<{row: LayoutRow; collapsed: boolean; onToggleRow: (rowKey: string) => void}> = ({row, collapsed, onToggleRow}) => (
+  <div className="board-row__header">
+    <div className="board-row__title">
+      <Button
+        className="board-row__toggle"
+        icon={collapsed ? chevronRightIcon : chevronDownIcon}
+        title={collapsed ? 'Expand swimlane' : 'Collapse swimlane'}
+        onClick={() => onToggleRow(row.key)}
+      />
+      {row.color ? (
+        <ValuePill label={row.label} color={row.color} className="board-row__label"/>
+      ) : (
+        <span className={`board-row__label${row.isUncategorized ? ' board-row__label_uncategorized' : ''}`} title={row.label}>{row.label}</span>
+      )}
+    </div>
+    <span className="board-row__count" title="Issues in this swimlane">{row.issueCount}</span>
+  </div>
+);
+
+const BoardRowComponent: React.FC<Props> = ({row, columns, collapsed, collapsedGroups, onToggleRow, onToggleGroup, pickerOnly = false, headless = false}) => {
   const ctx = useBoardContext();
   const bandStyle: React.CSSProperties = {gridTemplateColumns: bandTemplate(columns, ctx.collapsedColumns)};
   const bands = packGroups(row.groups);
@@ -39,22 +61,7 @@ const BoardRowComponent: React.FC<Props> = ({row, columns, collapsed, collapsedG
   }
   return (
     <div className={`board-row${collapsed ? ' board-row_collapsed' : ''}`} data-row-key={row.key}>
-      <div className="board-row__header">
-        <div className="board-row__title">
-          <Button
-            className="board-row__toggle"
-            icon={collapsed ? chevronRightIcon : chevronDownIcon}
-            title={collapsed ? 'Expand swimlane' : 'Collapse swimlane'}
-            onClick={() => onToggleRow(row.key)}
-          />
-          {row.color ? (
-            <ValuePill label={row.label} color={row.color} className="board-row__label"/>
-          ) : (
-            <span className={`board-row__label${row.isUncategorized ? ' board-row__label_uncategorized' : ''}`} title={row.label}>{row.label}</span>
-          )}
-        </div>
-        <span className="board-row__count" title="Issues in this swimlane">{row.issueCount}</span>
-      </div>
+      {!headless && <RowHeader row={row} collapsed={collapsed} onToggleRow={onToggleRow}/>}
       {!collapsed && (
         <div className="board-row__body">
           <div className="board-band board-band_loose" style={bandStyle}>

@@ -170,6 +170,8 @@ export type BoardLayout = {
   rows: LayoutRow[];
   rowsByKey: Record<string, LayoutRow>;
   twoLevel: boolean;
+  /** No swimlane field: one "All issues" row, shown without a header. */
+  noSwimlanes: boolean;
   /** First-level swimlanes; empty on single-level boards. */
   outerRows: LayoutOuterRow[];
   placement: Record<string, Placement>;
@@ -764,6 +766,7 @@ export const computeLayout = ({issues, config, universe, parents, visibleColumnI
     copiesByIssue: copiesOf(cards, rowOrder, columnIndex),
     rowsByKey: Object.fromEntries(rowByKey),
     twoLevel,
+    noSwimlanes: !config.row.field,
     outerRows: skeleton.outerRows,
     placement: Object.fromEntries(placed),
     groupAncestors: ancestors,
