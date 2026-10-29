@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/youtrack-app.json",
   "name": "reboards",
   "title": "ReBoards",
-  "description": "Revamped agile boards: see and create relations, group subtasks under their parent, use one or two swimlane levels and plan in time",
+  "description": "Revamped agile boards: work with relations, group subtasks under their parent, use multiple swimlane levels and plan in time.",
   "version": "1.0.0",
   "minYouTrackVersion": "2026.2.0",
   "aiToolPrefix": "reboards",
