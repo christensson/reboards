@@ -36,6 +36,8 @@ export type UserPrefs = {
   collapsedGroups: Record<string, string[]>;
   /** Dynamic column fields: ids of the columns the user picked per board id; the board default when missing. */
   visibleColumns: Record<string, string[]>;
+  /** Boards with both swimlanes and time set up: the layout the user picked per board id. */
+  rowModeByBoard: Record<string, 'swimlanes' | 'time'>;
 };
 
 export const PREFS_KEY = 'reboards.prefs.v1';
@@ -52,7 +54,8 @@ export const defaultPrefs = (): UserPrefs => ({
   collapsedOuterRows: {},
   swappedSwimlanes: {},
   collapsedGroups: {},
-  visibleColumns: {}
+  visibleColumns: {},
+  rowModeByBoard: {}
 });
 
 const readRaw = async (host: HostAPI): Promise<string | null> => {

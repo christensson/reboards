@@ -4,6 +4,9 @@ import {buildFieldUpdate, buildMultiFieldUpdate, describeFieldType, toFieldValue
 describe('describeFieldType', () => {
   it('classifies known field types', () => {
     expect(describeFieldType('enum[1]')).toEqual({kind: 'enum', multi: false});
+    expect(describeFieldType('date')).toEqual({kind: 'date', multi: false});
+    expect(describeFieldType('date and time')).toEqual({kind: 'datetime', multi: false});
+    expect(describeFieldType('period')).toEqual({kind: 'period', multi: false});
     expect(describeFieldType('enum[*]')).toEqual({kind: 'enum', multi: true});
     expect(describeFieldType('state[1]')).toEqual({kind: 'state', multi: false});
     expect(describeFieldType('version[*]')).toEqual({kind: 'version', multi: true});
@@ -15,8 +18,7 @@ describe('describeFieldType', () => {
 
   it('marks unsupported types as other', () => {
     expect(describeFieldType('string')).toEqual({kind: 'other', multi: false});
-    expect(describeFieldType('date')).toEqual({kind: 'other', multi: false});
-    expect(describeFieldType('period').kind).toBe('other');
+    expect(describeFieldType('text').kind).toBe('other');
   });
 });
 

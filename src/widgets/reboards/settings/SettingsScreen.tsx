@@ -32,7 +32,7 @@ import {ListEditor} from './ListEditor';
 import {MergeDialog, type PendingMerge} from './MergeDialog';
 import {OwnerField} from './OwnerField';
 import {RelatedBoardsField} from './RelatedBoardsField';
-import {SwimlanesSection} from './SwimlanesSection';
+import {RowLayoutSection} from './RowLayoutSection';
 
 type Props = {
   board: BoardConfig;
@@ -428,15 +428,8 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
         <ColumnValues draft={draft} kind={columnKind} universe={reference.universe} readOnly={readOnly} patch={patch}/>
       </Section>
 
-      <Section title="Swimlanes (rows)">
-        <SwimlanesSection
-          universe={reference.universe}
-          row={draft.row}
-          innerRow={draft.innerRow}
-          readOnly={readOnly}
-          onChange={patch}
-          sprintFieldName={sprintFieldNames[0]}
-        />
+      <Section title="Rows">
+        <RowLayoutSection draft={draft} universe={reference.universe} readOnly={readOnly} patch={patch} sprintFieldName={sprintFieldNames[0]}/>
       </Section>
 
       <Section title="Cards">

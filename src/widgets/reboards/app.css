@@ -43,6 +43,8 @@ body {
 .board-screen {
   --col-w: 280px;
   --col-c: 36px;
+  /* Time rows' title lines: a shade darker than the grid lines. */
+  --time-line-color: color-mix(in srgb, var(--ring-line-color) 55%, var(--ring-secondary-color));
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -1439,14 +1441,40 @@ body {
 
 /* ---------- Cards shown more than once (multi-value fields) ---------- */
 
-.issue-card:has(> .issue-card__copies) {
-  padding-right: calc(var(--ring-unit) * 2.5);
+.issue-card:has(> .issue-card__corner) {
+  padding-bottom: calc(var(--ring-unit) * 2.5);
 }
 
-.issue-card__copies {
+/* Lower right corner: timing icons, then the "also shown in" icon. */
+.issue-card__corner {
   position: absolute;
   right: 2px;
   bottom: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.issue-card__timing {
+  display: inline-flex;
+  padding: 2px;
+  line-height: 0;
+  cursor: help;
+}
+
+.issue-card__timing_error {
+  color: var(--ring-error-color);
+}
+
+.issue-card__timing_warning {
+  color: var(--ring-warning-color);
+}
+
+.issue-card__timing_info {
+  color: var(--ring-secondary-color);
+}
+
+.issue-card__copies {
   display: inline-flex;
   padding: 2px;
   border-radius: var(--ring-border-radius);
@@ -1507,4 +1535,95 @@ body {
 .board-screen_moving .board-cell__assign-label,
 .board-screen_moving .board-row__picker-label {
   visibility: visible;
+}
+
+/* ---------- Time layout ---------- */
+
+.board-row_time {
+  /* Rows are told apart by their title line, not by a border. */
+  border-bottom: none;
+}
+
+/* Title strip of a time row: a line across the whole board with the date on it. */
+.time-row__title {
+  position: relative;
+  display: grid;
+  height: calc(var(--ring-unit) * 2.5);
+}
+
+.time-row__title::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  border-top: 1px solid var(--time-line-color);
+}
+
+/* One per column: carries the column line through the strip, like the cells below. */
+.time-row__track {
+  grid-row: 1;
+  border-left: 1px solid var(--ring-line-color);
+}
+
+.time-row__track:first-child {
+  border-left: none;
+}
+
+.time-row__label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  grid-row: 1;
+  grid-column: 1 / -1;
+  align-self: center;
+  justify-self: start;
+  max-width: calc(var(--col-w) * 2);
+  margin-left: var(--ring-unit);
+  padding: 0 calc(var(--ring-unit) / 2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background-color: var(--ring-content-background-color);
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+  line-height: calc(var(--ring-unit) * 2);
+}
+
+.board-row_time-none .time-row__label {
+  font-style: italic;
+}
+
+/* Today: a line in the accent color between the rows, in a strip of its own. */
+.time-today {
+  position: relative;
+  display: grid;
+  height: calc(var(--ring-unit) * 2);
+}
+
+.time-today::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  left: 0;
+  top: 50%;
+  z-index: 1;
+  border-top: 2px solid color-mix(in srgb, var(--ring-main-color) 45%, transparent);
+}
+
+.time-today__label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  grid-row: 1;
+  grid-column: 1 / -1;
+  align-self: center;
+  justify-self: start;
+  margin-left: var(--ring-unit);
+  padding: 0 calc(var(--ring-unit) / 2);
+  background-color: var(--ring-content-background-color);
+  color: var(--ring-main-color);
+  font-size: var(--ring-font-size-smaller);
+  line-height: calc(var(--ring-unit) * 2);
 }

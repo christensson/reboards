@@ -18,7 +18,8 @@ export type YtFieldType = {
 
 /** The parts of the user's general profile that decide how dates are shown. */
 export type YtGeneralProfile = {
-  dateFieldFormat?: {datePattern?: string};
+  /** `datePattern` for dates, `pattern` for dates with a time of day. */
+  dateFieldFormat?: {datePattern?: string; pattern?: string};
   locale?: {locale?: string};
 };
 
@@ -90,6 +91,8 @@ export type YtFieldValueObject = {
   presentation?: string;
   color?: YtColor | null;
   isResolved?: boolean;
+  /** Period values: the duration in minutes. */
+  minutes?: number;
 };
 
 export type YtIssueCustomField = {
@@ -109,6 +112,8 @@ export type YtIssue = {
   id: string;
   idReadable: string;
   summary: string;
+  /** When the issue was resolved; null while it is unresolved. */
+  resolved?: number | null;
   project: {id: string; shortName: string};
   tags: YtTag[];
   customFields: YtIssueCustomField[];

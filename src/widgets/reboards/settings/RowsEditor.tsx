@@ -16,6 +16,8 @@ type Props = {
   /** Label of the field selector; defaults to "Swimlane field". */
   fieldLabel?: string;
   noneLabel?: string;
+  /** Offer "no field"; the first level has none: turning swimlanes off is a layout choice. */
+  allowNone?: boolean;
   /** Field names that cannot be chosen (the other swimlane level). */
   excludeNames?: string[];
 };
@@ -79,7 +81,7 @@ const rowForField = (row: RowConfig, universe: FieldUniverse, fieldRef: FieldRef
   return {...row, field: fieldRef, sort, customOrder: values.map(v => v.key), dynamic: {...row.dynamic, asDynamic: false}};
 };
 
-export const RowsEditor: React.FC<Props> = ({universe, row, onChange, disabled, fieldLabel = 'Swimlane field', noneLabel = 'No swimlanes', excludeNames}) => {
+export const RowsEditor: React.FC<Props> = ({universe, row, onChange, disabled, fieldLabel = 'Swimlane field', noneLabel = 'No swimlanes', allowNone = true, excludeNames}) => {
   const field = row.field ? universe.byName.get(row.field.name) : undefined;
   const kind = field?.kind ?? row.field?.kind ?? 'other';
   return (
@@ -91,7 +93,7 @@ export const RowsEditor: React.FC<Props> = ({universe, row, onChange, disabled, 
           kinds={ROW_FIELD_KINDS}
           singleOnly
           multiKinds={DYNAMIC_KINDS}
-          allowNone
+          allowNone={allowNone}
           noneLabel={noneLabel}
           excludeNames={excludeNames}
           value={row.field}

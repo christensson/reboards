@@ -1,3 +1,4 @@
+import {type TimingFlag, timingFlagOfFilter} from './timeline';
 import type {BoardIssue} from './issue';
 
 /** Lower-cased words of a search term; every word must match somewhere. */
@@ -23,15 +24,26 @@ export const findMatches = (issues: BoardIssue[], term: string): string[] => {
  * Ids matching the text term and, when set, the quick filter (card field that must be unset).
  * Both conditions must hold when both are given; nothing matches when neither is given.
  */
-export const computeMatchIds = (issues: BoardIssue[], term: string, unsetField: string | null): Set<string> => {
+/**
+ * Issues matching the search words and the quick filter. The quick filter is a field name (issues
+ * where it is unset) or a timing highlight key, matched against `flagsByIssue`.
+ */
+export const computeMatchIds = (issues: BoardIssue[], term: string, quickFilter: string | null, flagsByIssue: Record<string, TimingFlag[]> = {}): Set<string> => {
   const words = searchWords(term);
-  if (words.length === 0 && !unsetField) {
+  if (words.length === 0 && !quickFilter) {
     return new Set();
   }
+  const flag = timingFlagOfFilter(quickFilter);
+  const passes = (issue: BoardIssue): boolean => {
+    if (!quickFilter) {
+      return true;
+    }
+    return flag ? Boolean(flagsByIssue[issue.id]?.includes(flag)) : !issue.fields[quickFilter];
+  };
   return new Set(
     issues
       .filter(issue => words.length === 0 || matchesSearch(issue, words))
-      .filter(issue => !unsetField || !issue.fields[unsetField])
+      .filter(passes)
       .map(issue => issue.id)
   );
 };

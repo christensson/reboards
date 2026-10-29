@@ -43,10 +43,38 @@ const RowHeader: React.FC<{row: LayoutRow; collapsed: boolean; onToggleRow: (row
   </div>
 );
 
+type RowBodyProps = {
+  row: LayoutRow;
+  columns: LayoutColumn[];
+  bandStyle: React.CSSProperties;
+  collapsedGroups: Set<string>;
+  onToggleGroup: (groupKey: string) => void;
+};
+
+/** The cards of a row: loose cards first, then the subtask boxes packed into bands. */
+export const RowBody: React.FC<RowBodyProps> = ({row, columns, bandStyle, collapsedGroups, onToggleGroup}) => (
+  <div className="board-row__body">
+    <div className="board-band board-band_loose" style={bandStyle}>
+      {columns.map(column => (
+        <Cell key={column.id} rowKey={row.key} columnId={column.id} issueIds={row.looseByColumn[column.id] ?? []}/>
+      ))}
+    </div>
+    {packGroups(row.groups).map(bandGroups => (
+      <div key={bandGroups[0].key} className="board-band board-band_group" style={bandStyle}>
+        {columns.map(column => (
+          <BandDropCell key={column.id} rowKey={row.key} columnId={column.id} columnIndex={column.index} bandKey={bandGroups[0].key}/>
+        ))}
+        {bandGroups.map(group => (
+          <GroupBox key={group.key} group={group} columns={columns} collapsedGroups={collapsedGroups} onToggle={onToggleGroup}/>
+        ))}
+      </div>
+    ))}
+  </div>
+);
+
 const BoardRowComponent: React.FC<Props> = ({row, columns, collapsed, collapsedGroups, onToggleRow, onToggleGroup, pickerOnly = false, headless = false}) => {
   const ctx = useBoardContext();
   const bandStyle: React.CSSProperties = {gridTemplateColumns: bandTemplate(columns, ctx.collapsedColumns)};
-  const bands = packGroups(row.groups);
   if (row.kind === 'picker') {
     return (
       <div className="board-row board-row_picker" data-row-key={row.key}>
@@ -62,25 +90,7 @@ const BoardRowComponent: React.FC<Props> = ({row, columns, collapsed, collapsedG
   return (
     <div className={`board-row${collapsed ? ' board-row_collapsed' : ''}`} data-row-key={row.key}>
       {!headless && <RowHeader row={row} collapsed={collapsed} onToggleRow={onToggleRow}/>}
-      {!collapsed && (
-        <div className="board-row__body">
-          <div className="board-band board-band_loose" style={bandStyle}>
-            {columns.map(column => (
-              <Cell key={column.id} rowKey={row.key} columnId={column.id} issueIds={row.looseByColumn[column.id] ?? []}/>
-            ))}
-          </div>
-          {bands.map(bandGroups => (
-            <div key={bandGroups[0].key} className="board-band board-band_group" style={bandStyle}>
-              {columns.map(column => (
-                <BandDropCell key={column.id} rowKey={row.key} columnId={column.id} columnIndex={column.index} bandKey={bandGroups[0].key}/>
-              ))}
-              {bandGroups.map(group => (
-                <GroupBox key={group.key} group={group} columns={columns} collapsedGroups={collapsedGroups} onToggle={onToggleGroup}/>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
+      {!collapsed && <RowBody row={row} columns={columns} bandStyle={bandStyle} collapsedGroups={collapsedGroups} onToggleGroup={onToggleGroup}/>}
     </div>
   );
 };

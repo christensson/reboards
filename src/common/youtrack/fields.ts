@@ -6,8 +6,12 @@ export type FieldTypeInfo = {
   multi: boolean;
 };
 
-/** Classifies a YouTrack field type id such as `enum[1]`, `version[*]`, `user[1]`, `integer`. */
+/** Classifies a YouTrack field type id such as `enum[1]`, `version[*]`, `user[1]`, `integer`, `date and time`. */
 export const describeFieldType = (typeId: string): FieldTypeInfo => {
+  // The only type id with a space, which the pattern below does not take.
+  if (typeId === 'date and time') {
+    return {kind: 'datetime', multi: false};
+  }
   const match = typeId.match(/^([a-zA-Z]+)(?:\[(\*|1)\])?$/);
   if (!match) {
     return {kind: 'other', multi: false};
@@ -28,6 +32,10 @@ export const describeFieldType = (typeId: string): FieldTypeInfo => {
       return {kind: 'user', multi};
     case 'integer':
       return {kind: 'integer', multi: false};
+    case 'date':
+      return {kind: 'date', multi: false};
+    case 'period':
+      return {kind: 'period', multi: false};
     default:
       return {kind: 'other', multi};
   }
@@ -48,6 +56,8 @@ export type FieldValue = {
   labels: string[];
   /** For multi-value fields: all keys, in field order; otherwise [key]. */
   keys: string[];
+  /** Period fields: the duration in minutes. */
+  minutes?: number;
 };
 
 const objectValue = (value: YtFieldValueObject): {key: string; label: string; color?: YtColor; isResolved?: boolean; avatarUrl?: string} => {
@@ -82,7 +92,8 @@ export const toFieldValue = (field: YtIssueCustomField): FieldValue | null => {
     return {$type: field.$type, ...first, labels: all.map(v => v.label), keys: all.map(v => v.key)};
   }
   const single = objectValue(value);
-  return {$type: field.$type, ...single, labels: [single.label], keys: [single.key]};
+  const minutes = typeof value.minutes === 'number' ? {minutes: value.minutes} : {};
+  return {$type: field.$type, ...single, labels: [single.label], keys: [single.key], ...minutes};
 };
 
 const DEFAULT_ISSUE_FIELD_TYPES: Record<FieldKind, string> = {
@@ -91,7 +102,10 @@ const DEFAULT_ISSUE_FIELD_TYPES: Record<FieldKind, string> = {
   version: 'SingleVersionIssueCustomField',
   build: 'SingleBuildIssueCustomField',
   user: 'SingleUserIssueCustomField',
-  integer: 'SimpleIssueCustomField'
+  integer: 'SimpleIssueCustomField',
+  date: 'DateIssueCustomField',
+  datetime: 'DateIssueCustomField',
+  period: 'PeriodIssueCustomField'
 };
 
 type ValueRef = {name: string} | {login: string};
@@ -129,7 +143,8 @@ export const buildFieldUpdate = (
   if (valueKey === null) {
     return {name, $type, value: null};
   }
-  if (kind === 'integer') {
+  // Numbers and dates (epoch milliseconds) are sent as numbers.
+  if (kind === 'integer' || kind === 'date' || kind === 'datetime') {
     return {name, $type, value: Number(valueKey)};
   }
   return {name, $type, value: valueRef(kind, valueKey)};

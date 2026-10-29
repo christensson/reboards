@@ -1,9 +1,10 @@
-import {type BoardConfig, type RowConfig, UNCATEGORIZED_ROW_KEY, columnLabel, isDynamicField, isTwoLevel} from '@/common/model/board-config';
+import {type BoardConfig, type RowConfig, type RowMode, UNCATEGORIZED_ROW_KEY, columnLabel, effectiveRowMode, isDynamicField, isTwoLevel} from '@/common/model/board-config';
 import type {YtColor} from '@/common/youtrack/types';
 import {dynamicValues, noValueLabel, shownKeys} from './dynamicValues';
 import type {FieldUniverse} from './fieldUniverse';
 import {type BoardIssue, compareIssues} from './issue';
 import {orderValues} from './sorting';
+import {type TimingFlag, hasTimeOfDay, isExactTime, issueTime, timeMeaning, timePosition, timingFlags, todayPosition} from './timeline';
 
 export type ParentInfo = {
   id: string;
@@ -108,8 +109,8 @@ export type LayoutGroup = {
 
 export type LayoutRow = {
   key: string;
-  /** 'picker' rows are the "Assign <field>…" drop targets of two-level boards. */
-  kind: 'normal' | 'picker';
+  /** 'picker' rows are the "Assign <field>…" drop targets; 'time' rows are the rows of the time layout. */
+  kind: 'normal' | 'picker' | 'time';
   /** Picker rows: the swimlane level whose value is asked for on drop. */
   pickLevel?: 'outer' | 'inner';
   label: string;
@@ -128,6 +129,16 @@ export type LayoutRow = {
   /** Top-level boxes of the row. */
   groups: LayoutGroup[];
   issueCount: number;
+  /** Time rows: the position (exact time, or the calendar day), or null for the "No <field>" row. */
+  time?: number | null;
+  /** Time rows: show the time of day, not only the date. */
+  withTime?: boolean;
+  /** Time rows shown as a date: the calendar day to show (a UTC day, like dates are stored on). */
+  day?: number;
+  /** Time rows: names of the versions or builds at this position. */
+  timeNames?: string[];
+  /** Time rows: index of the rightmost column with a card or box; the row's line ends at its left edge. */
+  lastIndex?: number;
 };
 
 /** First-level swimlane of a two-level board, enclosing its inner rows. */
@@ -172,6 +183,14 @@ export type BoardLayout = {
   twoLevel: boolean;
   /** No swimlane field: one "All issues" row, shown without a header. */
   noSwimlanes: boolean;
+  /** The row layout in use. */
+  rowMode: RowMode;
+  /** Time layout: the row index the today line is drawn above (rows.length: below all dated rows); null without dated rows. */
+  todayIndex: number | null;
+  /** Time layout: timing problems per issue id, for issues that have any. */
+  flagsByIssue: Record<string, TimingFlag[]>;
+  /** Time layout: whether the rows' times are starts or ends ("Starts …", "Ends …"). */
+  timeMeaning: 'start' | 'end';
   /** First-level swimlanes; empty on single-level boards. */
   outerRows: LayoutOuterRow[];
   placement: Record<string, Placement>;
@@ -193,6 +212,10 @@ export type LayoutInput = {
   parents: Record<string, ParentInfo>;
   /** Dynamic column fields: ids of the columns the user picked; the first `maxColumns` when missing. */
   visibleColumnIds?: string[];
+  /** The row layout to use; the board's default when missing. */
+  rowMode?: RowMode;
+  /** The current time, for the today line and overdue checks. */
+  now?: number;
 };
 
 export const groupKey = (parentId: string, rowKey: string): string => `${parentId}::${rowKey}`;
@@ -359,13 +382,13 @@ const planColumns = (config: BoardConfig, universe: FieldUniverse, issues: Board
     : configuredColumns(config);
 
 /** Places every issue in each of its column × swimlane combinations; issues without any are hidden. */
-const placeIssues = (issues: BoardIssue[], config: BoardConfig, universe: FieldUniverse, columnIdsOf: ColumnPlan['columnIdsOf']): PlacementResult => {
+const placeIssues = (issues: BoardIssue[], rowKeysFor: (issue: BoardIssue) => string[], columnIdsOf: ColumnPlan['columnIdsOf']): PlacementResult => {
   const placed = new Map<string, Placement>();
   const extraCards = new Map<string, CardPlacement>();
   const hiddenIssueIds: string[] = [];
   const placedIssues: BoardIssue[] = [];
   [...issues].sort(compareIssues).forEach(issue => {
-    const rowKeys = rowKeysOf(issue, config, universe);
+    const rowKeys = rowKeysFor(issue);
     const spots = columnIdsOf(issue).flatMap(columnId => rowKeys.map(rowKey => ({columnId, rowKey})));
     if (spots.length === 0) {
       hiddenIssueIds.push(issue.id);
@@ -471,16 +494,173 @@ const twoLevelRows = (config: BoardConfig, universe: FieldUniverse, placedIssues
   return {rows, outerRows};
 };
 
+/* ---------- Time rows ---------- */
+
+/** Row key of the issues without a time in the time layout. */
+export const NO_TIME_ROW_KEY = '__no_time__';
+
+const timeRowKey = (position: number): string => `t:${position}`;
+
+/** Order of two positions in the configured direction; issues without a time go last either way. */
+const comparePositions = (a: number | undefined, b: number | undefined, direction: number): number => {
+  if (a === undefined || b === undefined) {
+    return (a === undefined ? 1 : 0) - (b === undefined ? 1 : 0);
+  }
+  return direction * (a - b);
+};
+
+type TimePlan = {
+  /** Row of each issue: its own time, or the time of the top of its box. */
+  rowKeyOf: Map<string, string>;
+  /** Each issue's own position. */
+  positionOf: Map<string, number | undefined>;
+  namesOf: Map<string, string | undefined>;
+  exact: boolean;
+  direction: number;
+  compare: (a: BoardIssue, b: BoardIssue) => number;
+};
+
+const byReadable = (issuesById: Map<string, BoardIssue>) => (a: string, b: string): number =>
+  compareReadable(issuesById.get(a)?.idReadable ?? `~${a}`, issuesById.get(b)?.idReadable ?? `~${b}`);
+
+/** The issue at the top of the chain of parents on the board: its box decides the row. */
+const topOfBoxes = (issue: BoardIssue, issuesById: Map<string, BoardIssue>): BoardIssue => {
+  const seen = new Set<string>([issue.id]);
+  let current = issue;
+  for (;;) {
+    const parentId = current.parentIds.filter(id => issuesById.has(id)).sort(byReadable(issuesById))[0];
+    const parent = parentId ? issuesById.get(parentId) : undefined;
+    if (!parent || seen.has(parent.id)) {
+      return current;
+    }
+    seen.add(parent.id);
+    current = parent;
+  }
+};
+
+/**
+ * Rows of the time layout. Each distinct time is a row ("discrete time"); a subtask follows the
+ * top of its boxes, and a box whose parent is not on the board takes its first subtask's time.
+ */
+const planTimeRows = (issues: BoardIssue[], config: BoardConfig, universe: FieldUniverse): TimePlan => {
+  const exact = isExactTime(config.timeline, universe);
+  const direction = config.timeline.sort === 'desc' ? -1 : 1;
+  const issuesById = new Map(issues.map(i => [i.id, i]));
+  const positionOf = new Map<string, number | undefined>();
+  const namesOf = new Map<string, string | undefined>();
+  issues.forEach(issue => {
+    const time = issueTime(issue, config.timeline, universe);
+    positionOf.set(issue.id, time.at === undefined ? undefined : timePosition(time.at, exact));
+    namesOf.set(issue.id, time.atLabel);
+  });
+  const keyOf = (position: number | undefined): string => (position === undefined ? NO_TIME_ROW_KEY : timeRowKey(position));
+  // Tops whose parent is not on the board share a box: the earliest of them places it.
+  const boxPosition = new Map<string, number | undefined>();
+  const offBoardParent = (top: BoardIssue): string | undefined => [...top.parentIds].sort(byReadable(issuesById))[0];
+  issues.forEach(issue => {
+    const parentId = issue.parentIds.length > 0 && topOfBoxes(issue, issuesById) === issue ? offBoardParent(issue) : undefined;
+    if (parentId) {
+      const position = positionOf.get(issue.id);
+      const best = boxPosition.has(parentId) ? boxPosition.get(parentId) : position;
+      boxPosition.set(parentId, comparePositions(position, best, direction) < 0 ? position : best);
+    }
+  });
+  const rowKeyOf = new Map<string, string>();
+  issues.forEach(issue => {
+    const top = topOfBoxes(issue, issuesById);
+    const parentId = top.parentIds.length > 0 ? offBoardParent(top) : undefined;
+    rowKeyOf.set(issue.id, keyOf(parentId && boxPosition.has(parentId) ? boxPosition.get(parentId) : positionOf.get(top.id)));
+  });
+  return {
+    rowKeyOf,
+    positionOf,
+    namesOf,
+    exact,
+    direction,
+    compare: (a, b) => comparePositions(positionOf.get(a.id), positionOf.get(b.id), direction) || compareIssues(a, b)
+  };
+};
+
+const timeRows = (config: BoardConfig, plan: TimePlan, placedIssues: BoardIssue[]): RowsResult => {
+  const names = new Map<string, Set<string>>();
+  placedIssues.forEach(issue => {
+    const key = plan.rowKeyOf.get(issue.id) ?? NO_TIME_ROW_KEY;
+    const set = names.get(key) ?? new Set<string>();
+    const name = plan.namesOf.get(issue.id);
+    // Only issues placed by their own time name the row; subtasks following their box do not.
+    if (name && key === timeRowKey(plan.positionOf.get(issue.id) ?? NaN)) {
+      set.add(name);
+    }
+    names.set(key, set);
+  });
+  const timeOf = (key: string): number | null => (key === NO_TIME_ROW_KEY ? null : Number(key.slice(2)));
+  const keys = Array.from(names.keys()).sort((a, b) => comparePositions(timeOf(a) ?? undefined, timeOf(b) ?? undefined, plan.direction));
+  const fieldName = config.timeline.field?.name ?? 'time';
+  return {
+    rows: keys.map((key): RowSkeleton => {
+      const time = timeOf(key);
+      const label = time === null ? `No ${fieldName}` : '';
+      const timeNames = Array.from(names.get(key) ?? []);
+      const withTime = time !== null && plan.exact && hasTimeOfDay(time);
+      return {
+        key,
+        kind: 'time',
+        label,
+        fullLabel: label || timeNames.join(', '),
+        isUncategorized: time === null,
+        outerKey: null,
+        outerValue: null,
+        innerValue: null,
+        time,
+        withTime,
+        // A "date and time" at midnight is shown as its local date.
+        ...(time === null || withTime ? {} : {day: plan.exact ? todayPosition(time) : time}),
+        timeNames
+      };
+    }),
+    outerRows: []
+  };
+};
+
+/** The row the today line is drawn above, in display order; null when no row has a time. */
+const todayRowIndex = (rows: RowSkeleton[], plan: TimePlan, now: number): number | null => {
+  const dated = rows.filter(r => r.time !== null && r.time !== undefined);
+  if (dated.length === 0) {
+    return null;
+  }
+  const today = plan.exact ? now : todayPosition(now);
+  const index = dated.findIndex(r => (plan.direction > 0 ? (r.time ?? 0) >= today : (r.time ?? 0) <= today));
+  return index === -1 ? dated.length : index;
+};
+
+/** Index of the rightmost column with a loose card or a box in the row. */
+const lastUsedIndex = (row: LayoutRow, columnIndex: Map<string, number>): number => {
+  const loose = Object.entries(row.looseByColumn).filter(([, ids]) => ids.length > 0).map(([id]) => columnIndex.get(id) ?? 0);
+  return Math.max(0, ...loose, ...row.groups.map(g => g.startIndex));
+};
+
+/** Timing problems of the placed issues; the parent is the issue's first parent on the board. */
+const timingFlagsOf = (placedIssues: BoardIssue[], issuesById: Map<string, BoardIssue>, placed: Map<string, Placement>, config: BoardConfig, universe: FieldUniverse, now: number) => {
+  const flags: Record<string, TimingFlag[]> = {};
+  placedIssues.forEach(issue => {
+    const parentId = issue.parentIds.filter(id => placed.has(id)).sort(byReadable(issuesById))[0];
+    const found = timingFlags(issue, parentId ? issuesById.get(parentId) : undefined, {timeline: config.timeline, universe, now});
+    if (found.length > 0) {
+      flags[issue.id] = found;
+    }
+  });
+  return flags;
+};
+
 /* ---------- Subtask groups ---------- */
 
 const chooseParent = (issue: BoardIssue, placed: Map<string, Placement>, issuesById: Map<string, BoardIssue>): string | null => {
   if (issue.parentIds.length === 0) {
     return null;
   }
-  const readable = (id: string): string => issuesById.get(id)?.idReadable ?? `~${id}`;
-  const byReadable = (a: string, b: string): number => compareReadable(readable(a), readable(b));
-  const onBoard = issue.parentIds.filter(id => placed.has(id)).sort(byReadable);
-  return onBoard.length > 0 ? onBoard[0] : [...issue.parentIds].sort(byReadable)[0];
+  const order = byReadable(issuesById);
+  const onBoard = issue.parentIds.filter(id => placed.has(id)).sort(order);
+  return onBoard.length > 0 ? onBoard[0] : [...issue.parentIds].sort(order)[0];
 };
 
 type GroupDraft = {
@@ -494,6 +674,8 @@ type GroupDraft = {
 
 type GroupBuildContext = {
   placed: Map<string, Placement>;
+  /** Order of the subtasks inside a box. */
+  compare: (a: BoardIssue, b: BoardIssue) => number;
   issuesById: Map<string, BoardIssue>;
   parents: Record<string, ParentInfo>;
   columnIndex: Map<string, number>;
@@ -548,10 +730,10 @@ const buildGroupDrafts = (placedIssues: BoardIssue[], placed: Map<string, Placem
   return drafts;
 };
 
-const compareIds = (issuesById: Map<string, BoardIssue>) => (a: string, b: string): number => {
+const compareIds = (issuesById: Map<string, BoardIssue>, compare = compareIssues) => (a: string, b: string): number => {
   const ia = issuesById.get(a);
   const ib = issuesById.get(b);
-  return ia && ib ? compareIssues(ia, ib) : a.localeCompare(b);
+  return ia && ib ? compare(ia, ib) : a.localeCompare(b);
 };
 
 const assignGroupKey = (placed: Map<string, Placement>, id: string, key: string): void => {
@@ -578,7 +760,7 @@ const addIds = (byColumn: Record<string, string[]>, columnId: string, ids: strin
 const buildGroup = (draft: GroupDraft, depth: number, ancestors: string[], ctx: GroupBuildContext): LayoutGroup => {
   const {placed, columnIndex} = ctx;
   ctx.ancestors[draft.key] = ancestors;
-  const sortedMembers = [...draft.memberIds].sort(compareIds(ctx.issuesById));
+  const sortedMembers = [...draft.memberIds].sort(compareIds(ctx.issuesById, ctx.compare));
   const nestedKeys = sortedMembers.map(id => groupKey(id, draft.rowKey)).filter(key => ctx.drafts.get(key)?.parentKey === draft.key);
   const nestedParentIds = new Set(nestedKeys.map(key => ctx.drafts.get(key)?.parentId));
   const memberIds = sortedMembers.filter(id => !nestedParentIds.has(id));
@@ -705,16 +887,42 @@ export const cardLocation = (layout: BoardLayout, id: string): string => {
   return row && hasSwimlanes ? `${column} · ${row.fullLabel}` : column;
 };
 
-export const computeLayout = ({issues, config, universe, parents, visibleColumnIds}: LayoutInput): BoardLayout => {
+/** Swimlane rows, or the rows of the time layout, with how each issue finds its row. */
+const planRows = (issues: BoardIssue[], config: BoardConfig, universe: FieldUniverse, rowMode: RowMode) => {
+  if (rowMode === 'time') {
+    const plan = planTimeRows(issues, config, universe);
+    return {
+      time: plan,
+      rowKeysFor: (issue: BoardIssue) => [plan.rowKeyOf.get(issue.id) ?? NO_TIME_ROW_KEY],
+      skeletonFor: (placedIssues: BoardIssue[]) => timeRows(config, plan, placedIssues),
+      twoLevel: false
+    };
+  }
+  // Without the swimlane mode, the swimlane fields are ignored.
+  const swimlanes = rowMode === 'swimlanes' ? config : {...config, row: {...config.row, field: null}, innerRow: null};
+  const twoLevel = isTwoLevel(swimlanes);
+  return {
+    time: null,
+    rowKeysFor: (issue: BoardIssue) => rowKeysOf(issue, swimlanes, universe),
+    skeletonFor: (placedIssues: BoardIssue[]) =>
+      (twoLevel ? twoLevelRows(swimlanes, universe, placedIssues) : singleLevelRows(swimlanes, universe, placedIssues)),
+    twoLevel
+  };
+};
+
+export const computeLayout = ({issues, config, universe, parents, visibleColumnIds, rowMode: requested, now = Date.now()}: LayoutInput): BoardLayout => {
+  const rowMode = requested ?? effectiveRowMode(config, undefined);
   const {columns, availableColumns, columnIdsOf} = planColumns(config, universe, issues, visibleColumnIds);
   const columnIndex = new Map(columns.map(c => [c.id, c.index]));
   const issuesById = new Map(issues.map(i => [i.id, i]));
-  const {placed, placedIssues, hiddenIssueIds, extraCards} = placeIssues(issues, config, universe, columnIdsOf);
-  const twoLevel = isTwoLevel(config);
-  const skeleton = twoLevel ? twoLevelRows(config, universe, placedIssues) : singleLevelRows(config, universe, placedIssues);
+  const rowPlan = planRows(issues, config, universe, rowMode);
+  const {placed, placedIssues, hiddenIssueIds, extraCards} = placeIssues(issues, rowPlan.rowKeysFor, columnIdsOf);
+  const {twoLevel} = rowPlan;
+  const skeleton = rowPlan.skeletonFor(placedIssues);
   const rowOrder = new Map(skeleton.rows.map((r, index) => [r.key, index]));
   const rowLabels = new Map(skeleton.rows.map(r => [r.key, r.fullLabel]));
-  const {groupsByRow, ancestors} = buildGroups(placedIssues, {placed, issuesById, parents, columnIndex, rowOrder, rowLabels});
+  const compare = rowPlan.time?.compare ?? compareIssues;
+  const {groupsByRow, ancestors} = buildGroups(placedIssues, {placed, compare, issuesById, parents, columnIndex, rowOrder, rowLabels});
 
   const rows: LayoutRow[] = skeleton.rows.map(row => ({
     ...row,
@@ -759,6 +967,11 @@ export const computeLayout = ({issues, config, universe, parents, visibleColumnI
     const byIssue = (a: string, b: string): number => compareIds(issuesById)(cards[a]?.issueId ?? a, cards[b]?.issueId ?? b);
     rows.forEach(row => Object.values(row.looseByColumn).forEach(ids => ids.sort(byIssue)));
   }
+  if (rowPlan.time) {
+    rows.forEach(row => {
+      row.lastIndex = lastUsedIndex(row, columnIndex);
+    });
+  }
 
   return {
     columns,
@@ -766,7 +979,11 @@ export const computeLayout = ({issues, config, universe, parents, visibleColumnI
     copiesByIssue: copiesOf(cards, rowOrder, columnIndex),
     rowsByKey: Object.fromEntries(rowByKey),
     twoLevel,
-    noSwimlanes: !config.row.field,
+    noSwimlanes: rowMode === 'none',
+    rowMode,
+    todayIndex: rowPlan.time ? todayRowIndex(skeleton.rows, rowPlan.time, now) : null,
+    flagsByIssue: rowPlan.time ? timingFlagsOf(placedIssues, issuesById, placed, config, universe, now) : {},
+    timeMeaning: timeMeaning(config.timeline, universe),
     outerRows: skeleton.outerRows,
     placement: Object.fromEntries(placed),
     groupAncestors: ancestors,

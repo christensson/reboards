@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {type BoardConfig, BOARD_LIMITS, columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, relatedBoardsOf, swapSwimlanes, validateBoardConfig, validateBoardSize, defaultDynamicOptions} from './board-config';
+import {type BoardConfig, BOARD_LIMITS, availableRowModes, effectiveRowMode, emptyTimeline, columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, relatedBoardsOf, swapSwimlanes, validateBoardConfig, validateBoardSize, defaultDynamicOptions} from './board-config';
 
 describe('normalizeBoardConfig', () => {
   it('fills defaults for an empty document', () => {
@@ -185,5 +185,30 @@ describe('relatedBoards', () => {
     const unrelated = board('u', 'Unrelated');
     expect(relatedBoardsOf(sprint, [sprint, backlog, other, unrelated]).map(r => [r.board.id, r.direction])).toEqual([['o', 'in'], ['b', 'out']]);
     expect(relatedBoardsOf(backlog, [sprint, backlog, other]).map(r => [r.board.id, r.direction])).toEqual([['s', 'in']]);
+  });
+});
+
+describe('row modes', () => {
+  const both = (): BoardConfig => ({...createEmptyBoard('me'), timeline: {...emptyTimeline(), field: {name: 'Due Date', kind: 'date'}}});
+
+  it('offers the layouts the board has set up and picks the user\'s, else the default', () => {
+    expect(availableRowModes(both())).toEqual(['swimlanes', 'time']);
+    expect(effectiveRowMode(both(), undefined)).toBe('swimlanes');
+    expect(effectiveRowMode({...both(), defaultRowMode: 'time'}, undefined)).toBe('time');
+    expect(effectiveRowMode(both(), 'time')).toBe('time');
+    const timeOnly = {...both(), row: {...both().row, field: null}};
+    expect(effectiveRowMode(timeOnly, 'swimlanes')).toBe('time');
+    expect(effectiveRowMode({...timeOnly, timeline: emptyTimeline()}, undefined)).toBe('none');
+  });
+
+  it('normalizes and validates the time layout', () => {
+    expect(normalizeBoardConfig({}).timeline).toEqual(emptyTimeline());
+    expect(normalizeBoardConfig({timeline: {field: {name: 'Due Date', kind: 'date'}, sort: 'desc', dateRole: 'odd'}}).timeline)
+      .toMatchObject({field: {name: 'Due Date', kind: 'date'}, sort: 'desc', dateRole: 'end'});
+    const board = {...both(), name: 'B', projects: [{id: '1', shortName: 'SAN'}], columns: [{id: 'c', values: ['Open']}]};
+    expect(validateBoardConfig(board)).toEqual([]);
+    expect(validateBoardConfig({...board, timeline: {...board.timeline, field: {name: 'Type', kind: 'enum'}}}).map(i => i.field)).toEqual(['timeline']);
+    expect(validateBoardConfig({...board, timeline: {...board.timeline, field: {name: 'Fix versions', kind: 'version'}, periodField: {name: 'Estimation', kind: 'period'}}}).map(i => i.field))
+      .toEqual(['timeline']);
   });
 });

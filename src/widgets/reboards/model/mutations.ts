@@ -3,6 +3,7 @@ import type {FieldValue} from '@/common/youtrack/fields';
 import type {FieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
 import type {LayoutColumn, LayoutRow, Placement} from './layout';
+import {timeRowChange} from './timeline';
 
 export type FieldChange = {
   field: FieldRef;
@@ -63,20 +64,21 @@ const pickerChoices = (config: BoardConfig, fromRow: LayoutRow, toRow: LayoutRow
   return field ? [{field, replaceKey: outer ? fromRow.outerValue : fromRow.innerValue}] : [];
 };
 
-/** Field changes implied by moving from one swimlane to another (both levels). */
-export const planRowChanges = (config: BoardConfig, fromRowKey: string, toRowKey: string, rowsByKey: RowsByKey): RowPlan => {
+/** Moving between rows of the time layout sets the time field to the target row's time. */
+const timeMoveChanges = (config: BoardConfig, fromRow: LayoutRow | undefined, toRow: LayoutRow | undefined): FieldChange[] => {
+  const change = fromRow && toRow ? timeRowChange(config.timeline, fromRow, toRow) : null;
+  return change ? [change] : [];
+};
+
+/** Unknown rows (single-level fallback): the key is the value itself. */
+const unknownRowChanges = (config: BoardConfig, toRowKey: string, toRow: LayoutRow | undefined): FieldChange[] =>
+  config.row.field && !toRow ? [{field: config.row.field, valueKey: toRowKey === UNCATEGORIZED_ROW_KEY ? null : toRowKey}] : [];
+
+/** Moving between swimlanes: the levels whose values differ change, a picker row asks. */
+const swimlaneChanges = (config: BoardConfig, fromRow: LayoutRow | undefined, toRow: LayoutRow | undefined, toRowKey: string): RowPlan => {
   const changes: FieldChange[] = [];
-  if (fromRowKey === toRowKey) {
-    return {changes};
-  }
-  const fromRow = rowsByKey[fromRowKey];
-  const toRow = rowsByKey[toRowKey];
   if (!fromRow || !toRow) {
-    // Unknown rows (single-level fallback): the key is the value itself.
-    if (config.row.field && !toRow) {
-      changes.push({field: config.row.field, valueKey: toRowKey === UNCATEGORIZED_ROW_KEY ? null : toRowKey});
-    }
-    return {changes};
+    return {changes: unknownRowChanges(config, toRowKey, toRow)};
   }
   if (toRow.kind === 'picker' && toRow.pickLevel === 'outer') {
     // "Assign <field>…" of a dynamic first-level field: the second level stays.
@@ -93,6 +95,20 @@ export const planRowChanges = (config: BoardConfig, fromRowKey: string, toRowKey
   }
   return {changes};
 };
+
+/** Field changes implied by moving from one swimlane to another (both levels). */
+export const planRowChanges = (config: BoardConfig, fromRowKey: string, toRowKey: string, rowsByKey: RowsByKey): RowPlan => {
+  if (fromRowKey === toRowKey) {
+    return {changes: []};
+  }
+  const fromRow = rowsByKey[fromRowKey];
+  const toRow = rowsByKey[toRowKey];
+  if (fromRow?.kind === 'time' || toRow?.kind === 'time') {
+    return {changes: timeMoveChanges(config, fromRow, toRow)};
+  }
+  return swimlaneChanges(config, fromRow, toRow, toRowKey);
+};
+
 
 type TargetColumn = Pick<LayoutColumn, 'id' | 'values' | 'columnKey' | 'assign'> & {name?: string};
 

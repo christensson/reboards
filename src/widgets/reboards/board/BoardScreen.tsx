@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {DndContext, type DragEndEvent, type DragOverEvent, type DragStartEvent, DragOverlay, PointerSensor, useSensor, useSensors} from '@dnd-kit/core';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
-import {type BoardConfig, type DynamicOptions, type FieldRef, isDynamicField, isTwoLevel, swapSwimlanes} from '@/common/model/board-config';
+import {type BoardConfig, type DynamicOptions, type FieldRef, availableRowModes, effectiveRowMode, isDynamicField, swapSwimlanes} from '@/common/model/board-config';
 import {type UserPrefs, boardView, setBoardView, toggleStar} from '@/common/storage/prefs';
 import {buildFieldUpdate, buildMultiFieldUpdate} from '@/common/youtrack/fields';
 import {errorMessage} from '@/common/youtrack/rest';
@@ -20,6 +20,8 @@ import {type FieldChange, type MoveTarget, type ValueChoice, applyChanges, keysA
 import {groupDragHint, issueDragHint, linkDragHint} from '../model/dragHint';
 import {isLinkDropData} from '../model/linkTargets';
 import {computeMatchIds} from '../model/search';
+import {type TimingFlag, type TimingNote, hasTimeOfDay, isExactTime, issueTime, timeMeaning, timingFlagOfFilter, timePreset, timingFlagsFor, timingNotes, todayPosition} from '../model/timeline';
+import {useDateFormat, useDateTimeFormat} from '../data/useDateFormat';
 import {visibleIssueIds} from '../model/visibility';
 import {BoardContext, type BoardContextValue, type CardRegistry, type DragHighlight} from './BoardContext';
 import {BoardRows} from './BoardRows';
@@ -62,6 +64,34 @@ type PendingMove = {
 };
 
 const DRAG_ACTIVATION_DISTANCE = 6;
+
+const NO_NOTES: TimingNote[] = [];
+
+/** Field values that put a new issue in a row: its swimlane values, or the date, version or build of a time row. */
+const rowPresets = (board: BoardConfig, row: BoardLayout['rows'][number] | undefined, universe: FieldUniverse): {field: string; value: string}[] => {
+  if (row?.kind === 'time') {
+    const time = timePreset(row, board.timeline, universe);
+    return time ? [time] : [];
+  }
+  return [
+    ...(board.row.field && row?.outerValue ? [{field: board.row.field.name, value: row.outerValue}] : []),
+    ...(board.innerRow?.field && row?.innerValue ? [{field: board.innerRow.field.name, value: row.innerValue}] : [])
+  ];
+};
+const NO_FLAGS: TimingFlag[] = [];
+
+/** Formats a time of the board's time field: with the time of day for "date and time" fields that have one. */
+const useTimeFormat = (timeline: BoardConfig['timeline'], universe: FieldUniverse): ((time: number) => string) => {
+  const formatDate = useDateFormat();
+  const formatDateTime = useDateTimeFormat();
+  const exact = isExactTime(timeline, universe);
+  return useCallback((time: number) => {
+    if (!exact) {
+      return formatDate(time);
+    }
+    return hasTimeOfDay(time) ? formatDateTime(time) : formatDate(todayPosition(time));
+  }, [exact, formatDate, formatDateTime]);
+};
 
 const subtaskIdsOf = (group: LayoutGroup): string[] =>
   Object.values(group.allIdsByColumn).flat().filter(id => id !== group.parentId);
@@ -326,29 +356,32 @@ export const BoardScreen: React.FC<Props> = ({
   const baseUrl = useBaseUrl();
 
   const issuesById = useMemo(() => new Map(data.issues.map(i => [i.id, i])), [data.issues]);
+  // Boards with both swimlanes and time: the layout this user picked, else the board's default.
+  const rowMode = effectiveRowMode(board, prefs.rowModeByBoard[board.id]);
   const layout = useMemo(
     () => computeLayout({
       issues: data.issues,
       config: board,
       universe: reference.universe,
       parents: data.parents,
-      visibleColumnIds: prefs.visibleColumns[board.id]
+      visibleColumnIds: prefs.visibleColumns[board.id],
+      rowMode
     }),
-    [data.issues, board, reference.universe, data.parents, prefs.visibleColumns]
+    [data.issues, board, reference.universe, data.parents, prefs.visibleColumns, rowMode]
   );
   const collapsedRows = useMemo(() => new Set(prefs.collapsedRows[board.id] ?? []), [prefs.collapsedRows, board.id]);
   const collapsedGroups = useMemo(() => new Set(prefs.collapsedGroups[board.id] ?? []), [prefs.collapsedGroups, board.id]);
   const collapsedColumns = useMemo(() => new Set(prefs.collapsedColumns[board.id] ?? []), [prefs.collapsedColumns, board.id]);
   const collapsedOuterRows = useMemo(() => new Set(prefs.collapsedOuterRows[board.id] ?? []), [prefs.collapsedOuterRows, board.id]);
-  const twoLevel = isTwoLevel(board);
+  const twoLevel = layout.twoLevel;
   // Toolbar count: issues highlighted by the "No <field>" quick filter alone.
-  const highlightIds = useMemo(() => computeMatchIds(data.issues, '', quickFilter), [data.issues, quickFilter]);
+  const highlightIds = useMemo(() => computeMatchIds(data.issues, '', quickFilter, layout.flagsByIssue), [data.issues, quickFilter, layout.flagsByIssue]);
   // While the "/" find box is open, its text drives matching and highlighting instead of the toolbar's.
   const [quickFindTerm, setQuickFindTerm] = useState<string | null>(null);
   const activeTerm = quickFindTerm ?? '';
   const matchIds = useMemo(
-    () => (quickFindTerm === null ? highlightIds : computeMatchIds(data.issues, quickFindTerm, quickFilter)),
-    [quickFindTerm, highlightIds, data.issues, quickFilter]
+    () => (quickFindTerm === null ? highlightIds : computeMatchIds(data.issues, quickFindTerm, quickFilter, layout.flagsByIssue)),
+    [quickFindTerm, highlightIds, data.issues, quickFilter, layout.flagsByIssue]
   );
 
   const visibleIds = useMemo(
@@ -398,17 +431,13 @@ export const BoardScreen: React.FC<Props> = ({
         return null;
       }
       const value = column.values[0];
-      const presets = value === undefined ? [] : [{field: board.columnField.name, value}];
-      const row = layout.rowsByKey[rowKey];
-      if (board.innerRow?.field && row?.innerValue) {
-        presets.unshift({field: board.innerRow.field.name, value: row.innerValue});
-      }
-      if (board.row.field && row?.outerValue) {
-        presets.unshift({field: board.row.field.name, value: row.outerValue});
-      }
+      const presets = [
+        ...rowPresets(board, layout.rowsByKey[rowKey], reference.universe),
+        ...(value === undefined ? [] : [{field: board.columnField.name, value}])
+      ];
       return newIssueUrl(baseUrl, project.shortName, presets, parentIdReadable ? [`subtask of ${parentIdReadable}`] : []);
     },
-    [board, baseUrl, layout.columns, layout.rowsByKey, view.showNewIssue]
+    [board, baseUrl, layout.columns, layout.rowsByKey, view.showNewIssue, reference.universe]
   );
 
   /** Expands the swimlanes, column and boxes that hide a card at this placement. */
@@ -466,6 +495,18 @@ export const BoardScreen: React.FC<Props> = ({
     [layout.cards, layout.placement, expandPlacement]
   );
   const cardCopies = useCallback((issueId: string) => layout.copiesByIssue[issueId] ?? [], [layout.copiesByIssue]);
+  const formatTime = useTimeFormat(board.timeline, reference.universe);
+  const notesByIssue = useMemo(() => {
+    const notes: Record<string, TimingNote[]> = {};
+    Object.entries(layout.flagsByIssue).forEach(([id, flags]) => {
+      const issue = issuesById.get(id);
+      if (issue) {
+        notes[id] = timingNotes(flags, issueTime(issue, board.timeline, reference.universe), formatTime);
+      }
+    });
+    return notes;
+  }, [layout.flagsByIssue, issuesById, board.timeline, reference.universe, formatTime]);
+  const timingNotesOf = useCallback((issueId: string) => notesByIssue[issueId] ?? NO_NOTES, [notesByIssue]);
   const locateCard = useCallback((cardId: string) => cardLocation(layout, cardId), [layout]);
 
   /** Selects the current matches, expands what hides them and scrolls to the first; returns whether anything was selected. */
@@ -669,12 +710,13 @@ export const BoardScreen: React.FC<Props> = ({
     [pendingMove, settlePending]
   );
 
+  // Time rows follow the issues' times, so boxes cannot be moved between them.
   const canMoveGroup = useCallback(
-    (group: LayoutGroup) => movedIdsOf(group).some(id => {
+    (group: LayoutGroup) => layout.rowMode !== 'time' && movedIdsOf(group).some(id => {
       const issue = issuesById.get(id);
       return !issue || canUpdateIssue(issue);
     }),
-    [issuesById, canUpdateIssue]
+    [issuesById, canUpdateIssue, layout.rowMode]
   );
 
   const columnLabelOf = useCallback((columnId: string) => layout.columns.find(c => c.id === columnId)?.label ?? '', [layout.columns]);
@@ -722,9 +764,10 @@ export const BoardScreen: React.FC<Props> = ({
       issueIdOf,
       cardCopies,
       cardLocation: locateCard,
-      showCard
+      showCard,
+      timingNotes: timingNotesOf
     }),
-    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf, canDrag, canMoveGroup, issueIdOf, cardCopies, locateCard, showCard]
+    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf, canDrag, canMoveGroup, issueIdOf, cardCopies, locateCard, showCard, timingNotesOf]
   );
 
   const status = useMemo(
@@ -786,6 +829,16 @@ export const BoardScreen: React.FC<Props> = ({
         onShowNewIssue={show => updatePrefs(prev => setBoardView(prev, board.id, {showNewIssue: show}))}
         starredBoards={prefs.starredBoards}
         onToggleStar={boardId => updatePrefs(prev => toggleStar(prev, boardId))}
+        rowModes={availableRowModes(board)}
+        rowMode={layout.rowMode}
+        onRowMode={mode => {
+          // Timing highlights only exist in the time layout.
+          if (timingFlagOfFilter(quickFilter)) {
+            setQuickFilter(null);
+          }
+          updatePrefs(prev => ({rowModeByBoard: {...prev.rowModeByBoard, [board.id]: mode}}));
+        }}
+        timingFlags={layout.rowMode === 'time' && board.timeline.highlights ? timingFlagsFor(timeMeaning(board.timeline, reference.universe)) : NO_FLAGS}
         onRefresh={() => {
           reference.reload();
           data.refresh();

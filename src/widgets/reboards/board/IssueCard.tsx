@@ -3,6 +3,10 @@ import {useDraggable, useDroppable} from '@dnd-kit/core';
 import Avatar from '@jetbrains/ring-ui-built/components/avatar/avatar';
 import Icon from '@jetbrains/ring-ui-built/components/icon/icon';
 import artifactsIcon from '@jetbrains/icons/artifacts-12px';
+import infoIcon from '@jetbrains/icons/info-12px';
+import overtimeIcon from '@jetbrains/icons/overtime-12px';
+import timeIcon from '@jetbrains/icons/time-12px';
+import warningIcon from '@jetbrains/icons/warning-12px';
 import {Size as AvatarSize} from '@jetbrains/ring-ui-built/components/avatar/avatar-size';
 import {ValuePill} from '@/common/components/ValuePill';
 import type {FieldValue} from '@/common/youtrack/fields';
@@ -10,6 +14,7 @@ import type {CardSize} from '@/common/storage/prefs';
 import type {BoardIssue} from '../model/issue';
 import {searchWords, splitForHighlight} from '../model/search';
 import {LINK_CARD_PREFIX} from '../model/linkTargets';
+import type {TimingIcon, TimingNote} from '../model/timeline';
 import {useBoardContext} from './BoardContext';
 
 type ViewProps = {
@@ -118,6 +123,25 @@ export const IssueCardView = React.forwardRef<HTMLDivElement, ViewProps & React.
 );
 IssueCardView.displayName = 'IssueCardView';
 
+/** Overdue and late starts are real problems, a subtask planned after its parent too; one planned early is an inconsistency. */
+const TIMING_ICONS: Record<TimingIcon, {glyph: string; severity: 'error' | 'warning' | 'info'}> = {
+  'overdue': {glyph: overtimeIcon, severity: 'error'},
+  'late-start': {glyph: timeIcon, severity: 'error'},
+  'planned-late': {glyph: warningIcon, severity: 'warning'},
+  'planned-early': {glyph: infoIcon, severity: 'info'}
+};
+
+/** Time layout: an icon per timing problem, its tooltip telling why. */
+const TimingIcons: React.FC<{notes: TimingNote[]}> = ({notes}) => (
+  <>
+    {notes.map(note => (
+      <span key={note.icon} className={`issue-card__timing issue-card__timing_${TIMING_ICONS[note.icon].severity}`} title={note.text} aria-label={note.text}>
+        <Icon glyph={TIMING_ICONS[note.icon].glyph}/>
+      </span>
+    ))}
+  </>
+);
+
 /** Shown on a card whose issue has other cards (multi-value fields): lists them, a click goes to the next. */
 const CopiesBadge: React.FC<{cardId: string; copies: string[]}> = ({cardId, copies}) => {
   const ctx = useBoardContext();
@@ -168,6 +192,8 @@ const IssueCardComponent: React.FC<Props> = ({issueId, cardId = issueId, isParen
   const {setNodeRef: setLinkDropRef} = useDroppable({id: `${LINK_CARD_PREFIX}${cardId}`, data: {kind: 'link-card', issueId}});
   const primary = cardId === issueId;
   const copies = ctx.cardCopies(issueId);
+  const notes = ctx.timingNotes(issueId);
+  const hasCorner = copies.length > 1 || notes.length > 0;
 
   const setRef = useCallback(
     (element: HTMLDivElement | null) => {
@@ -219,7 +245,12 @@ const IssueCardComponent: React.FC<Props> = ({issueId, cardId = issueId, isParen
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       data-card-id={cardId}
-      corner={copies.length > 1 ? <CopiesBadge cardId={cardId} copies={copies}/> : undefined}
+      corner={hasCorner ? (
+        <span className="issue-card__corner">
+          <TimingIcons notes={notes}/>
+          {copies.length > 1 && <CopiesBadge cardId={cardId} copies={copies}/>}
+        </span>
+      ) : undefined}
       {...attributes}
       {...listeners}
     />

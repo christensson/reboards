@@ -15,6 +15,9 @@ export const fieldRefSchema = z.object({
     z.literal("build"),
     z.literal("user"),
     z.literal("integer"),
+    z.literal("date"),
+    z.literal("datetime"),
+    z.literal("period"),
   ]),
 });
 
@@ -49,6 +52,16 @@ export const rowConfigSchema = z.object({
   ]),
   customOrder: z.array(z.string()),
   dynamic: dynamicOptionsSchema,
+});
+
+export const timelineConfigSchema = z.object({
+  field: fieldRefSchema.nullable(),
+  periodField: fieldRefSchema.nullable(),
+  dateRole: z.union([z.literal("start"), z.literal("end")]),
+  position: z.union([z.literal("start"), z.literal("end")]),
+  sort: z.union([z.literal("asc"), z.literal("desc")]),
+  highlights: z.boolean(),
+  assigneeField: fieldRefSchema.nullable(),
 });
 
 export const boardDeleteReqSchema = z.object({
@@ -107,6 +120,8 @@ export const boardConfigSchema = z.object({
   linkTypes: z.array(z.string()),
   cardColorField: fieldRefSchema.nullable(),
   relatedBoards: z.array(z.string()),
+  timeline: timelineConfigSchema,
+  defaultRowMode: z.union([z.literal("swimlanes"), z.literal("time")]),
   createdAt: z.number(),
   updatedAt: z.number(),
   version: z.number(),

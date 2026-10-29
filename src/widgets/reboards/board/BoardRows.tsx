@@ -2,6 +2,7 @@ import React, {memo} from 'react';
 import type {BoardLayout} from '../model/layout';
 import {BoardRow} from './BoardRow';
 import {OuterRow} from './OuterRow';
+import {TimeRow, TodayLine} from './TimeRow';
 
 type Props = {
   layout: BoardLayout;
@@ -15,6 +16,20 @@ type Props = {
 
 /** All swimlanes of the board: first-level groups on two-level boards, plain rows otherwise. */
 const BoardRowsComponent: React.FC<Props> = ({layout, collapsedRows, collapsedOuterRows, collapsedGroups, onToggleRow, onToggleOuter, onToggleGroup}) => {
+  if (layout.rowMode === 'time') {
+    return (
+      <>
+        {layout.rows.map((row, index) => (
+          <React.Fragment key={row.key}>
+            {index === layout.todayIndex && <TodayLine columns={layout.columns}/>}
+            <TimeRow row={row} meaning={layout.timeMeaning} columns={layout.columns} collapsedGroups={collapsedGroups} onToggleGroup={onToggleGroup}/>
+          </React.Fragment>
+        ))}
+        {/* Every row is before today and none lacks a time: the line goes last. */}
+        {layout.todayIndex === layout.rows.length && <TodayLine columns={layout.columns}/>}
+      </>
+    );
+  }
   if (layout.twoLevel) {
     return (
       <>

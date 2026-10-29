@@ -36,3 +36,11 @@ describe('toLanguageTag', () => {
     expect(toLanguageTag(undefined)).toBeUndefined();
   });
 });
+
+describe('formatWithPattern with a time of day', () => {
+  it('formats hours and minutes in local time', () => {
+    const time = new Date(2026, 4, 10, 14, 5).getTime();
+    expect(formatWithPattern(time, 'yyyy-MM-dd HH:mm', 'en', true)).toBe('2026-05-10 14:05');
+    expect(formatWithPattern(time, 'h:mm a', 'en', true)).toBe('2:05 PM');
+  });
+});

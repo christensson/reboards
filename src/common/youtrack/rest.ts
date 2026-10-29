@@ -6,9 +6,10 @@ export const ISSUE_FIELDS = [
   'id',
   'idReadable',
   'summary',
+  'resolved',
   'project(id,shortName)',
   'tags(id,name,color(background,foreground))',
-  'customFields(id,name,$type,value(id,name,login,fullName,avatarUrl,presentation,color(background,foreground),isResolved))',
+  'customFields(id,name,$type,value(id,name,login,fullName,avatarUrl,presentation,minutes,color(background,foreground),isResolved))',
   'links(id,direction,linkType(id,name,sourceToTarget,targetToSource,directed,aggregation),issues(id,idReadable))'
 ].join(',');
 
@@ -52,7 +53,7 @@ export const createYouTrackClient = (host: HostAPI) => {
     /** Date pattern and locale from the current user's profile. */
     getMyGeneralProfile: async (): Promise<YtGeneralProfile> => {
       const me = await get<{profiles?: {general?: YtGeneralProfile}}>('users/me', {
-        fields: 'profiles(general(dateFieldFormat(datePattern),locale(locale)))'
+        fields: 'profiles(general(dateFieldFormat(datePattern,pattern),locale(locale)))'
       });
       return me.profiles?.general ?? {};
     },

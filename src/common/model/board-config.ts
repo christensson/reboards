@@ -12,7 +12,7 @@
  */
 export type FieldRef = {
   name: string;
-  kind: 'enum' | 'state' | 'version' | 'build' | 'user' | 'integer';
+  kind: 'enum' | 'state' | 'version' | 'build' | 'user' | 'integer' | 'date' | 'datetime' | 'period';
 };
 
 export type FieldKind = FieldRef['kind'];
@@ -82,6 +82,28 @@ export type SprintConfig = {
   field: FieldRef | null;
 };
 
+// Time mode: rows ordered by a time field instead of swimlanes. The field is a date or
+// "date and time" field (optionally made a range by a period field), a version (start to
+// release date) or a build (assembly date). `dateRole` tells whether a date is a start or an
+// end/due date, `position` which end of a range places the card, and `highlights` false
+// ignores the meaning: no timing highlights or card icons.
+/**
+ * @zod-to-schema
+ */
+export type TimelineConfig = {
+  field: FieldRef | null;
+  periodField: FieldRef | null;
+  dateRole: 'start' | 'end';
+  position: 'start' | 'end';
+  sort: 'asc' | 'desc';
+  highlights: boolean;
+  /** User field for the "unassigned" checks. */
+  assigneeField: FieldRef | null;
+};
+
+/** How a board lays out its rows: by swimlane fields, by time, or as one row. */
+export type RowMode = 'none' | 'swimlanes' | 'time';
+
 /**
  * @zod-to-schema
  */
@@ -115,6 +137,10 @@ export type BoardConfig = {
   cardColorField: FieldRef | null;
   /** Ids of boards this board links to; the linked boards show the link back. */
   relatedBoards: string[];
+  /** Time mode; set up when `timeline.field` is set. */
+  timeline: TimelineConfig;
+  /** The layout used when both swimlanes and time are set up, until the user picks the other. */
+  defaultRowMode: 'swimlanes' | 'time';
   createdAt: number;
   updatedAt: number;
   /** Raised by the server on every write; a save must name the version it started from. */
@@ -137,6 +163,16 @@ export const DEFAULT_MAX_COLUMNS = 5;
 /** Released versions shown, archived ones hidden, like YouTrack itself. */
 export const defaultDynamicOptions = (): DynamicOptions => ({sort: 'alphabetical', asDynamic: false, showReleased: true, showArchived: false, maxColumns: DEFAULT_MAX_COLUMNS});
 
+export const emptyTimeline = (): TimelineConfig => ({
+  field: null,
+  periodField: null,
+  dateRole: 'end',
+  position: 'end',
+  sort: 'asc',
+  highlights: true,
+  assigneeField: {name: 'Assignee', kind: 'user'}
+});
+
 /** A swimlane level without a field. */
 export const emptyRow = (): RowConfig => ({field: null, sort: 'custom', customOrder: [], dynamic: defaultDynamicOptions()});
 
@@ -158,6 +194,8 @@ export const createEmptyBoard = (owner: string): BoardConfig => ({
   cardFields: [...DEFAULT_CARD_FIELDS],
   linkTypes: [...DEFAULT_LINK_TYPES],
   relatedBoards: [],
+  timeline: emptyTimeline(),
+  defaultRowMode: 'swimlanes',
   cardColorField: {name: 'Type', kind: 'enum'},
   createdAt: 0,
   updatedAt: 0,
@@ -170,7 +208,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const stringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 
-const FIELD_KINDS: FieldKind[] = ['enum', 'state', 'version', 'build', 'user', 'integer'];
+const FIELD_KINDS: FieldKind[] = ['enum', 'state', 'version', 'build', 'user', 'integer', 'date', 'datetime', 'period'];
 
 const fieldRef = (value: unknown): FieldRef | null => {
   if (!isRecord(value) || typeof value.name !== 'string') {
@@ -225,6 +263,23 @@ const normalizeRow = (value: unknown, fallback: RowConfig): RowConfig => {
   };
 };
 
+const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
+  allowed.includes(value as T) ? (value as T) : fallback;
+
+const normalizeTimeline = (value: unknown): TimelineConfig => {
+  const input = isRecord(value) ? value : {};
+  const base = emptyTimeline();
+  return {
+    field: fieldRef(input.field),
+    periodField: fieldRef(input.periodField),
+    dateRole: oneOf(input.dateRole, ['start', 'end'] as const, base.dateRole),
+    position: oneOf(input.position, ['start', 'end'] as const, base.position),
+    sort: oneOf(input.sort, ['asc', 'desc'] as const, base.sort),
+    highlights: typeof input.highlights === 'boolean' ? input.highlights : base.highlights,
+    assigneeField: 'assigneeField' in input ? fieldRef(input.assigneeField) : base.assigneeField
+  };
+};
+
 const normalizeSprints = (value: unknown): SprintConfig => {
   const sprints = isRecord(value) ? value : {};
   return {enabled: sprints.enabled === true, field: fieldRef(sprints.field)};
@@ -259,6 +314,8 @@ export const normalizeBoardConfig = (raw: unknown, fallbackOwner = ''): BoardCon
     linkTypes: 'linkTypes' in input ? stringArray(input.linkTypes) : base.linkTypes,
     cardColorField: 'cardColorField' in input ? fieldRef(input.cardColorField) : base.cardColorField,
     relatedBoards: Array.from(new Set(stringArray(input.relatedBoards))).filter(id => id && id !== str(input.id)),
+    timeline: normalizeTimeline(input.timeline),
+    defaultRowMode: oneOf(input.defaultRowMode, ['swimlanes', 'time'] as const, base.defaultRowMode),
     createdAt: num(input.createdAt),
     updatedAt: num(input.updatedAt),
     version: num(input.version)
@@ -305,10 +362,15 @@ const allTexts = (config: BoardConfig): string[] => [
   ...config.cardFields,
   ...config.linkTypes,
   ...config.relatedBoards,
-  config.row.field?.name ?? '',
-  config.innerRow?.field?.name ?? '',
-  config.sprints.field?.name ?? '',
-  config.cardColorField?.name ?? ''
+  ...[
+    config.row.field,
+    config.innerRow?.field,
+    config.sprints.field,
+    config.timeline.field,
+    config.timeline.periodField,
+    config.timeline.assigneeField,
+    config.cardColorField
+  ].map(field => field?.name ?? '')
 ];
 
 /** Checks the size limits; problems are reported per limit, not per value. */
@@ -407,6 +469,30 @@ const validateSprints = (config: BoardConfig): ValidationIssue[] => {
   return used.includes(sprintField) ? [{field: 'sprints', message: `The sprint field ${sprintField} cannot also be a column or swimlane field`}] : [];
 };
 
+/** Kinds a time field may have. */
+export const TIME_FIELD_KINDS: FieldKind[] = ['date', 'datetime', 'version', 'build'];
+
+/** Date and "date and time" fields: their single date can be made a range by a period field. */
+export const isDateKind = (kind: FieldKind | 'other' | undefined): boolean => kind === 'date' || kind === 'datetime';
+
+const validateTimeline = (config: BoardConfig): ValidationIssue[] => {
+  const {field, periodField} = config.timeline;
+  if (!field) {
+    return [];
+  }
+  const issues: ValidationIssue[] = [];
+  if (!TIME_FIELD_KINDS.includes(field.kind)) {
+    issues.push({field: 'timeline', message: 'The time field must be a date, version or build field'});
+  }
+  if (periodField && (periodField.kind !== 'period' || !isDateKind(field.kind))) {
+    issues.push({field: 'timeline', message: 'A period field can only be combined with a date field'});
+  }
+  if (config.sprints.enabled && config.sprints.field?.name === field.name) {
+    issues.push({field: 'timeline', message: `The sprint field ${field.name} cannot also be the time field`});
+  }
+  return issues;
+};
+
 /** Validates a config before saving. Returns an empty array when valid. */
 export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
   const issues: ValidationIssue[] = [...validateBoardSize(config)];
@@ -419,7 +505,25 @@ export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
   if (!config.columnField.name) {
     issues.push({field: 'columnField', message: 'Select a column field'});
   }
-  return [...issues, ...validateColumns(config), ...validateSprints(config), ...validateSwimlanes(config)];
+  return [...issues, ...validateColumns(config), ...validateSprints(config), ...validateSwimlanes(config), ...validateTimeline(config)];
+};
+
+/** The row layouts a board has set up. */
+export const availableRowModes = (config: BoardConfig): Exclude<RowMode, 'none'>[] => [
+  ...(config.row.field ? ['swimlanes' as const] : []),
+  ...(config.timeline.field ? ['time' as const] : [])
+];
+
+/** The layout to use: the user's pick when the board has it, else the board's default, else its only one. */
+export const effectiveRowMode = (config: BoardConfig, preferred: RowMode | undefined): RowMode => {
+  const modes = availableRowModes(config);
+  if (preferred && preferred !== 'none' && modes.includes(preferred)) {
+    return preferred;
+  }
+  if (modes.includes(config.defaultRowMode)) {
+    return config.defaultRowMode;
+  }
+  return modes[0] ?? 'none';
 };
 
 /** The same board with its two swimlane levels exchanged; unchanged unless both are configured. */

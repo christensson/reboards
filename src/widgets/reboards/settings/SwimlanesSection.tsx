@@ -26,6 +26,7 @@ export const SwimlanesSection: React.FC<Props> = ({universe, row, innerRow, read
         universe={universe}
         row={row}
         disabled={readOnly}
+        allowNone={false}
         excludeNames={[...sprint, ...(innerRow?.field ? [innerRow.field.name] : [])]}
         onChange={next => onChange({row: next})}
       />

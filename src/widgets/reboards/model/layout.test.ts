@@ -341,3 +341,64 @@ describe('revealColumnIds', () => {
     expect(revealColumnIds([{id: 'open', label: 'Open', values: ['Open'], index: 0, count: 0}], ['Done'])).toBeNull();
   });
 });
+
+describe('computeLayout in the time layout', () => {
+  const day = (iso: string): number => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
+  const dateUniverse = buildFieldUniverse([[
+    pf('State', 'state[1]', ['Open', 'In Progress', 'Review', 'Done'], 'StateBundle'),
+    {id: 'pf-Due', $type: 'X', field: {id: 'f-Due', name: 'Due Date', fieldType: {id: 'date', valueType: 'date'}}}
+  ]]);
+  const due = (spec: Spec & {due?: string}): BoardIssue => {
+    const base = issue(spec);
+    const time = spec.due ? String(day(spec.due) + 12 * 3_600_000) : null;
+    return {...base, fields: {...base.fields, 'Due Date': time ? {$type: 'DateIssueCustomField', key: time, label: time, labels: [time], keys: [time]} : null}};
+  };
+  const board = (sort: 'asc' | 'desc' = 'asc'): BoardConfig => ({
+    ...config(),
+    timeline: {...config().timeline, field: {name: 'Due Date', kind: 'date'}, sort},
+    defaultRowMode: 'time'
+  });
+  const now = new Date(2026, 4, 10, 9).getTime();
+
+  it('makes a row per date across columns, sorted, with the issues without a date last', () => {
+    const issues = [
+      due({id: '1', state: 'Open', due: '2026-05-12'}),
+      due({id: '2', state: 'Done', due: '2026-05-12'}),
+      due({id: '3', state: 'Open', due: '2026-05-01'}),
+      due({id: '4', state: 'Open'})
+    ];
+    const layout = computeLayout({issues, config: board(), universe: dateUniverse, parents: {}, now});
+    expect(layout.rowMode).toBe('time');
+    expect(layout.rows.map(r => [r.kind, r.time, r.label])).toEqual([
+      ['time', day('2026-05-01'), ''],
+      ['time', day('2026-05-12'), ''],
+      ['time', null, 'No Due Date']
+    ]);
+    // Same date, same row, in both columns; the row's line reaches the rightmost one.
+    expect(layout.rows[1].looseByColumn).toMatchObject({open: ['1'], done: ['2']});
+    expect(layout.rows[1].lastIndex).toBe(2);
+    expect(layout.todayIndex).toBe(1);
+    expect(layout.flagsByIssue).toEqual({'3': ['overdue', 'overdue-unassigned']});
+    const newest = computeLayout({issues, config: board('desc'), universe: dateUniverse, parents: {}, now});
+    expect(newest.rows.map(r => r.time)).toEqual([day('2026-05-12'), day('2026-05-01'), null]);
+    expect(newest.todayIndex).toBe(1);
+  });
+
+  it('puts subtasks in their parent\'s row, sorted by their own date inside the box', () => {
+    const issues = [
+      due({id: '10', state: 'Open', due: '2026-06-01', children: ['11', '12']}),
+      due({id: '11', state: 'Open', due: '2026-06-20', parents: ['10']}),
+      due({id: '12', state: 'Open', due: '2026-05-20', parents: ['10']})
+    ];
+    const layout = computeLayout({issues, config: board(), universe: dateUniverse, parents: {}, now});
+    expect(layout.rows.map(r => r.time)).toEqual([day('2026-06-01')]);
+    expect(layout.rows[0].groups[0].memberIds).toEqual(['12', '11']);
+    expect(layout.flagsByIssue['11']).toEqual(['planned-late']);
+  });
+
+  it('keeps the swimlanes when the swimlane layout is asked for', () => {
+    const layout = computeLayout({issues: [due({id: '1', state: 'Open', priority: 'Major', due: '2026-05-12'})], config: board(), universe: dateUniverse, parents: {}, rowMode: 'swimlanes'});
+    expect(layout.rows.map(r => r.kind)).toEqual(['normal']);
+    expect(layout.flagsByIssue).toEqual({});
+  });
+});

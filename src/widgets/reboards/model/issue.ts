@@ -36,6 +36,8 @@ export type BoardIssue = {
   parentIds: string[];
   /** Ids of subtasks (Subtask links pointing outward). */
   childIds: string[];
+  /** The issue is resolved (YouTrack's own resolved date is set). */
+  resolved?: boolean;
 };
 
 const issueNumber = (idReadable: string): number => {
@@ -72,7 +74,8 @@ export const normalizeIssue = (issue: YtIssue): BoardIssue => {
     fields,
     links,
     parentIds: subtaskLinks.filter(l => l.direction === 'INWARD').flatMap(l => l.issueIds),
-    childIds: subtaskLinks.filter(l => l.direction === 'OUTWARD').flatMap(l => l.issueIds)
+    childIds: subtaskLinks.filter(l => l.direction === 'OUTWARD').flatMap(l => l.issueIds),
+    resolved: typeof issue.resolved === 'number'
   };
 };
 

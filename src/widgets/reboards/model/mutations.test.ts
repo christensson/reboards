@@ -73,6 +73,30 @@ describe('planMove on two-level boards', () => {
   });
 });
 
+describe('planMove in the time layout', () => {
+  const day = Date.UTC(2026, 4, 12);
+  const timeRow = (key: string, time: number | null, timeNames: string[] = []): LayoutRow => ({...row(key, null, null, 'time'), time, timeNames, ...(time === null ? {} : {day: time})});
+  const rows = {'t:1': timeRow('t:1', Date.UTC(2026, 4, 1), ['1.0']), 't:2': timeRow('t:2', day, ['2.0']), 'none': timeRow('none', null)};
+  const dated: BoardConfig = {...config, timeline: {...config.timeline, field: {name: 'Due Date', kind: 'date'}}};
+
+  it('sets the target row\'s date, at noon UTC, along with the column', () => {
+    expect(planMove(dated, {rowKey: 't:1', columnId: 'wip'}, {rowKey: 't:2', columnId: 'open'}, rows).changes).toEqual([
+      {field: {name: 'State', kind: 'state'}, valueKey: 'Open'},
+      {field: {name: 'Due Date', kind: 'date'}, valueKey: String(day + 12 * 3_600_000)}
+    ]);
+    expect(planMove(dated, {rowKey: 't:1', columnId: 'open'}, {rowKey: 'none', columnId: 'open'}, rows).changes)
+      .toEqual([{field: {name: 'Due Date', kind: 'date'}, valueKey: null}]);
+  });
+
+  it('swaps the version the card leaves for the target row\'s, and skips the far end of a date plus period', () => {
+    const versions: BoardConfig = {...config, timeline: {...config.timeline, field: {name: 'Fix versions', kind: 'version'}}};
+    expect(planMove(versions, {rowKey: 't:1', columnId: 'open'}, {rowKey: 't:2', columnId: 'open'}, rows).changes)
+      .toEqual([{field: {name: 'Fix versions', kind: 'version'}, valueKey: '2.0', replaceKey: '1.0'}]);
+    const ranged: BoardConfig = {...dated, timeline: {...dated.timeline, periodField: {name: 'Estimation', kind: 'period'}, dateRole: 'start', position: 'end'}};
+    expect(planMove(ranged, {rowKey: 't:1', columnId: 'open'}, {rowKey: 't:2', columnId: 'open'}, rows).changes).toEqual([]);
+  });
+});
+
 describe('applyChanges', () => {
   it('updates fields using universe metadata', () => {
     const universe = buildFieldUniverse([[{

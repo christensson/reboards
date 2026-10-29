@@ -32,6 +32,8 @@ describe('search', () => {
     expect(computeMatchIds(all, '', null)).toEqual(new Set());
     expect(computeMatchIds(all, '', 'Assignee')).toEqual(new Set(['1', '2', '3']));
     expect(computeMatchIds(all, 'crash', 'Assignee')).toEqual(new Set(['1', '2']));
+    // Timing highlights match the issues that have the flag.
+    expect(computeMatchIds(all, '', 'flag:overdue', {'2': ['overdue'], '3': ['late-start']})).toEqual(new Set(['2']));
     expect(computeMatchIds(all, 'crash', null)).toEqual(new Set(['1', '2', '4']));
   });
 

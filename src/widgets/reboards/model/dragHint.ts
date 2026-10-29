@@ -12,8 +12,20 @@ const valueLabel = (universe: FieldUniverse, fieldName: string, key: string | nu
   return universe.byName.get(fieldName)?.values.find(v => v.key === key)?.label ?? key;
 };
 
+/** "2026-05-12" at the start of an ISO timestamp. */
+const ISO_DATE_LENGTH = 10;
+
+/** Dates are keyed by their epoch milliseconds; show them as dates. */
+const changeLabel = (universe: FieldUniverse, change: FieldChange): string => {
+  if (change.valueKey !== null && (change.field.kind === 'date' || change.field.kind === 'datetime')) {
+    const date = new Date(Number(change.valueKey));
+    return change.field.kind === 'date' ? date.toISOString().slice(0, ISO_DATE_LENGTH) : date.toLocaleString();
+  }
+  return valueLabel(universe, change.field.name, change.valueKey);
+};
+
 const describeChange = (universe: FieldUniverse, change: FieldChange): string =>
-  `${change.field.name} to ${valueLabel(universe, change.field.name, change.valueKey)}`;
+  `${change.field.name} to ${changeLabel(universe, change)}`;
 
 /** Text shown while an issue card is dragged over a cell. */
 export const issueDragHint = (

@@ -16,9 +16,10 @@ import settingsIcon from '@jetbrains/icons/settings';
 import starEmptyIcon from '@jetbrains/icons/star-empty';
 import starFilledIcon from '@jetbrains/icons/star-filled';
 import updateIcon from '@jetbrains/icons/update';
-import {type BoardConfig, type RelatedBoard, relatedBoardsOf} from '@/common/model/board-config';
+import {type BoardConfig, type RelatedBoard, type RowMode, relatedBoardsOf} from '@/common/model/board-config';
 import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
 import {orderBoards} from '../model/boardOrder';
+import {TIMING_FLAGS, type TimingFlag, timingFilterKey, timingFlagOfFilter} from '../model/timeline';
 import type {FieldUniverse} from '../model/fieldUniverse';
 import type {UniverseValue} from '../model/fieldUniverse';
 import {currentSprints, sortSprintsByDate, sprintDateRange} from '../model/sprints';
@@ -30,6 +31,8 @@ export const UNSCHEDULED = '';
 type FindMenuProps = {
   /** Card fields that may be empty: each offers a "No <field>" highlight. */
   fields: string[];
+  /** Time layout: the timing problems that can be highlighted. */
+  timingFlags: TimingFlag[];
   quickFilter: string | null;
   onQuickFilter: (field: string | null) => void;
 };
@@ -40,28 +43,38 @@ const OptionIndicator: React.FC<{selected: boolean}> = ({selected}) => (
 );
 
 /** Magnifying glass menu: highlight issues where a card field is unset. */
-const FindMenu: React.FC<FindMenuProps> = ({fields, quickFilter, onQuickFilter}) => {
+const FindMenu: React.FC<FindMenuProps> = ({fields, timingFlags, quickFilter, onQuickFilter}) => {
+  const timingKeys = timingFlags.map(timingFilterKey);
   const items: SelectItem[] = [
-    {key: 'highlight-title', label: 'Highlight issues with', rgItemType: List.ListProps.Type.TITLE},
-    ...fields.map(name => ({key: name, label: `No ${name}`, leftNodes: <OptionIndicator selected={quickFilter === name}/>}))
+    ...(fields.length > 0 ? [{key: 'highlight-title', label: 'Highlight issues with', rgItemType: List.ListProps.Type.TITLE}] : []),
+    ...fields.map(name => ({key: name, label: `No ${name}`, leftNodes: <OptionIndicator selected={quickFilter === name}/>})),
+    ...(timingFlags.length > 0 ? [{key: 'timing-title', label: 'Timing', rgItemType: List.ListProps.Type.TITLE}] : []),
+    ...timingFlags.map(flag => ({key: timingFilterKey(flag), label: TIMING_FLAGS[flag].label, leftNodes: <OptionIndicator selected={quickFilter === timingFilterKey(flag)}/>}))
   ];
+  const empty = fields.length === 0 && timingFlags.length === 0;
   return (
     <Dropdown
-      disabled={fields.length === 0}
-      anchor={<Button icon={searchIcon} disabled={fields.length === 0} title={fields.length > 0 ? 'Highlight issues' : 'No card field can be empty'}/>}
+      disabled={empty}
+      anchor={<Button icon={searchIcon} disabled={empty} title={empty ? 'No card field can be empty' : 'Highlight issues'}/>}
     >
       <PopupMenu
         directions={[Directions.BOTTOM_LEFT, Directions.TOP_LEFT]}
         closeOnSelect
         data={items}
         onSelect={(item: SelectItem) => {
-          if (fields.includes(String(item.key))) {
+          if (fields.includes(String(item.key)) || timingKeys.includes(String(item.key))) {
             onQuickFilter(item.key === quickFilter ? null : String(item.key));
           }
         }}
       />
     </Dropdown>
   );
+};
+
+/** "No Assignee" for a field's quick filter, the highlight's name for a timing one. */
+const quickFilterLabel = (quickFilter: string): string => {
+  const flag = timingFlagOfFilter(quickFilter);
+  return flag ? TIMING_FLAGS[flag].label : `No ${quickFilter}`;
 };
 
 const RELATION_OPTIONS: {mode: ConnectorsMode; label: string}[] = [
@@ -172,6 +185,12 @@ type Props = {
   showNewIssue: boolean;
   onShowNewIssue: (show: boolean) => void;
   onToggleStar: (boardId: string) => void;
+  /** Row layouts the board has set up; with both, the toolbar switches between them. */
+  rowModes: ('swimlanes' | 'time')[];
+  rowMode: RowMode;
+  onRowMode: (mode: 'swimlanes' | 'time') => void;
+  /** Time layout: timing problems the highlight menu offers. */
+  timingFlags: TimingFlag[];
 };
 
 const StarToggle: React.FC<{starred: boolean; onToggle: () => void}> = ({starred, onToggle}) => (
@@ -299,7 +318,11 @@ export const Toolbar: React.FC<Props> = ({
   selectedCount,
   showNewIssue,
   onShowNewIssue,
-  onToggleStar
+  onToggleStar,
+  rowModes,
+  rowMode,
+  onRowMode,
+  timingFlags
 }) => {
   const boardItems = useMemo(() => buildBoardItems(boards, starredBoards, onToggleStar), [boards, starredBoards, onToggleStar]);
   const related = useMemo(() => relatedBoardsOf(board, boards), [board, boards]);
@@ -329,6 +352,14 @@ export const Toolbar: React.FC<Props> = ({
         <Button icon={settingsIcon} title="Board settings" onClick={onOpenSettings}/>
         <Button icon={addIcon} title="New board" onClick={onNewBoard}/>
       </div>
+      {rowModes.length > 1 && (
+        <div className="toolbar__group">
+          <ButtonGroup>
+            <Button active={rowMode === 'swimlanes'} title="Rows by swimlane fields" onClick={() => onRowMode('swimlanes')}>Swimlanes</Button>
+            <Button active={rowMode === 'time'} title="Rows by time" onClick={() => onRowMode('time')}>Time</Button>
+          </ButtonGroup>
+        </div>
+      )}
       {board.sprints.enabled && (
         <div className="toolbar__group toolbar__group_sprint">
           <Select
@@ -342,10 +373,10 @@ export const Toolbar: React.FC<Props> = ({
         </div>
       )}
       <div className="toolbar__group toolbar__group_search">
-        <FindMenu fields={filterFields} quickFilter={quickFilter} onQuickFilter={onQuickFilter}/>
+        <FindMenu fields={filterFields} timingFlags={timingFlags} quickFilter={quickFilter} onQuickFilter={onQuickFilter}/>
         <button type="button" className="toolbar__find-hint" onClick={onOpenQuickFind}>{'Type "/" to find…'}</button>
         {quickFilter && (
-          <Tag onRemove={() => onQuickFilter(null)} readOnly={false} className="toolbar__filter-tag">{`No ${quickFilter}`}</Tag>
+          <Tag onRemove={() => onQuickFilter(null)} readOnly={false} className="toolbar__filter-tag">{quickFilterLabel(quickFilter)}</Tag>
         )}
         {matchCount !== null && (
           <span className="toolbar__match-count" title="Issues on the board that are highlighted">{`${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`}</span>
