@@ -269,8 +269,8 @@ const SprintButtonLabel: React.FC<{label: string; range: string}> = ({label, ran
 );
 
 /**
- * Sprint selector items, newest first with their dates. Sprints running today
- * come first under a "Current sprint" label and appear again in the full list.
+ * Sprint selector items: "Unscheduled", then the sprints newest first with their dates.
+ * Sprints running today come first under a "Current sprint" label and appear again in the full list.
  */
 const buildSprintItems = (values: UniverseValue[], formatDate: DateFormatter, now: number): SelectItem[] => {
   const item = (v: UniverseValue, keyPrefix = ''): SelectItem => {
@@ -280,7 +280,9 @@ const buildSprintItems = (values: UniverseValue[], formatDate: DateFormatter, no
     const selectedLabel = range ? (<SprintButtonLabel label={v.label} range={range}/>) as unknown as string : v.label;
     return {key: keyPrefix + v.key, label: v.label, description: range, selectedLabel};
   };
-  const all: SelectItem[] = [{key: UNSCHEDULED, label: 'Unscheduled', description: 'No sprint set'}, ...sortSprintsByDate(values).map(v => item(v))];
+  // A sprint named "Unscheduled" would show next to the entry for no sprint; the entry wins.
+  const sprints = sortSprintsByDate(values).filter(v => v.label.trim().toLowerCase() !== 'unscheduled');
+  const all: SelectItem[] = [{key: UNSCHEDULED, label: 'Unscheduled', description: 'No sprint set'}, ...sprints.map(v => item(v))];
   const current = currentSprints(values, now);
   if (current.length === 0) {
     return all;
