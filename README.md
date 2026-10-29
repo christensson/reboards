@@ -1,25 +1,19 @@
 # ReBoards
 
-Kanban and scrum sprint boards for YouTrack with first-class grouping of subtasks and relation connectors.
+Revamped agile boards for YouTrack: relations, hierarchy, swimlanes and time.
 ReBoards is a YouTrack app (Enhanced DX, TypeScript) that adds a **ReBoards** item to the main menu.
+It requires YouTrack 2026.2 or later.
 
 ## What it does
 
-- Boards work like YouTrack agile boards: a query selects the issues, a state or enum field defines the
-  columns (values can be combined into one column or ignored), and an enum, version, user or integer field
-  defines the rows (custom drag-sorted, alphabetical or numerical order).
-- Optional sprints: pick a version or enum field and the sprint selector lists its values.
-- Issues that are subtasks of the same parent are drawn inside an outlined box per row, with a title such as
-  `SP-12: Epic · 3 of 5 (1/2)` (children in this box, total subtasks, box index when the parent spans rows).
-  Boxes are collapsible to per-column indicators; the parent's column is marked when the parent is on the board.
-- Cards show `ID: summary`, tags and a configurable set of fields; a size selector switches between small and
-  normal cards. The search box highlights matches while typing, and Enter selects them and scrolls to the first.
-- Drag a card to another column or row to update the field (a dialog asks which value to use for columns that
-  combine several values). Click selects, double-click opens the issue in a new tab.
-- Selected issues show curved connectors to related issues on the board, labelled with the relation name
-  (arrowhead at the target, filled diamond at the parent end of subtask links). A toggle shows all connectors.
-- Every cell has a discreet "+" that opens the YouTrack new-issue page with the row and column fields preset.
-- Boards are shared or personal; shared boards can be changed by their owner or a system administrator.
+- **Relations**: labelled connectors to related issues, and links created by dragging.
+- **Hierarchy**: subtasks grouped in collapsible boxes under their parent, with progress.
+- **Swimlanes**: one or two levels, such as Team → Assignee.
+- **Time**: rows by date, version or build, with overdue and late work highlighted.
+- Keyboard navigation and moves, linked agile boards and sprints, personal or shared boards, and read-only
+  MCP tools for AI assistants.
+
+See [MARKETPLACE.md](MARKETPLACE.md) for the full feature description.
 
 ## Development
 
@@ -47,8 +41,9 @@ npx youtrack-app app logs --app reboards
 ```
 src/
   backend/
+    ai-tools/          MCP tools: reboards_list_boards, reboards_get_board, reboards_list_board_issues
     boards/            persistence (AppGlobalStorage JSON), permission rules, HTTP helpers
-    router/global/     boards GET, boards/save POST, boards/delete POST (typed client via @/api)
+    router/global/     boards (GET, save, delete, owner), context, projects/permissions (typed client via @/api)
   common/
     model/             BoardConfig types, defaults, normalization and validation (shared by both sides)
     youtrack/          REST client, field classification, query composition, URL helpers, host registration
@@ -59,6 +54,7 @@ src/
     model/             pure board logic: issue normalization, field universe, layout, grouping, sorting,
                        connectors, search, drag/drop planning (all unit-tested with vitest)
     data/              hooks that load boards, reference data and issues
+    hooks/             UI hooks such as per-user preferences
     board/             board screen, toolbar, rows, cells, cards, group boxes, connectors overlay
     settings/          board settings screen and editors
 ```
