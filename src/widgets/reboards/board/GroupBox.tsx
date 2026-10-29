@@ -19,6 +19,8 @@ type Props = {
   containerStart?: number;
   /** Insets already taken from the containing grid's tracks (none for the row band). */
   containerInsets?: TrackInsets;
+  /** A one-column box placed in a wrapping row of boxes: it takes its width from there, not from grid tracks. */
+  flow?: boolean;
 };
 
 const MAX_DEPTH_CLASS = 3;
@@ -132,7 +134,7 @@ const needsMemberRow = (group: LayoutGroup, span: LayoutColumn[], newIssueHref: 
   group.parentInThisRow ||
   (span.length > 0 && newIssueHref(group.rowKey, span[0].id, group.parentIdReadable) !== null);
 
-function GroupBoxComponent({group, columns, collapsedGroups, onToggle, containerStart = 0, containerInsets}: Props): React.JSX.Element {
+function GroupBoxComponent({group, columns, collapsedGroups, onToggle, containerStart = 0, containerInsets, flow = false}: Props): React.JSX.Element {
   const ctx = useBoardContext();
   // Target for Ctrl/Ctrl+Shift drags: the box stands for its parent issue.
   const {setNodeRef: setLinkDropRef} = useDroppable({
@@ -142,12 +144,14 @@ function GroupBoxComponent({group, columns, collapsedGroups, onToggle, container
   const collapsed = collapsedGroups.has(group.key);
   const span = columns.slice(group.startIndex, group.endIndex + 1);
   const tracks = boxTracks(span, ctx.collapsedColumns, containerInsets);
-  const style: React.CSSProperties = {
-    gridColumn: `${group.startIndex - containerStart + 1} / ${group.endIndex - containerStart + 2}`,
-    gridTemplateColumns: tracks.template,
-    // Top-level boxes share grid row 1 with the band's drop targets so the targets stretch behind the box.
-    ...(group.depth === 0 ? {gridRow: 1} : {})
-  };
+  const style: React.CSSProperties = flow
+    ? {gridTemplateColumns: tracks.template}
+    : {
+      gridColumn: `${group.startIndex - containerStart + 1} / ${group.endIndex - containerStart + 2}`,
+      gridTemplateColumns: tracks.template,
+      // Top-level boxes share grid row 1 with the band's drop targets so the targets stretch behind the box.
+      ...(group.depth === 0 ? {gridRow: 1} : {})
+    };
   const classes = [
     'group-box',
     `group-box_depth-${Math.min(group.depth, MAX_DEPTH_CLASS)}`,

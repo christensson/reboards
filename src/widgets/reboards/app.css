@@ -1627,3 +1627,42 @@ body {
   font-size: var(--ring-font-size-smaller);
   line-height: calc(var(--ring-unit) * 2);
 }
+
+/* ---------- Side by side in wide columns ---------- */
+
+/*
+ * Cards wrap side by side once a column has room for two of at least --card-w (the Small /
+ * Normal card size); a narrow column keeps one card per line across its whole width.
+ */
+.board-cell:not(.board-cell_collapsed):not(.board-cell_assign) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--card-w), 100%), 1fr));
+  align-content: start;
+  align-items: start;
+}
+
+/* The "New issue…" link takes a line of its own; a box's parent card is just the first card. */
+.board-cell:not(.board-cell_collapsed) > .board-cell__add {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+/* Boxes within one column: side by side when the column is wide, one per line when it is not. */
+.board-band_flow {
+  position: relative;
+}
+
+.board-band__flow {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.board-band__flow > .group-box {
+  flex: 1 1 calc(var(--card-w) + var(--ring-unit) * 2);
+  pointer-events: auto;
+}

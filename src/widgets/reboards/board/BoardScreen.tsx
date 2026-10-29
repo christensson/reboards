@@ -273,8 +273,13 @@ const screenClass = (twoLevel: boolean, active: ActiveDrag, plainDrag: boolean):
   return ['board-screen', twoLevel ? 'board-screen_two-level' : '', moving ? 'board-screen_moving' : ''].filter(Boolean).join(' ');
 };
 
-const screenStyle = (colWidth: number): React.CSSProperties =>
-  ({'--col-w': `${colWidth}px`, '--col-c': `${COLLAPSED_COLUMN_WIDTH}px`, '--outer-w': `${OUTER_WIDTH}px`} as React.CSSProperties);
+/** `--card-w` is the narrowest a card gets: wide columns fit several cards of at least that width side by side. */
+const screenStyle = (colWidth: number, cardSize: string): React.CSSProperties => ({
+  '--col-w': `${colWidth}px`,
+  '--card-w': `${BASE_COLUMN_WIDTH[cardSize] ?? BASE_COLUMN_WIDTH.normal}px`,
+  '--col-c': `${COLLAPSED_COLUMN_WIDTH}px`,
+  '--outer-w': `${OUTER_WIDTH}px`
+} as React.CSSProperties);
 
 /** Tracks the inner width of the scroll container. */
 const useElementWidth = (ref: React.RefObject<HTMLElement | null>): number => {
@@ -811,7 +816,7 @@ export const BoardScreen: React.FC<Props> = ({
   return (
     <div
       className={screenClass(twoLevel, activeDrag, link.mode === 'none')}
-      style={screenStyle(colWidth)}
+      style={screenStyle(colWidth, view.cardSize)}
     >
       <Toolbar
         boards={boards}
