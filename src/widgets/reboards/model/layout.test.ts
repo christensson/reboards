@@ -396,10 +396,37 @@ describe('computeLayout in the time layout', () => {
     expect(layout.flagsByIssue['11']).toEqual(['planned-late']);
   });
 
+  it('places every issue at its own date, without boxes, when not grouping by parent', () => {
+    const issues = [
+      due({id: '10', state: 'Open', due: '2026-06-01', children: ['11']}),
+      due({id: '11', state: 'Open', due: '2026-06-20', parents: ['10']})
+    ];
+    const layout = computeLayout({issues, config: board(), universe: dateUniverse, parents: {}, now, groupByParent: false});
+    expect(layout.rows.map(r => r.time)).toEqual([day('2026-06-01'), day('2026-06-20')]);
+    expect(layout.rows.every(r => r.groups.length === 0)).toBe(true);
+    expect(layout.rows[1].looseByColumn.open).toEqual(['11']);
+    // The parent relation still tells that the subtask ends after its parent.
+    expect(layout.flagsByIssue['11']).toEqual(['planned-late']);
+  });
+
   it('keeps the swimlanes when the swimlane layout is asked for', () => {
     const layout = computeLayout({issues: [due({id: '1', state: 'Open', priority: 'Major', due: '2026-05-12'})], config: board(), universe: dateUniverse, parents: {}, rowMode: 'swimlanes'});
     expect(layout.rows.map(r => r.kind)).toEqual(['normal']);
     expect(layout.flagsByIssue).toEqual({});
+  });
+});
+
+describe('computeLayout without grouping by parent', () => {
+  it('shows parents and subtasks as loose cards in their own cells', () => {
+    const issues = [
+      issue({id: '10', state: 'Open', priority: 'Major', children: ['11']}),
+      issue({id: '11', state: 'Done', priority: 'Major', parents: ['10']})
+    ];
+    const layout = computeLayout({issues, config: config(), universe, parents: {}, groupByParent: false});
+    const row = rowOf(layout, 'Major');
+    expect(row.groups).toEqual([]);
+    expect(row.looseByColumn).toMatchObject({open: ['10'], done: ['11']});
+    expect(layout.placement['11'].groupKey).toBeUndefined();
   });
 });
 

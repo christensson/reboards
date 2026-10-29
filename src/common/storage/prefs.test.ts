@@ -6,18 +6,18 @@ const apply = (prefs: UserPrefs, patch: Partial<UserPrefs>): UserPrefs => ({...p
 describe('board view prefs', () => {
   it('falls back to the last used settings for boards without a stored view', () => {
     const prefs = {...defaultPrefs(), cardSize: 'small' as const};
-    expect(boardView(prefs, 'x')).toEqual({cardSize: 'small', connectorsMode: 'selected', showNewIssue: true});
+    expect(boardView(prefs, 'x')).toEqual({cardSize: 'small', connectorsMode: 'selected', showNewIssue: true, groupByParent: true});
   });
 
   it('remembers settings per board and updates the default', () => {
     let prefs = apply(defaultPrefs(), setBoardView(defaultPrefs(), 'a', {cardSize: 'small'}));
     prefs = apply(prefs, setBoardView(prefs, 'b', {connectorsMode: 'all'}));
-    expect(boardView(prefs, 'a')).toEqual({cardSize: 'small', connectorsMode: 'all', showNewIssue: true});
-    expect(boardView(prefs, 'b')).toEqual({cardSize: 'small', connectorsMode: 'all', showNewIssue: true});
+    expect(boardView(prefs, 'a')).toEqual({cardSize: 'small', connectorsMode: 'all', showNewIssue: true, groupByParent: true});
+    expect(boardView(prefs, 'b')).toEqual({cardSize: 'small', connectorsMode: 'all', showNewIssue: true, groupByParent: true});
     prefs = apply(prefs, setBoardView(prefs, 'a', {connectorsMode: 'none'}));
     prefs = apply(prefs, setBoardView(prefs, 'b', {cardSize: 'normal'}));
-    expect(boardView(prefs, 'a')).toEqual({cardSize: 'small', connectorsMode: 'none', showNewIssue: true});
-    expect(boardView(prefs, 'b')).toEqual({cardSize: 'normal', connectorsMode: 'all', showNewIssue: true});
+    expect(boardView(prefs, 'a')).toEqual({cardSize: 'small', connectorsMode: 'none', showNewIssue: true, groupByParent: true});
+    expect(boardView(prefs, 'b')).toEqual({cardSize: 'normal', connectorsMode: 'all', showNewIssue: true, groupByParent: true});
   });
 
   it('remembers whether new-issue controls are shown', () => {

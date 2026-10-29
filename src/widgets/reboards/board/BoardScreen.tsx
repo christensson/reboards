@@ -375,9 +375,10 @@ export const BoardScreen: React.FC<Props> = ({
       universe: reference.universe,
       parents: data.parents,
       visibleColumnIds: prefs.visibleColumns[board.id],
-      rowMode
+      rowMode,
+      groupByParent: view.groupByParent
     }),
-    [data.issues, board, reference.universe, data.parents, prefs.visibleColumns, rowMode]
+    [data.issues, board, reference.universe, data.parents, prefs.visibleColumns, rowMode, view.groupByParent]
   );
   const collapsedRows = useMemo(() => new Set(prefs.collapsedRows[board.id] ?? []), [prefs.collapsedRows, board.id]);
   const collapsedGroups = useMemo(() => new Set(prefs.collapsedGroups[board.id] ?? []), [prefs.collapsedGroups, board.id]);
@@ -840,6 +841,8 @@ export const BoardScreen: React.FC<Props> = ({
         onConnectorsMode={mode => updatePrefs(prev => setBoardView(prev, board.id, {connectorsMode: mode}))}
         showNewIssue={view.showNewIssue}
         onShowNewIssue={show => updatePrefs(prev => setBoardView(prev, board.id, {showNewIssue: show}))}
+        groupByParent={view.groupByParent}
+        onGroupByParent={group => updatePrefs(prev => setBoardView(prev, board.id, {groupByParent: group}))}
         starredBoards={prefs.starredBoards}
         onToggleStar={boardId => updatePrefs(prev => toggleStar(prev, boardId))}
         rowModes={availableRowModes(board)}

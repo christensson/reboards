@@ -84,6 +84,7 @@ const RELATION_OPTIONS: {mode: ConnectorsMode; label: string}[] = [
 ];
 
 const NEW_ISSUE_KEY = 'new-issue';
+const GROUP_BY_PARENT_KEY = 'group-by-parent';
 
 const boardName = (board: BoardConfig): string => board.name || 'Untitled board';
 
@@ -119,17 +120,20 @@ const RelatedBoardsButton: React.FC<{related: RelatedBoard[]; onSelectBoard: (bo
 type ShowMenuProps = {
   connectorsMode: ConnectorsMode;
   showNewIssue: boolean;
+  groupByParent: boolean;
   onConnectorsMode: (mode: ConnectorsMode) => void;
   onShowNewIssue: (show: boolean) => void;
+  onGroupByParent: (group: boolean) => void;
 };
 
-/** "Show" menu: which relation connectors to draw, and whether cells offer "New issue…". */
-const ShowMenu: React.FC<ShowMenuProps> = ({connectorsMode, showNewIssue, onConnectorsMode, onShowNewIssue}) => {
+/** "Show" menu: which relation connectors to draw, whether cells offer "New issue…", and whether subtasks are boxed. */
+const ShowMenu: React.FC<ShowMenuProps> = ({connectorsMode, showNewIssue, groupByParent, onConnectorsMode, onShowNewIssue, onGroupByParent}) => {
   const items: SelectItem[] = [
     {key: 'relations-title', label: 'Relations', rgItemType: List.ListProps.Type.TITLE},
     ...RELATION_OPTIONS.map(option => ({key: option.mode, label: option.label, checkbox: connectorsMode === option.mode})),
     {key: 'separator', rgItemType: List.ListProps.Type.SEPARATOR},
-    {key: NEW_ISSUE_KEY, label: 'New issue controls', checkbox: showNewIssue}
+    {key: NEW_ISSUE_KEY, label: 'New issue controls', checkbox: showNewIssue},
+    {key: GROUP_BY_PARENT_KEY, label: 'Group by parent', checkbox: groupByParent}
   ];
   const relationLabel = RELATION_OPTIONS.find(option => option.mode === connectorsMode)?.label.toLowerCase() ?? '';
   return (
@@ -148,6 +152,8 @@ const ShowMenu: React.FC<ShowMenuProps> = ({connectorsMode, showNewIssue, onConn
         onSelect={(item: SelectItem) => {
           if (item.key === NEW_ISSUE_KEY) {
             onShowNewIssue(!showNewIssue);
+          } else if (item.key === GROUP_BY_PARENT_KEY) {
+            onGroupByParent(!groupByParent);
           } else if (RELATION_OPTIONS.some(option => option.mode === item.key)) {
             onConnectorsMode(item.key as ConnectorsMode);
           }
@@ -184,6 +190,8 @@ type Props = {
   selectedCount: number;
   showNewIssue: boolean;
   onShowNewIssue: (show: boolean) => void;
+  groupByParent: boolean;
+  onGroupByParent: (group: boolean) => void;
   onToggleStar: (boardId: string) => void;
   /** Row layouts the board has set up; with both, the toolbar switches between them. */
   rowModes: ('swimlanes' | 'time')[];
@@ -318,6 +326,8 @@ export const Toolbar: React.FC<Props> = ({
   selectedCount,
   showNewIssue,
   onShowNewIssue,
+  groupByParent,
+  onGroupByParent,
   onToggleStar,
   rowModes,
   rowMode,
@@ -393,8 +403,10 @@ export const Toolbar: React.FC<Props> = ({
         <ShowMenu
           connectorsMode={connectorsMode}
           showNewIssue={showNewIssue}
+          groupByParent={groupByParent}
           onConnectorsMode={onConnectorsMode}
           onShowNewIssue={onShowNewIssue}
+          onGroupByParent={onGroupByParent}
         />
       </div>
       <div className="toolbar__group toolbar__group_status">

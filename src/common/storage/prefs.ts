@@ -11,6 +11,8 @@ export type BoardView = {
   connectorsMode: ConnectorsMode;
   /** Show the "+" / "New issue…" links in cells. */
   showNewIssue: boolean;
+  /** Draw subtasks in boxes of their parent (and, in the time layout, on the parent's row). */
+  groupByParent: boolean;
 };
 
 export type UserPrefs = {
@@ -21,6 +23,7 @@ export type UserPrefs = {
   cardSize: CardSize;
   connectorsMode: ConnectorsMode;
   showNewIssue: boolean;
+  groupByParent: boolean;
   viewByBoard: Record<string, Partial<BoardView>>;
   /** Board ids the user has starred. */
   starredBoards: string[];
@@ -47,6 +50,7 @@ export const defaultPrefs = (): UserPrefs => ({
   cardSize: 'normal',
   connectorsMode: 'selected',
   showNewIssue: true,
+  groupByParent: true,
   viewByBoard: {},
   starredBoards: [],
   collapsedRows: {},
@@ -103,7 +107,8 @@ export const savePrefs = (host: HostAPI, prefs: UserPrefs): Promise<void> => wri
 export const boardView = (prefs: UserPrefs, boardId: string): BoardView => ({
   cardSize: prefs.viewByBoard[boardId]?.cardSize ?? prefs.cardSize,
   connectorsMode: prefs.viewByBoard[boardId]?.connectorsMode ?? prefs.connectorsMode,
-  showNewIssue: prefs.viewByBoard[boardId]?.showNewIssue ?? prefs.showNewIssue
+  showNewIssue: prefs.viewByBoard[boardId]?.showNewIssue ?? prefs.showNewIssue,
+  groupByParent: prefs.viewByBoard[boardId]?.groupByParent ?? prefs.groupByParent
 });
 
 /** Stores view settings for one board and makes them the default for boards without a stored view. */

@@ -216,6 +216,8 @@ export type LayoutInput = {
   rowMode?: RowMode;
   /** The current time, for the today line and overdue checks. */
   now?: number;
+  /** Draw subtasks in boxes of their parent; off, every issue is a plain card placed by its own fields. */
+  groupByParent?: boolean;
 };
 
 export const groupKey = (parentId: string, rowKey: string): string => `${parentId}::${rowKey}`;
@@ -556,7 +558,7 @@ const topOfBoxes = (issue: BoardIssue, issuesById: Map<string, BoardIssue>): Boa
  * Rows of the time layout. Each distinct time is a row ("discrete time"); a subtask follows the
  * top of its boxes, and a box whose parent is not on the board takes its first subtask's time.
  */
-const planTimeRows = (issues: BoardIssue[], config: BoardConfig, universe: FieldUniverse): TimePlan => {
+const planTimeRows = (issues: BoardIssue[], config: BoardConfig, universe: FieldUniverse, groupByParent: boolean): TimePlan => {
   const exact = isExactTime(config.timeline, universe);
   const direction = config.timeline.sort === 'desc' ? -1 : 1;
   const issuesById = new Map(issues.map(i => [i.id, i]));
@@ -581,6 +583,11 @@ const planTimeRows = (issues: BoardIssue[], config: BoardConfig, universe: Field
   });
   const rowKeyOf = new Map<string, string>();
   issues.forEach(issue => {
+    if (!groupByParent) {
+      // No boxes: each issue at its own time.
+      rowKeyOf.set(issue.id, keyOf(positionOf.get(issue.id)));
+      return;
+    }
     const top = topOfBoxes(issue, issuesById);
     const parentId = top.parentIds.length > 0 ? offBoardParent(top) : undefined;
     rowKeyOf.set(issue.id, keyOf(parentId && boxPosition.has(parentId) ? boxPosition.get(parentId) : positionOf.get(top.id)));
@@ -902,9 +909,9 @@ export const cardLocation = (layout: BoardLayout, id: string): string => {
 };
 
 /** Swimlane rows, or the rows of the time layout, with how each issue finds its row. */
-const planRows = (issues: BoardIssue[], config: BoardConfig, universe: FieldUniverse, rowMode: RowMode) => {
+const planRows = (issues: BoardIssue[], config: BoardConfig, universe: FieldUniverse, rowMode: RowMode, groupByParent: boolean) => {
   if (rowMode === 'time') {
-    const plan = planTimeRows(issues, config, universe);
+    const plan = planTimeRows(issues, config, universe, groupByParent);
     return {
       time: plan,
       rowKeysFor: (issue: BoardIssue) => [plan.rowKeyOf.get(issue.id) ?? NO_TIME_ROW_KEY],
@@ -924,19 +931,22 @@ const planRows = (issues: BoardIssue[], config: BoardConfig, universe: FieldUniv
   };
 };
 
-export const computeLayout = ({issues, config, universe, parents, visibleColumnIds, rowMode: requested, now = Date.now()}: LayoutInput): BoardLayout => {
+export const computeLayout = ({issues, config, universe, parents, visibleColumnIds, rowMode: requested, now = Date.now(), groupByParent = true}: LayoutInput): BoardLayout => {
   const rowMode = requested ?? effectiveRowMode(config, undefined);
   const {columns, availableColumns, columnIdsOf} = planColumns(config, universe, issues, visibleColumnIds);
   const columnIndex = new Map(columns.map(c => [c.id, c.index]));
   const issuesById = new Map(issues.map(i => [i.id, i]));
-  const rowPlan = planRows(issues, config, universe, rowMode);
+  const rowPlan = planRows(issues, config, universe, rowMode, groupByParent);
   const {placed, placedIssues, hiddenIssueIds, extraCards} = placeIssues(issues, rowPlan.rowKeysFor, columnIdsOf);
   const {twoLevel} = rowPlan;
   const skeleton = rowPlan.skeletonFor(placedIssues);
   const rowOrder = new Map(skeleton.rows.map((r, index) => [r.key, index]));
   const rowLabels = new Map(skeleton.rows.map(r => [r.key, r.fullLabel]));
   const compare = rowPlan.time?.compare ?? compareIssues;
-  const {groupsByRow, ancestors} = buildGroups(placedIssues, {placed, compare, issuesById, parents, columnIndex, rowOrder, rowLabels});
+  // Without grouping by parent there are no boxes: every placed issue is a loose card.
+  const {groupsByRow, ancestors} = groupByParent
+    ? buildGroups(placedIssues, {placed, compare, issuesById, parents, columnIndex, rowOrder, rowLabels})
+    : {groupsByRow: new Map<string, LayoutGroup[]>(), ancestors: {}};
 
   const rows: LayoutRow[] = skeleton.rows.map(row => ({
     ...row,
