@@ -10,7 +10,6 @@ import {Directions} from '@jetbrains/ring-ui-built/components/popup/popup.consts
 import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/select/select';
 import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
 import addIcon from '@jetbrains/icons/add';
-import chevronDownIcon from '@jetbrains/icons/chevron-down';
 import linkIcon from '@jetbrains/icons/link';
 import searchIcon from '@jetbrains/icons/search';
 import settingsIcon from '@jetbrains/icons/settings';
@@ -123,9 +122,9 @@ const ShowMenu: React.FC<ShowMenuProps> = ({connectorsMode, showNewIssue, onConn
   return (
     <Dropdown
       anchor={(
-        <Button title={`Relations: ${relationLabel} · New issue controls: ${showNewIssue ? 'shown' : 'hidden'}`}>
-          {'Show '}
-          <Icon glyph={chevronDownIcon}/>
+        // Inline like the sprint selector: text with a chevron, no button frame.
+        <Button inline dropdown title={`Relations: ${relationLabel} · New issue controls: ${showNewIssue ? 'shown' : 'hidden'}`}>
+          Show
         </Button>
       )}
     >
