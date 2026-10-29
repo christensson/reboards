@@ -110,7 +110,7 @@ export const boardConfigSchema = z.object({
   projects: z.array(projectRefSchema),
   query: z.string(),
   sprints: sprintConfigSchema,
-  columnField: fieldRefSchema,
+  columnField: fieldRefSchema.nullable(),
   columns: z.array(columnConfigSchema),
   columnOptions: dynamicOptionsSchema,
   ignoredValues: z.array(z.string()),

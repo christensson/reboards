@@ -67,6 +67,11 @@ const DRAG_ACTIVATION_DISTANCE = 6;
 
 const NO_NOTES: TimingNote[] = [];
 
+/** A configured column field (not a dynamic one) without columns: the board has nothing to show yet. */
+const needsColumns = (board: BoardConfig, universe: FieldUniverse): boolean =>
+  Boolean(board.columnField) && board.columns.length === 0
+  && !isDynamicField(universe.byName.get(board.columnField?.name ?? '')?.kind ?? board.columnField?.kind, board.columnOptions);
+
 /** Field values that put a new issue in a row: its swimlane values, or the date, version or build of a time row. */
 const rowPresets = (board: BoardConfig, row: BoardLayout['rows'][number] | undefined, universe: FieldUniverse): {field: string; value: string}[] => {
   if (row?.kind === 'time') {
@@ -136,7 +141,7 @@ const choiceOptions = (board: BoardConfig, field: FieldRef | null): DynamicOptio
   if (!field) {
     return undefined;
   }
-  if (field.name === board.columnField.name) {
+  if (field.name === board.columnField?.name) {
     return board.columnOptions;
   }
   return field.name === board.row.field?.name ? board.row.dynamic : board.innerRow?.dynamic;
@@ -182,7 +187,7 @@ const PendingMoveDialogs: React.FC<PendingMoveDialogsProps> = ({pending, board, 
     <>
       <ValuePickerDialog
         column={pickedColumn(pending, columnById)}
-        fieldName={board.columnField.name}
+        fieldName={board.columnField?.name ?? ''}
         universe={universe}
         issueLabel={pending?.label ?? ''}
         onPick={onPickValue}
@@ -433,7 +438,7 @@ export const BoardScreen: React.FC<Props> = ({
       const value = column.values[0];
       const presets = [
         ...rowPresets(board, layout.rowsByKey[rowKey], reference.universe),
-        ...(value === undefined ? [] : [{field: board.columnField.name, value}])
+        ...(value === undefined || !board.columnField ? [] : [{field: board.columnField.name, value}])
       ];
       return newIssueUrl(baseUrl, project.shortName, presets, parentIdReadable ? [`subtask of ${parentIdReadable}`] : []);
     },
@@ -611,7 +616,7 @@ export const BoardScreen: React.FC<Props> = ({
       setPendingMove(null);
       pending.issues.forEach(issue => applyMove(issue, pending.changes));
       // A value assigned through "Assign <field>…" may have a column that is not shown: show it.
-      const columnChange = pending.changes.find(change => change.field.name === board.columnField.name);
+      const columnChange = pending.changes.find(change => change.field.name === board.columnField?.name);
       // Only added values may need a column; unchecking alone never does.
       const assigned = columnChange?.delta?.add ?? (columnChange?.valueKey ? [columnChange.valueKey] : []);
       const reveal = columnChange && !(columnChange.delta && assigned.length === 0) ? revealColumnIds(layout.columns, assigned) : null;
@@ -619,7 +624,7 @@ export const BoardScreen: React.FC<Props> = ({
         updatePrefs(prev => ({visibleColumns: {...prev.visibleColumns, [board.id]: reveal}}));
       }
     },
-    [applyMove, board.columnField.name, board.id, layout.columns, updatePrefs]
+    [applyMove, board.columnField?.name, board.id, layout.columns, updatePrefs]
   );
 
   /** Moves every subtask inside a box to another swimlane; the column never changes. */
@@ -684,7 +689,10 @@ export const BoardScreen: React.FC<Props> = ({
       if (!pendingMove) {
         return;
       }
-      settlePending({...pendingMove, changes: [...pendingMove.changes, {field: board.columnField, valueKey: value}], pickColumnId: undefined});
+      const field = board.columnField;
+      if (field) {
+        settlePending({...pendingMove, changes: [...pendingMove.changes, {field, valueKey: value}], pickColumnId: undefined});
+      }
     },
     [pendingMove, board.columnField, settlePending]
   );
@@ -845,7 +853,7 @@ export const BoardScreen: React.FC<Props> = ({
         }}
       />
       {error && <div className="board-error">{error}</div>}
-      {board.columns.length === 0 && !isDynamicField(reference.universe.byName.get(board.columnField.name)?.kind ?? board.columnField.kind, board.columnOptions) && !error && (
+      {needsColumns(board, reference.universe) && !error && (
         <div className="board-empty">This board has no columns yet. Open the board settings to configure columns.</div>
       )}
       <BoardContext.Provider value={contextValue}>
@@ -863,18 +871,21 @@ export const BoardScreen: React.FC<Props> = ({
         >
           <div className="board-scroll" ref={scrollRef} onClick={() => setSelectedIds(new Set())} role="presentation">
             <div className="board-content" ref={contentRef}>
-              <ColumnHeaders
-                columns={layout.columns}
-                columnFieldName={board.columnField.name}
-                universe={reference.universe}
-                collapsedColumns={collapsedColumns}
-                onToggleColumn={columnId => updatePrefs(prev => toggleCollapsedColumn(prev, board.id, columnId))}
-                twoLevel={twoLevel}
-                swappedSwimlanes={swapped}
-                onToggleSwappedSwimlanes={() => updatePrefs(prev => ({swappedSwimlanes: {...prev.swappedSwimlanes, [board.id]: !swapped}}))}
-                availableColumns={layout.availableColumns}
-                onPickColumns={pickColumns}
-              />
+              {/* Without a column field there is one column and no header. */}
+              {board.columnField && (
+                <ColumnHeaders
+                  columns={layout.columns}
+                  columnFieldName={board.columnField.name}
+                  universe={reference.universe}
+                  collapsedColumns={collapsedColumns}
+                  onToggleColumn={columnId => updatePrefs(prev => toggleCollapsedColumn(prev, board.id, columnId))}
+                  twoLevel={twoLevel}
+                  swappedSwimlanes={swapped}
+                  onToggleSwappedSwimlanes={() => updatePrefs(prev => ({swappedSwimlanes: {...prev.swappedSwimlanes, [board.id]: !swapped}}))}
+                  availableColumns={layout.availableColumns}
+                  onPickColumns={pickColumns}
+                />
+              )}
               <BoardRows
                 layout={layout}
                 collapsedRows={collapsedRows}

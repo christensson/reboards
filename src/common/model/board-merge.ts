@@ -91,7 +91,7 @@ const summaries: Record<MergeGroup, (board: BoardConfig) => string> = {
   projects: board => list(board.projects.map(p => p.shortName)),
   query: board => board.query || '(none)',
   sprints: board => (board.sprints.enabled ? `On (${board.sprints.field?.name ?? 'no field'})` : 'Off'),
-  columns: board => `${board.columnField.name}: ${list(board.columns.map(columnLabel))}`,
+  columns: board => (board.columnField ? `${board.columnField.name}: ${list(board.columns.map(columnLabel))}` : 'No columns'),
   swimlanes: board => [board.row.field?.name, board.innerRow?.field?.name].filter(Boolean).join(' › ') || 'None',
   cardFields: board => list(board.cardFields),
   cardColorField: board => board.cardColorField?.name ?? 'None',

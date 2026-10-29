@@ -3,7 +3,7 @@ import {type BoardConfig, UNCATEGORIZED_ROW_KEY, createEmptyBoard, defaultDynami
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
-import {ASSIGN_COLUMN_ID, type BoardLayout, type LayoutGroup, NO_VALUE_COLUMN_ID, PICKER_ROW_SUFFIX, cardLocation, revealColumnIds, cardId, compositeRowKey, computeLayout, dynamicColumnId, groupKey, packGroups} from './layout';
+import {ALL_COLUMN_ID, ASSIGN_COLUMN_ID, type BoardLayout, type LayoutGroup, NO_VALUE_COLUMN_ID, PICKER_ROW_SUFFIX, cardLocation, revealColumnIds, cardId, compositeRowKey, computeLayout, dynamicColumnId, groupKey, packGroups} from './layout';
 
 const rowOf = (layout: BoardLayout, key: string) => {
   const row = layout.rows.find(r => r.key === key);
@@ -400,5 +400,14 @@ describe('computeLayout in the time layout', () => {
     const layout = computeLayout({issues: [due({id: '1', state: 'Open', priority: 'Major', due: '2026-05-12'})], config: board(), universe: dateUniverse, parents: {}, rowMode: 'swimlanes'});
     expect(layout.rows.map(r => r.kind)).toEqual(['normal']);
     expect(layout.flagsByIssue).toEqual({});
+  });
+});
+
+describe('computeLayout without a column field', () => {
+  it('puts every issue in one column', () => {
+    const board: BoardConfig = {...config(), columnField: null, columns: []};
+    const layout = computeLayout({issues: [issue({id: '1', state: 'Open', priority: 'Major'}), issue({id: '2', state: 'Done', priority: 'Major'})], config: board, universe, parents: {}});
+    expect(layout.columns.map(c => c.id)).toEqual([ALL_COLUMN_ID]);
+    expect(rowOf(layout, 'Major').looseByColumn[ALL_COLUMN_ID]).toEqual(['1', '2']);
   });
 });

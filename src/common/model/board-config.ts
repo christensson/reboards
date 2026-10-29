@@ -119,7 +119,8 @@ export type BoardConfig = {
   projects: ProjectRef[];
   query: string;
   sprints: SprintConfig;
-  columnField: FieldRef;
+  /** null: no columns, the board is one column wide and shows no column header. */
+  columnField: FieldRef | null;
   /** Explicit columns of a stable column field (enum, state); empty for a dynamic one. */
   columns: ColumnConfig[];
   /** Sorting, filtering and the default column count of a dynamic column field. */
@@ -304,7 +305,7 @@ export const normalizeBoardConfig = (raw: unknown, fallbackOwner = ''): BoardCon
     projects: normalizeProjects(input.projects),
     query: str(input.query),
     sprints: normalizeSprints(input.sprints),
-    columnField: fieldRef(input.columnField) ?? base.columnField,
+    columnField: 'columnField' in input ? fieldRef(input.columnField) : base.columnField,
     columns: normalizeColumns(input.columns),
     columnOptions: normalizeDynamic(input.columnOptions),
     ignoredValues: stringArray(input.ignoredValues),
@@ -353,7 +354,6 @@ const allTexts = (config: BoardConfig): string[] => [
   config.name,
   config.id,
   config.owner,
-  config.columnField.name,
   ...config.projects.flatMap(p => [p.id, p.shortName]),
   ...config.columns.flatMap(c => [c.id, c.name ?? '', ...c.values]),
   ...config.ignoredValues,
@@ -363,6 +363,7 @@ const allTexts = (config: BoardConfig): string[] => [
   ...config.linkTypes,
   ...config.relatedBoards,
   ...[
+    config.columnField,
     config.row.field,
     config.innerRow?.field,
     config.sprints.field,
@@ -418,6 +419,9 @@ export const isDynamicField = (kind: FieldKind | 'other' | undefined, options: D
   isDynamicKind(kind) || (canBeDynamic(kind) && Boolean(options?.asDynamic));
 
 const validateColumns = (config: BoardConfig): ValidationIssue[] => {
+  if (!config.columnField) {
+    return [];
+  }
   if (isDynamicField(config.columnField.kind, config.columnOptions)) {
     const max = config.columnOptions.maxColumns;
     return max >= 1 && max <= BOARD_LIMITS.dynamicColumns
@@ -465,7 +469,7 @@ const validateSprints = (config: BoardConfig): ValidationIssue[] => {
   if (!sprintField) {
     return [{field: 'sprints', message: 'Select a sprint field or disable sprints'}];
   }
-  const used = [config.columnField.name, config.row.field?.name, config.innerRow?.field?.name];
+  const used = [config.columnField?.name, config.row.field?.name, config.innerRow?.field?.name];
   return used.includes(sprintField) ? [{field: 'sprints', message: `The sprint field ${sprintField} cannot also be a column or swimlane field`}] : [];
 };
 
@@ -501,9 +505,6 @@ export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
   }
   if (config.projects.length === 0) {
     issues.push({field: 'projects', message: 'Select at least one project'});
-  }
-  if (!config.columnField.name) {
-    issues.push({field: 'columnField', message: 'Select a column field'});
   }
   return [...issues, ...validateColumns(config), ...validateSprints(config), ...validateSwimlanes(config), ...validateTimeline(config)];
 };

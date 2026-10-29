@@ -43,9 +43,10 @@ export const issueDragHint = (
   const plan = planMove(board, from, target, rowsByKey, columns);
   const parts = plan.changes.map(change => describeChange(universe, change));
   (plan.choices ?? []).forEach(choice => parts.push(`${choice.field.name} to a value you choose on drop`));
+  const columnField = board.columnField?.name ?? '';
   if (plan.pickColumn) {
-    const options = plan.pickColumn.values.map(v => valueLabel(universe, board.columnField.name, v)).join(' / ');
-    parts.push(`${board.columnField.name} to one of ${options} (choose on drop)`);
+    const options = plan.pickColumn.values.map(v => valueLabel(universe, columnField, v)).join(' / ');
+    parts.push(`${columnField} to one of ${options} (choose on drop)`);
   }
   if (parts.length === 0) {
     return `${issue.idReadable}: no change`;

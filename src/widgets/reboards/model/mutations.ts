@@ -120,18 +120,19 @@ const planColumnMove = (config: BoardConfig, fromId: string, toId: string, colum
   // Dynamic columns name the value the card leaves, so multi-value fields swap just that one.
   const fromKey = columns.find(c => c.id === fromId)?.columnKey;
   const replace = fromKey === undefined ? {} : {replaceKey: fromKey};
-  if (!column) {
+  const field = config.columnField;
+  if (!column || !field) {
     return {};
   }
   if (column.assign) {
-    return {choices: [{field: config.columnField, ...replace}]};
+    return {choices: [{field, ...replace}]};
   }
   if (column.columnKey === null) {
     // The "No <field>" column of a dynamic field.
-    return {change: {field: config.columnField, valueKey: null, ...replace}};
+    return {change: {field, valueKey: null, ...replace}};
   }
   if (column.values.length === 1) {
-    return {change: {field: config.columnField, valueKey: column.values[0], ...replace}};
+    return {change: {field, valueKey: column.values[0], ...replace}};
   }
   return column.values.length > 1 ? {pickColumn: {id: column.id, values: column.values, ...(column.name ? {name: column.name} : {})}} : {};
 };

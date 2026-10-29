@@ -26,7 +26,7 @@ describe('boards store', () => {
   it('drops boards without an id and normalizes the rest', () => {
     const doc = parseBoardsDocument(JSON.stringify({boards: [{name: 'no id'}, {id: 'a', name: 'A', owner: 'x'}]}));
     expect(doc.boards.map(b => b.id)).toEqual(['a']);
-    expect(doc.boards[0].columnField.name).toBe('State');
+    expect(doc.boards[0].columnField?.name).toBe('State');
   });
 
   it('round-trips through a storage object', () => {

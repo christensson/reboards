@@ -140,7 +140,7 @@ const setColumnsDynamic = async (draft: BoardConfig, universe: FieldUniverse, as
   patch({
     // Enums have a natural order, such as priorities.
     columnOptions: {...draft.columnOptions, asDynamic, ...(asDynamic ? {sort: 'order' as const} : {})},
-    columns: asDynamic ? [] : defaultColumns(universe, draft.columnField.name),
+    columns: asDynamic || !draft.columnField ? [] : defaultColumns(universe, draft.columnField.name),
     ignoredValues: []
   });
 };
@@ -150,7 +150,7 @@ const ColumnValuesEditor: React.FC<ColumnValuesProps> = ({draft, kind, universe,
     <DynamicOptionsEditor kind={kind} options={draft.columnOptions} columns disabled={readOnly} onChange={columnOptions => patch({columnOptions})}/>
   ) : (
     <ColumnsEditor
-      fieldName={draft.columnField.name}
+      fieldName={draft.columnField?.name ?? ''}
       universe={universe}
       columns={draft.columns}
       ignoredValues={draft.ignoredValues}
@@ -168,6 +168,43 @@ const ColumnValues: React.FC<ColumnValuesProps> = ({draft, kind, universe, readO
     <ColumnValuesEditor draft={draft} kind={kind} universe={universe} readOnly={readOnly} patch={patch}/>
   </>
 );
+
+type ColumnsSectionProps = {
+  draft: BoardConfig;
+  universe: FieldUniverse;
+  readOnly: boolean;
+  /** Fields that cannot be the column field, such as the sprint field. */
+  excludeNames: string[];
+  onColumnField: (field: FieldRef | null) => void;
+  patch: (changes: Partial<BoardConfig>) => void;
+};
+
+/** The column field, or none (one column without a header), and its columns. */
+const ColumnsSection: React.FC<ColumnsSectionProps> = ({draft, universe, readOnly, excludeNames, onColumnField, patch}) => {
+  const field = draft.columnField;
+  const kind = (field && universe.byName.get(field.name)?.kind) ?? field?.kind ?? 'other';
+  return (
+    <>
+      <div className="settings-field">
+        <span className="settings-field__label">Column field</span>
+        <FieldSelect
+          universe={universe}
+          kinds={COLUMN_FIELD_KINDS}
+          singleOnly
+          multiKinds={DYNAMIC_KINDS}
+          excludeNames={excludeNames}
+          allowNone
+          noneLabel="No columns"
+          value={field}
+          disabled={readOnly}
+          onChange={onColumnField}
+        />
+        {!field && <span className="settings-field__help">All issues are in one column, shown without a column header.</span>}
+      </div>
+      {field && <ColumnValues draft={draft} kind={kind} universe={universe} readOnly={readOnly} patch={patch}/>}
+    </>
+  );
+};
 
 /** Asks whether to store the draft as a new board after the edited one was deleted meanwhile. */
 const confirmRecreate = async (): Promise<boolean> => {
@@ -207,7 +244,6 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
   const reference = useBoardReference(draft.projects);
   const readOnly = !canEdit && !duplicating;
   const sprintFieldNames = sprintExclusions(draft);
-  const columnKind = reference.universe.byName.get(draft.columnField.name)?.kind ?? draft.columnField.kind;
   const showShareToggle = isAdmin || adminProjects.size > 0;
   const canShareDraft = canShareProjects(draft.projects, isAdmin, adminProjects);
   const [defaultsApplied, setDefaultsApplied] = useState(!isNew);
@@ -236,15 +272,17 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
 
   const onColumnField = useCallback(
     async (field: FieldRef | null) => {
-      if (!field) {
-        return;
-      }
-      if (draft.columns.length > 0 && field.name !== draft.columnField.name) {
+      if (draft.columns.length > 0 && field?.name !== draft.columnField?.name) {
         try {
           await confirm({text: 'Changing the column field resets the columns. Continue?', confirmLabel: 'Reset columns', rejectLabel: 'Cancel'});
         } catch {
           return;
         }
+      }
+      if (!field) {
+        // No column field: one column, no header.
+        patch({columnField: null, columns: [], ignoredValues: []});
+        return;
       }
       // Dynamic fields take their columns from the issues; only stable fields get configured columns.
       const dynamic = isDynamicKind(reference.universe.byName.get(field.name)?.kind ?? field.kind);
@@ -256,7 +294,7 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
         columnOptions: {...draft.columnOptions, asDynamic: false}
       });
     },
-    [draft.columns.length, draft.columnField.name, draft.columnOptions, patch, reference.universe]
+    [draft.columns.length, draft.columnField?.name, draft.columnOptions, patch, reference.universe]
   );
 
   const save = useCallback(async () => {
@@ -412,20 +450,14 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
 
       <Section title="Columns">
         {reference.loading && <LoaderInline/>}
-        <div className="settings-field">
-          <span className="settings-field__label">Column field</span>
-          <FieldSelect
-            universe={reference.universe}
-            kinds={COLUMN_FIELD_KINDS}
-            singleOnly
-            multiKinds={DYNAMIC_KINDS}
-            excludeNames={sprintFieldNames}
-            value={draft.columnField}
-            disabled={readOnly}
-            onChange={onColumnField}
-          />
-        </div>
-        <ColumnValues draft={draft} kind={columnKind} universe={reference.universe} readOnly={readOnly} patch={patch}/>
+        <ColumnsSection
+          draft={draft}
+          universe={reference.universe}
+          readOnly={readOnly}
+          excludeNames={sprintFieldNames}
+          onColumnField={onColumnField}
+          patch={patch}
+        />
       </Section>
 
       <Section title="Rows">

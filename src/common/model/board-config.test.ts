@@ -60,6 +60,12 @@ describe('validateBoardConfig', () => {
     expect(validateBoardConfig(valid())).toEqual([]);
   });
 
+  it('accepts a board without a column field, and keeps a stored null', () => {
+    expect(validateBoardConfig({...valid(), columnField: null, columns: []})).toEqual([]);
+    expect(normalizeBoardConfig({columnField: null}).columnField).toBeNull();
+    expect(normalizeBoardConfig({}).columnField).toEqual({name: 'State', kind: 'state'});
+  });
+
   it('needs no configured columns for an enum treated as a changing field', () => {
     const enumBoard = {...valid(), columnField: {name: 'Priority', kind: 'enum' as const}, columns: []};
     expect(validateBoardConfig(enumBoard).map(i => i.message)).toEqual(['Add at least one column']);
@@ -148,7 +154,7 @@ describe('dynamic column and swimlane fields', () => {
     const config = normalizeBoardConfig({row: {field: {name: 'Fix versions', kind: 'version'}}});
     expect(config.columnOptions).toEqual({sort: 'alphabetical', asDynamic: false, showReleased: true, showArchived: false, maxColumns: 5});
     expect(config.row.dynamic.showArchived).toBe(false);
-    expect(normalizeBoardConfig({columnField: {name: 'Fixed in build', kind: 'build'}}).columnField.kind).toBe('build');
+    expect(normalizeBoardConfig({columnField: {name: 'Fixed in build', kind: 'build'}}).columnField?.kind).toBe('build');
   });
 
   it('needs no explicit columns for a dynamic column field', () => {

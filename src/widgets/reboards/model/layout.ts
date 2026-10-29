@@ -326,8 +326,18 @@ type ColumnPlan = {
   columnIdsOf: (issue: BoardIssue) => string[];
 };
 
+/** Id of the one column of a board without a column field. */
+export const ALL_COLUMN_ID = '__all__';
+
+/** No column field: one column holding every issue. */
+const singleColumn = (): ColumnPlan => ({
+  columns: [{id: ALL_COLUMN_ID, label: '', values: [], index: 0, count: 0}],
+  availableColumns: [],
+  columnIdsOf: () => [ALL_COLUMN_ID]
+});
+
 /** Configured columns of a stable field (enum, state): one column per group of values. */
-const configuredColumns = (config: BoardConfig): ColumnPlan => {
+const configuredColumns = (config: BoardConfig, fieldName: string): ColumnPlan => {
   const ignored = new Set(config.ignoredValues);
   const valueToColumn = new Map<string, string>();
   config.columns.forEach(c => c.values.forEach(v => {
@@ -340,7 +350,7 @@ const configuredColumns = (config: BoardConfig): ColumnPlan => {
     columns,
     availableColumns: [],
     columnIdsOf: issue => {
-      const key = issue.fields[config.columnField.name]?.key;
+      const key = issue.fields[fieldName]?.key;
       const id = key === undefined ? undefined : valueToColumn.get(key);
       return id ? [id] : [];
     }
@@ -352,8 +362,7 @@ const configuredColumns = (config: BoardConfig): ColumnPlan => {
  * carry, "No <field>" first. The user's pick decides which are shown; without
  * one, the first `maxColumns` in sort order.
  */
-const dynamicColumns = (config: BoardConfig, universe: FieldUniverse, issues: BoardIssue[], visibleColumnIds?: string[]): ColumnPlan => {
-  const name = config.columnField.name;
+const dynamicColumns = (config: BoardConfig, name: string, universe: FieldUniverse, issues: BoardIssue[], visibleColumnIds?: string[]): ColumnPlan => {
   const field = universe.byName.get(name);
   const {values, emptyCount} = dynamicValues(name, field, issues, config.columnOptions);
   const all: Omit<AvailableColumn, 'visible'>[] = [
@@ -376,10 +385,15 @@ const dynamicColumns = (config: BoardConfig, universe: FieldUniverse, issues: Bo
   };
 };
 
-const planColumns = (config: BoardConfig, universe: FieldUniverse, issues: BoardIssue[], visibleColumnIds?: string[]): ColumnPlan =>
-  isDynamicField(universe.byName.get(config.columnField.name)?.kind ?? config.columnField.kind, config.columnOptions)
-    ? dynamicColumns(config, universe, issues, visibleColumnIds)
-    : configuredColumns(config);
+const planColumns = (config: BoardConfig, universe: FieldUniverse, issues: BoardIssue[], visibleColumnIds?: string[]): ColumnPlan => {
+  const field = config.columnField;
+  if (!field) {
+    return singleColumn();
+  }
+  return isDynamicField(universe.byName.get(field.name)?.kind ?? field.kind, config.columnOptions)
+    ? dynamicColumns(config, field.name, universe, issues, visibleColumnIds)
+    : configuredColumns(config, field.name);
+};
 
 /** Places every issue in each of its column × swimlane combinations; issues without any are hidden. */
 const placeIssues = (issues: BoardIssue[], rowKeysFor: (issue: BoardIssue) => string[], columnIdsOf: ColumnPlan['columnIdsOf']): PlacementResult => {

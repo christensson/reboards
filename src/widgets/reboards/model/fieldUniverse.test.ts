@@ -71,7 +71,7 @@ describe('defaults', () => {
 
   it('applies defaults to a new board', () => {
     const board = applyUniverseDefaults(createEmptyBoard('me'), u);
-    expect(board.columnField.name).toBe('State2');
+    expect(board.columnField?.name).toBe('State2');
     expect(board.columns).toHaveLength(3);
     expect(board.row.customOrder).toEqual(['Major', 'Minor']);
     expect(board.cardFields).toEqual(['Type', 'Estimation']);
