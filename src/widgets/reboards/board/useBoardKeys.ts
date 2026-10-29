@@ -132,7 +132,13 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
       const direction = directionOf(event.key);
       if (direction) {
         onArrow(event, direction);
-      } else if (event.key === 'Escape') {
+        return true;
+      }
+      // With Ctrl or Cmd the key belongs to the browser (Ctrl+R reloads, Ctrl+P prints).
+      if (event.ctrlKey || event.metaKey) {
+        return false;
+      }
+      if (event.key === 'Escape') {
         setSelectedIds(new Set());
       } else if (event.key === 'Enter' && anchor) {
         onOpen(anchor);
@@ -140,7 +146,8 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
         onParent(anchor);
       } else if (event.key === 'P' && anchor) {
         onBackToChild(anchor);
-      } else if (event.key === 'r' || event.key === 'R') {
+      } else if (event.key === 'r') {
+        // Plain R only: Shift+R and Ctrl+R are left to the browser.
         onToggleConnectors();
       } else if (event.key === '?') {
         onHelp();
