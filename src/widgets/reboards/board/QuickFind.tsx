@@ -28,7 +28,7 @@ const countText = (matchCount: number, position: number | null): string => {
 };
 
 /**
- * Interactive find opened with "/": a small box centered over the board. Enter goes through the
+ * Interactive find opened with "/": a small box a third down the board, clear of the centered match. Enter goes through the
  * matches one by one, selecting and scrolling to each; Ctrl+Enter selects and closes.
  */
 export const QuickFind: React.FC<Props> = ({term, matchCount, position, onChange, onStep, onSubmit, onClose}) => {

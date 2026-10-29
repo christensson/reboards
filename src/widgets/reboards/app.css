@@ -1290,7 +1290,7 @@ body {
 
 .quick-find {
   position: fixed;
-  top: 50%;
+  top: 33.333%;
   left: 50%;
   z-index: 20;
   display: flex;
