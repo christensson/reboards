@@ -33,8 +33,14 @@ const boxOf = (element: HTMLElement) => {
   return {left, top, width, height};
 };
 
+/**
+ * Scrolls a card into view and gives it keyboard focus. Focus moves along with the selection,
+ * so the focus ring does not stay on the card the user left and look like a second selection.
+ */
 const scrollToCard = (registry: CardRegistry, issueId: string): void => {
-  registry.get(issueId)?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'});
+  const element = registry.get(issueId);
+  element?.focus({preventScroll: true});
+  element?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'});
 };
 
 /** The card an arrow goes to: the nearest one that way, or the top left one when nothing is selected. */
