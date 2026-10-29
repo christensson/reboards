@@ -1491,3 +1491,14 @@ body {
   list-style: none;
   color: var(--ring-secondary-color);
 }
+
+/* "Assign…" labels only show while a card or box is dragged to change fields. visibility keeps their space, so nothing moves. */
+.board-cell__assign-label,
+.board-row__picker-label {
+  visibility: hidden;
+}
+
+.board-screen_moving .board-cell__assign-label,
+.board-screen_moving .board-row__picker-label {
+  visibility: visible;
+}

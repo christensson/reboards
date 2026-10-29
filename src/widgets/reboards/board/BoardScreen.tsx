@@ -229,6 +229,15 @@ const describeDragHint = (active: ActiveDrag, layout: BoardLayout, board: BoardC
   return '';
 };
 
+/**
+ * Root classes of the board. During a plain drag (no Ctrl or Ctrl+Shift), which changes fields,
+ * the "Assign…" targets show their labels.
+ */
+const screenClass = (twoLevel: boolean, active: ActiveDrag, plainDrag: boolean): string => {
+  const moving = Boolean(active.issue || active.group) && plainDrag;
+  return ['board-screen', twoLevel ? 'board-screen_two-level' : '', moving ? 'board-screen_moving' : ''].filter(Boolean).join(' ');
+};
+
 const screenStyle = (colWidth: number): React.CSSProperties =>
   ({'--col-w': `${colWidth}px`, '--col-c': `${COLLAPSED_COLUMN_WIDTH}px`, '--outer-w': `${OUTER_WIDTH}px`} as React.CSSProperties);
 
@@ -749,7 +758,10 @@ export const BoardScreen: React.FC<Props> = ({
   const onToggleOuter = useCallback((outerKey: string) => updatePrefs(prev => toggleCollapsedOuterRow(prev, board.id, outerKey)), [updatePrefs, board.id]);
 
   return (
-    <div className={`board-screen${twoLevel ? ' board-screen_two-level' : ''}`} style={screenStyle(colWidth)}>
+    <div
+      className={screenClass(twoLevel, activeDrag, link.mode === 'none')}
+      style={screenStyle(colWidth)}
+    >
       <Toolbar
         boards={boards}
         board={board}
