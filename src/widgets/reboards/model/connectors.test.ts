@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {computeEdges, edgeGeometry} from './connectors';
+import {computeEdges, routeEdges} from './connectors';
 import type {BoardIssue, IssueLink} from './issue';
 
 const link = (over: Partial<IssueLink>): IssueLink => ({
@@ -41,35 +41,92 @@ describe('computeEdges', () => {
   });
 });
 
-describe('edgeGeometry', () => {
-  it('leaves horizontally when the target is to the right', () => {
-    const g = edgeGeometry({x: 0, y: 0, width: 100, height: 40}, {x: 300, y: 0, width: 100, height: 40});
-    expect(g.start).toEqual({x: 100, y: 20});
-    expect(g.end).toEqual({x: 300, y: 20});
-    expect(g.mid).toEqual({x: 200, y: 20});
-    expect(g.path.startsWith('M 100 20 C')).toBe(true);
-    const tilted = edgeGeometry({x: 0, y: 0, width: 100, height: 40}, {x: 300, y: 100, width: 100, height: 40});
-    expect(tilted.path).toBe('M 100 20 C 200 40, 200 100, 300 120');
+describe('routeEdges', () => {
+  const card = (x: number, y: number) => ({x, y, width: 120, height: 60});
+  const route = (items: {id: string; fromId: string; toId: string; from: ReturnType<typeof card>; to: ReturnType<typeof card>}[]) => routeEdges(items);
+  /** The main direction a path ends in, from its last control point to its end. */
+  const endDirection = (path: string): {x: number; y: number} => {
+    const numbers = path.match(/-?\d+(\.\d+)?/gu)?.map(Number) ?? [];
+    const [c2x, c2y, ex, ey] = numbers.slice(-4);
+    const dx = ex - c2x;
+    const dy = ey - c2y;
+    return Math.abs(dx) >= Math.abs(dy) ? {x: Math.sign(dx), y: 0} : {x: 0, y: Math.sign(dy)};
+  };
+  /** The angle in degrees between the path's last segment and its main direction. */
+  const endLean = (path: string): number => {
+    const numbers = path.match(/-?\d+(\.\d+)?/gu)?.map(Number) ?? [];
+    const [c2x, c2y, ex, ey] = numbers.slice(-4);
+    const dx = Math.abs(ex - c2x);
+    const dy = Math.abs(ey - c2y);
+    return (Math.atan2(Math.min(dx, dy), Math.max(dx, dy)) * 180) / Math.PI;
+  };
+
+  it('connects cards in different columns with an S-curve between their facing sides', () => {
+    const g = route([{id: 'e', fromId: 'a', toId: 'b', from: card(0, 0), to: card(400, 300)}]).get('e');
+    expect(g?.start).toEqual({x: 120, y: 30});
+    // The line stops just outside the target, so the arrowhead stays clear of its border.
+    expect(g?.end).toEqual({x: 398, y: 330});
+    // It points into the target's left side, leaning with the curve but no more than about 30°.
+    expect(endDirection(g?.path ?? '')).toEqual({x: 1, y: 0});
+    expect(endLean(g?.path ?? '')).toBeGreaterThan(5);
+    expect(endLean(g?.path ?? '')).toBeLessThan(32);
   });
 
-  it('loops out of the side for cards stacked in one column, alternating sides per lane', () => {
-    const from = {x: 0, y: 0, width: 100, height: 40};
-    const to = {x: 0, y: 200, width: 100, height: 40};
-    const right = edgeGeometry(from, to, 0);
-    expect(right.start).toEqual({x: 100, y: 20});
-    expect(right.end).toEqual({x: 100, y: 220});
-    expect(right.mid.x).toBeGreaterThan(100);
-    const left = edgeGeometry(from, to, 1);
-    expect(left.start).toEqual({x: 0, y: 20});
-    expect(left.mid.x).toBeLessThan(0);
-    const wider = edgeGeometry(from, to, 2);
-    expect(wider.mid.x).toBeGreaterThan(right.mid.x);
+  it('arcs over two cards side by side, from their top borders one third in from the facing edges', () => {
+    const geometries = route([
+      {id: 'top', fromId: 'a', toId: 'b', from: card(0, 0), to: card(130, 0)},
+      {id: 'bottom', fromId: 'b', toId: 'a', from: card(130, 0), to: card(0, 0)}
+    ]);
+    const top = geometries.get('top');
+    expect(top?.start).toEqual({x: 80, y: 0});
+    expect(top?.end).toEqual({x: 170, y: -2});
+    expect(top?.mid.y).toBeLessThan(0);
+    expect(endDirection(top?.path ?? '')).toEqual({x: 0, y: 1});
+    // The second relation between them goes under the cards.
+    const bottom = geometries.get('bottom');
+    expect(bottom?.start.y).toBe(60);
+    expect(bottom?.mid.y).toBeGreaterThan(60);
   });
 
-  it('uses an S-curve for cards in different columns even when far apart vertically', () => {
-    const g = edgeGeometry({x: 0, y: 0, width: 100, height: 40}, {x: 300, y: 400, width: 100, height: 40});
-    expect(g.start).toEqual({x: 100, y: 20});
-    expect(g.end).toEqual({x: 300, y: 420});
-    expect(edgeGeometry({x: 0, y: 0, width: 100, height: 40}, {x: 300, y: 400, width: 100, height: 40}, 1).start.y).toBe(14);
+  it('leaves the upper of two diagonal neighbours through its bottom border, toward the other card', () => {
+    // b sits one card height below a and just to its right.
+    const down = route([{id: 'e', fromId: 'a', toId: 'b', from: card(0, 0), to: card(130, 120)}]).get('e');
+    expect(down?.start).toEqual({x: 80, y: 60});
+    expect(down?.end).toEqual({x: 128, y: 150});
+    expect(endDirection(down?.path ?? '')).toEqual({x: 1, y: 0});
+    // The same pair the other way round: the upper card is the target, entered from below.
+    const up = route([{id: 'e', fromId: 'b', toId: 'a', from: card(130, 120), to: card(0, 0)}]).get('e');
+    expect(up?.start).toEqual({x: 130, y: 150});
+    expect(up?.end).toEqual({x: 80, y: 62});
+    expect(endDirection(up?.path ?? '')).toEqual({x: 0, y: -1});
+    // Further than two card heights apart: an S-curve between the sides again.
+    expect(route([{id: 'e', fromId: 'a', toId: 'b', from: card(0, 0), to: card(130, 200)}]).get('e')?.start).toEqual({x: 120, y: 30});
+  });
+
+  it('gives every relation of a card its own port, ordered by where the other cards are', () => {
+    const geometries = route([
+      {id: 'low', fromId: 'a', toId: 'c', from: card(0, 100), to: card(400, 300)},
+      {id: 'high', fromId: 'a', toId: 'b', from: card(0, 100), to: card(400, 0)}
+    ]);
+    const high = geometries.get('high');
+    const low = geometries.get('low');
+    expect(high?.start.x).toBe(120);
+    expect(low?.start.x).toBe(120);
+    expect(high?.start.y).toBeLessThan(low?.start.y ?? 0);
+  });
+
+  it('loops cards stacked in one column out of distinct ports, alternating sides', () => {
+    const geometries = route([
+      {id: 'e1', fromId: 'a', toId: 'b', from: card(0, 0), to: card(0, 200)},
+      {id: 'e2', fromId: 'a', toId: 'c', from: card(0, 0), to: card(0, 400)},
+      {id: 'e3', fromId: 'a', toId: 'd', from: card(0, 0), to: card(0, 600)}
+    ]);
+    const starts = ['e1', 'e2', 'e3'].map(id => geometries.get(id)?.start);
+    expect(starts[0]?.x).toBe(120);
+    expect(starts[1]?.x).toBe(0);
+    expect(starts[2]?.x).toBe(120);
+    // e1 and e3 share the right side of card a, each at its own height.
+    expect(starts[0]?.y).not.toBe(starts[2]?.y);
+    expect(geometries.get('e3')?.mid.x).toBeGreaterThan(geometries.get('e1')?.mid.x ?? 0);
   });
 });

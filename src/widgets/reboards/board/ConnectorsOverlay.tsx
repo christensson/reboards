@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useLayoutEffect, useState} from 'react';
 import type {ConnectorsMode} from '@/common/storage/prefs';
-import {type Edge, type Rect, edgeGeometry, isStacked} from '../model/connectors';
+import {type Edge, type Rect, type RouteItem, routeEdges} from '../model/connectors';
 import type {CardRegistry} from './BoardContext';
 
 type Props = {
@@ -47,25 +47,16 @@ export const ConnectorsOverlay: React.FC<Props> = ({edges, selectedIds, mode, co
     }
     const base = content.getBoundingClientRect();
     const visible = mode === 'none' ? [] : edges.filter(edge => mode === 'all' || selectedIds.has(edge.from) || selectedIds.has(edge.to));
-    const next: DrawnEdge[] = [];
-    // Lanes separate edges that would otherwise coincide: all loops in one column share a
-    // lane counter, S-curves only when they connect the same two cards.
-    const lanes = new Map<string, number>();
-    visible.forEach(edge => {
+    // Every edge is routed together with the others so each end gets a port of its own.
+    const items: RouteItem[] = visible.flatMap(edge => {
       const from = registry.get(edge.from);
       const to = registry.get(edge.to);
-      if (!from || !to) {
-        return;
-      }
-      const fromRect = rectOf(from, base);
-      const toRect = rectOf(to, base);
-      const laneKey = isStacked(fromRect, toRect)
-        ? `stack:${Math.round(Math.min(fromRect.x, toRect.x))}`
-        : `pair:${[edge.from, edge.to].sort().join('>')}`;
-      const lane = lanes.get(laneKey) ?? 0;
-      lanes.set(laneKey, lane + 1);
-      const geometry = edgeGeometry(fromRect, toRect, lane);
-      next.push({...edge, path: geometry.path, mid: geometry.mid, selected: selectedIds.has(edge.from) || selectedIds.has(edge.to)});
+      return from && to ? [{id: edge.id, fromId: edge.from, toId: edge.to, from: rectOf(from, base), to: rectOf(to, base)}] : [];
+    });
+    const routed = routeEdges(items);
+    const next: DrawnEdge[] = visible.flatMap(edge => {
+      const geometry = routed.get(edge.id);
+      return geometry ? [{...edge, path: geometry.path, mid: geometry.mid, selected: selectedIds.has(edge.from) || selectedIds.has(edge.to)}] : [];
     });
     next.sort((a, b) => Number(a.selected) - Number(b.selected));
     setDrawn(next);
