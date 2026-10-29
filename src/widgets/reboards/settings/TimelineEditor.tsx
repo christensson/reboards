@@ -2,7 +2,7 @@ import React from 'react';
 import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/select/select';
 import Toggle from '@jetbrains/ring-ui-built/components/toggle/toggle';
 import {FieldSelect} from '@/common/components/FieldSelect';
-import {TIME_FIELD_KINDS, type TimelineConfig, isDateKind} from '@/common/model/board-config';
+import {type FieldKind, TIME_FIELD_KINDS, type TimelineConfig, isDateKind} from '@/common/model/board-config';
 import type {FieldUniverse} from '../model/fieldUniverse';
 import {TIMING_FLAGS, hasRange, timeMeaning, timingFlagsFor} from '../model/timeline';
 
@@ -17,13 +17,42 @@ type Props = {
 
 const ROLE_ITEMS: SelectItem[] = [
   {key: 'start', label: 'Start date'},
-  {key: 'end', label: 'End or due date'}
+  {key: 'end', label: 'End / due date'}
 ];
 
+/**
+ * What the date means, in short. Alone it also decides the timing checks; with a period the
+ * placement setting does, so the text only says which way the period runs.
+ */
+const roleText = (timeline: TimelineConfig): string => {
+  const date = timeline.field?.name ?? 'The date';
+  const start = timeline.dateRole === 'start';
+  if (timeline.periodField) {
+    return start
+      ? `${date} is when work starts; ${timeline.periodField.name} runs forward from it.`
+      : `${date} is when work is due; ${timeline.periodField.name} runs back from it.`;
+  }
+  return start ? `${date} is when work starts; flags late starts.` : `${date} is when work is due; flags overdue work.`;
+};
+
 const POSITION_ITEMS: SelectItem[] = [
-  {key: 'start', label: 'Start'},
-  {key: 'end', label: 'End'}
+  {key: 'start', label: 'Start date'},
+  {key: 'end', label: 'End / due date'}
 ];
+
+const POSITION_EFFECT = 'Start flags late starts; End / due date flags overdue work.';
+
+/** What the two ends of an issue's time are, in the words of the fields used. */
+const rangeText = (timeline: TimelineConfig, kind: FieldKind | 'other' | undefined): string => {
+  if (kind === 'version') {
+    return 'Versions span start to release date.';
+  }
+  const date = timeline.field?.name ?? 'the date';
+  const period = timeline.periodField?.name ?? 'the period';
+  return timeline.dateRole === 'start'
+    ? `Issues span ${date} to ${date} plus ${period}.`
+    : `Issues span ${date} minus ${period} to ${date}.`;
+};
 
 const SORT_ITEMS: SelectItem[] = [
   {key: 'asc', label: 'Oldest first'},
@@ -85,15 +114,22 @@ export const TimelineEditor: React.FC<Props> = ({universe, timeline, disabled, e
         </div>
       )}
       {(isDate || kind === 'build') && (
-        <Choice label="The date is" items={ROLE_ITEMS} value={timeline.dateRole} disabled={disabled} onChange={key => patch({dateRole: key as TimelineConfig['dateRole']})}/>
+        <Choice
+          label="The date is"
+          items={ROLE_ITEMS}
+          value={timeline.dateRole}
+          disabled={disabled}
+          help={roleText(timeline)}
+          onChange={key => patch({dateRole: key as TimelineConfig['dateRole']})}
+        />
       )}
       {range && (
         <Choice
-          label="Place cards at"
+          label="Place issues on timeline at their"
           items={POSITION_ITEMS}
           value={timeline.position}
           disabled={disabled}
-          help={kind === 'version' ? 'Versions run from their start date to their release date; with several versions, from the earliest to the latest.' : undefined}
+          help={`${rangeText(timeline, kind)} ${POSITION_EFFECT}`}
           onChange={key => patch({position: key as TimelineConfig['position']})}
         />
       )}
