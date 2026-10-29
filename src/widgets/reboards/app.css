@@ -836,6 +836,28 @@ body {
   pointer-events: none;
 }
 
+/* What Ctrl and Ctrl+Shift do instead: quieter than the hint itself. */
+.drag-hint__modifiers {
+  margin-top: calc(var(--ring-unit) / 2);
+  padding-top: calc(var(--ring-unit) / 2);
+  border-top: 1px solid var(--ring-line-color);
+  color: var(--ring-secondary-color);
+  font-size: 11px;
+}
+
+.drag-hint__key {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 3px;
+  border: 1px solid var(--ring-borders-color);
+  border-radius: 3px;
+  background-color: var(--ring-sidebar-background-color, var(--ring-content-background-color));
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+}
+
 .group-box__index {
   flex-shrink: 0;
 }

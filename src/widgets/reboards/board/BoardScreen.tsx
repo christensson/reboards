@@ -20,7 +20,7 @@ import type {BoardIssue} from '../model/issue';
 import {type BoardLayout, type CardPlacement, type LayoutGroup, type Placement, cardLocation, computeLayout, keepCardPosition, revealColumnIds, walkGroups} from '../model/layout';
 import {type FieldChange, type MoveTarget, type ValueChoice, applyChanges, keysAfter, planMove, planRowChanges} from '../model/mutations';
 import {groupDragHint, issueDragHint, linkDragHint} from '../model/dragHint';
-import {isLinkDropData} from '../model/linkTargets';
+import {type LinkMode, isLinkDropData} from '../model/linkTargets';
 import {computeMatchIds} from '../model/search';
 import {type TimingFlag, type TimingNote, hasTimeOfDay, isExactTime, issueTime, timeMeaning, timingFlagOfFilter, timePreset, timingFlagsFor, timingNotes, todayPosition} from '../model/timeline';
 import {useDateFormat, useDateTimeFormat} from '../data/useDateFormat';
@@ -159,24 +159,49 @@ const choiceOptions = (board: BoardConfig, field: FieldRef | null): DynamicOptio
   return field.name === board.row.field?.name ? board.row.dynamic : board.innerRow?.dynamic;
 };
 
-const DragHint: React.FC<{text: string}> = ({text}) => <div className="drag-hint">{text}</div>;
+/** The Ctrl key's name here: the drag modes also take Cmd, which Mac users press instead. */
+const CTRL = typeof navigator !== 'undefined' && /Mac/u.test(navigator.platform) ? '⌘' : 'Ctrl';
+
+const Key: React.FC<{name: string}> = ({name}) => <kbd className="drag-hint__key">{name}</kbd>;
+
+/** What the modifier keys do instead, for the mode the drag is in now. */
+const ModifierHelp: React.FC<{mode: LinkMode}> = ({mode}) => {
+  if (mode === 'parent') {
+    return <>Release <Key name={CTRL}/> — move · add <Key name="Shift"/> — add relation</>;
+  }
+  if (mode === 'relation') {
+    return <>Release <Key name="Shift"/> — change parent · release both — move</>;
+  }
+  return <><Key name={CTRL}/> — change parent · <Key name={CTRL}/>+<Key name="Shift"/> — add relation</>;
+};
+
+/** The hint under a dragged card or box; card drags also say what the modifier keys do. */
+const DragHint: React.FC<{text: string; mode: LinkMode | null}> = ({text, mode}) => (
+  <div className="drag-hint">
+    {text}
+    {mode && <div className="drag-hint__modifiers"><ModifierHelp mode={mode}/></div>}
+  </div>
+);
 
 type DragPreviewProps = {
   active: ActiveDrag;
   hint: string;
+  /** The drag mode the modifier keys give now. */
+  mode: LinkMode;
   cardSize: UserPrefs['cardSize'];
   board: BoardConfig;
 };
 
 /** Content of the drag overlay: the dragged card (if any) plus the hint. */
-const DragPreview: React.FC<DragPreviewProps> = ({active, hint, cardSize, board}) => {
+const DragPreview: React.FC<DragPreviewProps> = ({active, hint, mode, cardSize, board}) => {
   if (!active.issue && !active.group) {
     return null;
   }
   return (
     <div className="drag-overlay">
       {active.issue && <IssueCardView issue={active.issue} size={cardSize} cardFields={board.cardFields} cardColorField={board.cardColorField?.name} dragging/>}
-      <DragHint text={hint}/>
+      {/* Boxes can only change swimlanes: no modifier keys to explain. */}
+      <DragHint text={hint} mode={active.issue ? mode : null}/>
     </div>
   );
 };
@@ -1100,7 +1125,7 @@ export const BoardScreen: React.FC<Props> = ({
             </div>
           </div>
           <DragOverlay dropAnimation={null}>
-            <DragPreview active={activeDrag} hint={dragHint} cardSize={view.cardSize} board={board}/>
+            <DragPreview active={activeDrag} hint={dragHint} mode={link.mode} cardSize={view.cardSize} board={board}/>
           </DragOverlay>
         </DndContext>
       </BoardContext.Provider>
