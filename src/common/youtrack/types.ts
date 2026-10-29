@@ -39,6 +39,27 @@ export type YtBundleValue = {
   color?: YtColor | null;
 };
 
+export type YtSprint = {
+  id: string;
+  name: string;
+  /** Epoch milliseconds; null when not set. */
+  start?: number | null;
+  finish?: number | null;
+  archived?: boolean;
+};
+
+/** An agile board, as far as ReBoards uses one as an issue source. */
+export type YtAgile = {
+  id: string;
+  name: string;
+  owner?: {login: string} | null;
+  projects?: YtProject[];
+  sprintsSettings?: {disableSprints?: boolean} | null;
+  /** Who besides the owner may see the board: project members (`projectBased`), groups, users. */
+  readSharingSettings?: {projectBased?: boolean; permittedGroups?: {id: string}[]; permittedUsers?: {id: string}[]} | null;
+  sprints?: YtSprint[];
+};
+
 export type YtUser = {
   id: string;
   login: string;

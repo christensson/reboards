@@ -82,6 +82,16 @@ export type SprintConfig = {
   field: FieldRef | null;
 };
 
+// An agile board whose issues and sprints the board shows. `name` is the name at the last save,
+// for display; the live name is looked up by `id`.
+/**
+ * @zod-to-schema
+ */
+export type AgileSourceRef = {
+  id: string;
+  name: string;
+};
+
 // Time mode: rows ordered by a time field instead of swimlanes. The field is a date or
 // "date and time" field (optionally made a range by a period field), a version (start to
 // release date) or a build (assembly date). `dateRole` tells whether a date is a start or an
@@ -119,6 +129,8 @@ export type BoardConfig = {
   projects: ProjectRef[];
   query: string;
   sprints: SprintConfig;
+  /** Issues (and sprints) from an existing agile board; `query` then narrows them further. */
+  agileSource: AgileSourceRef | null;
   /** null: no columns, the board is one column wide and shows no column header. */
   columnField: FieldRef | null;
   /** Explicit columns of a stable column field (enum, state); empty for a dynamic one. */
@@ -186,6 +198,7 @@ export const createEmptyBoard = (owner: string): BoardConfig => ({
   projects: [],
   query: '',
   sprints: {enabled: false, field: null},
+  agileSource: null,
   columnField: {name: 'State', kind: 'state'},
   columns: [],
   columnOptions: defaultDynamicOptions(),
@@ -305,6 +318,9 @@ export const normalizeBoardConfig = (raw: unknown, fallbackOwner = ''): BoardCon
     projects: normalizeProjects(input.projects),
     query: str(input.query),
     sprints: normalizeSprints(input.sprints),
+    agileSource: isRecord(input.agileSource) && typeof input.agileSource.id === 'string' && input.agileSource.id
+      ? {id: input.agileSource.id, name: str(input.agileSource.name)}
+      : null,
     columnField: 'columnField' in input ? fieldRef(input.columnField) : base.columnField,
     columns: normalizeColumns(input.columns),
     columnOptions: normalizeDynamic(input.columnOptions),
@@ -362,6 +378,8 @@ const allTexts = (config: BoardConfig): string[] => [
   ...config.cardFields,
   ...config.linkTypes,
   ...config.relatedBoards,
+  config.agileSource?.name ?? '',
+  config.agileSource?.id ?? '',
   ...[
     config.columnField,
     config.row.field,

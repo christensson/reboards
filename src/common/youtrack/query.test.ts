@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {composeQuery, quoteToken} from './query';
+import {composeAgileQuery, composeQuery, quoteToken} from './query';
 
 describe('quoteToken', () => {
   it('braces tokens with spaces or special characters', () => {
@@ -32,5 +32,15 @@ describe('composeQuery', () => {
 
   it('omits the sprint clause without a sprint field', () => {
     expect(composeQuery({projects: ['SP'], query: '', sprintField: null, sprint: null})).toBe('project: SP');
+  });
+});
+
+describe('composeAgileQuery', () => {
+  it('shows a sprint of an agile board, its backlog, or a board without sprints, narrowed by the extra filter', () => {
+    const base = {boardField: 'Board sandbox Board', sprintsEnabled: true, query: '', projects: ['SAN']};
+    expect(composeAgileQuery({...base, sprint: 'First sprint'})).toBe('{Board sandbox Board}: {First sprint}');
+    // The backlog: the board's projects' issues that are on no sprint of the board.
+    expect(composeAgileQuery({...base, sprint: null, query: '#Unresolved'})).toBe('project: SAN and has: -{Board sandbox Board} and (#Unresolved)');
+    expect(composeAgileQuery({...base, boardField: 'Board sandbox Overview', sprintsEnabled: false, sprint: 'x'})).toBe('has: {Board sandbox Overview}');
   });
 });

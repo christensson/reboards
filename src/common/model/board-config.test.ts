@@ -60,6 +60,12 @@ describe('validateBoardConfig', () => {
     expect(validateBoardConfig(valid())).toEqual([]);
   });
 
+  it('keeps a link to an agile board and drops a malformed one', () => {
+    expect(normalizeBoardConfig({agileSource: {id: '177-2', name: 'sandbox Board'}}).agileSource).toEqual({id: '177-2', name: 'sandbox Board'});
+    expect(normalizeBoardConfig({agileSource: {name: 'no id'}}).agileSource).toBeNull();
+    expect(normalizeBoardConfig({}).agileSource).toBeNull();
+  });
+
   it('accepts a board without a column field, and keeps a stored null', () => {
     expect(validateBoardConfig({...valid(), columnField: null, columns: []})).toEqual([]);
     expect(normalizeBoardConfig({columnField: null}).columnField).toBeNull();

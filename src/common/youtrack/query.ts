@@ -28,3 +28,28 @@ export const composeQuery = ({projects, query, sprintField, sprint}: ComposeQuer
   }
   return parts.join(' and ');
 };
+
+export type ComposeAgileQueryInput = {
+  /** Search name of the agile board, `Board <name>`. */
+  boardField: string;
+  /** The board has sprints: show one sprint (or, with none, the board's backlog). */
+  sprintsEnabled: boolean;
+  sprint: string | null;
+  /** Extra filter of the ReBoards board. */
+  query: string;
+  /** The board's projects: the backlog (issues not on the board) is limited to them. */
+  projects: string[];
+};
+
+/**
+ * The issues of an agile board, narrowed by the extra filter:
+ * `{Board X}: {sprint}`, `project: … and has: -{Board X}` (its backlog) without a sprint, or
+ * `has: {Board X}` for a board without sprints.
+ */
+export const composeAgileQuery = ({boardField, sprintsEnabled, sprint, query, projects}: ComposeAgileQueryInput): string => {
+  const board = sprintsEnabled
+    ? composeQuery({projects: sprint ? [] : projects, query: '', sprintField: boardField, sprint})
+    : `has: ${quoteToken(boardField)}`;
+  const trimmed = query.trim();
+  return trimmed ? `${board} and (${trimmed})` : board;
+};

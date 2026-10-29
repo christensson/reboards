@@ -12,11 +12,13 @@ import {QueryEditor} from '@/common/components/QueryEditor';
 import {type BoardConfig, DYNAMIC_KINDS, type FieldKind, type FieldRef, canBeDynamic, isDynamicField, isDynamicKind, validateBoardConfig} from '@/common/model/board-config';
 import {type MergeChoice, type MergeGroup, mergeBoards, resolveMerge} from '@/common/model/board-merge';
 import {currentUserLogin} from '@/common/youtrack/host';
+import {isPersonalAgile} from '@/common/model/agileSource';
 import {composeQuery} from '@/common/youtrack/query';
 import {errorMessage} from '@/common/youtrack/rest';
-import type {YtProject} from '@/common/youtrack/types';
+import type {YtAgile, YtProject} from '@/common/youtrack/types';
 import {api, youtrack} from '../data/api';
 import {useBoardReference} from '../data/useBoardReference';
+import {effectiveQuery} from '../data/useBoardIssues';
 import type {SaveResult} from '../data/useBoards';
 import {
   CARD_COLOR_FIELD_KINDS,
@@ -32,6 +34,7 @@ import {ListEditor} from './ListEditor';
 import {MergeDialog, type PendingMerge} from './MergeDialog';
 import {OwnerField} from './OwnerField';
 import {RelatedBoardsField} from './RelatedBoardsField';
+import {AgileSourceField} from './AgileSourceField';
 import {RowLayoutSection} from './RowLayoutSection';
 
 type Props = {
@@ -91,6 +94,8 @@ type ShareFieldProps = {
   showToggle: boolean;
   /** The user administers every board project (or is a system admin). */
   canShare: boolean;
+  /** Why the board cannot be shared, such as a link to a personal agile board. */
+  blockedReason?: string;
   readOnly: boolean;
   onChange: (shared: boolean) => void;
 };
@@ -99,20 +104,25 @@ type ShareFieldProps = {
 const canShareProjects = (projects: BoardConfig['projects'], isAdmin: boolean, adminProjects: Set<string>): boolean =>
   isAdmin || (projects.length > 0 && projects.every(p => adminProjects.has(p.shortName)));
 
-const ShareField: React.FC<ShareFieldProps> = ({shared, showToggle, canShare, readOnly, onChange}) => {
+const shareHelp = (shared: boolean, canShare: boolean, blockedReason: string | undefined): string => {
+  if (blockedReason && !shared) {
+    return blockedReason;
+  }
+  return canShare || shared
+    ? 'Shared boards are visible to everyone who can read all of their projects. Personal boards are visible only to you.'
+    : 'To share this board you need admin rights in all of its projects.';
+};
+
+const ShareField: React.FC<ShareFieldProps> = ({shared, showToggle, canShare, blockedReason, readOnly, onChange}) => {
   if (!showToggle) {
     return shared ? <span className="settings-field__help">Shared with everyone who can read all of its projects.</span> : null;
   }
   return (
     <div className="settings-field">
-      <Toggle checked={shared} disabled={readOnly || (!shared && !canShare)} onChange={event => onChange(event.target.checked)}>
+      <Toggle checked={shared} disabled={readOnly || (!shared && (!canShare || Boolean(blockedReason)))} onChange={event => onChange(event.target.checked)}>
         Shared with all users
       </Toggle>
-      <span className="settings-field__help">
-        {canShare || shared
-          ? 'Shared boards are visible to everyone who can read all of their projects. Personal boards are visible only to you.'
-          : 'To share this board you need admin rights in all of its projects.'}
-      </span>
+      <span className="settings-field__help">{shareHelp(shared, canShare, blockedReason)}</span>
     </div>
   );
 };
@@ -206,6 +216,95 @@ const ColumnsSection: React.FC<ColumnsSectionProps> = ({draft, universe, readOnl
   );
 };
 
+/** The agile boards the user can see, and the one the draft is linked to. */
+const useAgileLink = (draft: BoardConfig) => {
+  const [agiles, setAgiles] = useState<YtAgile[] | null>(null);
+  useEffect(() => {
+    youtrack
+      .getAgiles()
+      .then(setAgiles)
+      .catch(() => setAgiles([]));
+  }, []);
+  const linkedAgile = draft.agileSource ? agiles?.find(agile => agile.id === draft.agileSource?.id) : undefined;
+  return {agiles, linkedAgile, personalLink: Boolean(linkedAgile && isPersonalAgile(linkedAgile))};
+};
+
+/** The query preview: a linked agile board's issues, or the projects, query and sprint field. */
+const previewQuery = (draft: BoardConfig, linkedAgile: YtAgile | undefined): string => {
+  if (draft.agileSource) {
+    const agile = linkedAgile ? {name: linkedAgile.name, sprintsEnabled: !linkedAgile.sprintsSettings?.disableSprints} : undefined;
+    return effectiveQuery(draft, '<sprint>', agile);
+  }
+  return composeQuery({
+    projects: draft.projects.map(p => p.shortName),
+    query: draft.query,
+    sprintField: draft.sprints.enabled ? draft.sprints.field?.name : null,
+    sprint: draft.sprints.enabled && draft.sprints.field ? '<sprint>' : null
+  });
+};
+
+type IssuesSectionProps = {
+  draft: BoardConfig;
+  universe: FieldUniverse;
+  readOnly: boolean;
+  patch: (changes: Partial<BoardConfig>) => void;
+  agiles: YtAgile[] | null;
+  linkedAgile: YtAgile | undefined;
+};
+
+/** The board's own sprints: a field whose values are the sprints. */
+const SprintSettings: React.FC<Omit<IssuesSectionProps, 'agiles' | 'linkedAgile'>> = ({draft, universe, readOnly, patch}) => (
+  <>
+    <div className="settings-field">
+      <Toggle checked={draft.sprints.enabled} disabled={readOnly} onChange={event => patch({sprints: {...draft.sprints, enabled: event.target.checked}})}>
+        Use sprints
+      </Toggle>
+    </div>
+    {draft.sprints.enabled && (
+      <div className="settings-field">
+        <span className="settings-field__label">Sprint field</span>
+        <FieldSelect
+          universe={universe}
+          kinds={SPRINT_FIELD_KINDS}
+          value={draft.sprints.field}
+          disabled={readOnly}
+          onChange={field => patch({sprints: {...draft.sprints, field}})}
+        />
+        <span className="settings-field__help">The sprint selector lists the values of this field.</span>
+      </div>
+    )}
+  </>
+);
+
+/** Which issues the board shows: an agile board's, or its projects and query, plus the sprints. */
+const IssuesSection: React.FC<IssuesSectionProps> = ({draft, universe, readOnly, patch, agiles, linkedAgile}) => {
+  const linked = draft.agileSource;
+  // Linking an agile board takes its projects, which decide the fields and who can see the board.
+  const onAgileSource = (agile: YtAgile | null) => patch(agile
+    ? {agileSource: {id: agile.id, name: agile.name}, projects: (agile.projects ?? []).map(p => ({id: p.id, shortName: p.shortName}))}
+    : {agileSource: null});
+  return (
+    <>
+      <AgileSourceField agiles={agiles} value={linked} shared={draft.shared} disabled={readOnly} onChange={onAgileSource}/>
+      <div className="settings-field">
+        <span className="settings-field__label">{linked ? 'Extra filter (optional)' : 'Query'}</span>
+        <QueryEditor value={draft.query} disabled={readOnly} searchAssist={youtrack.searchAssist} onChange={query => patch({query})} placeholder="e.g. #Unresolved"/>
+      </div>
+      {linked ? (
+        <span className="settings-field__help">
+          {linkedAgile?.sprintsSettings?.disableSprints ? `${linked.name} has no sprints.` : `Sprints come from ${linked.name}.`}
+        </span>
+      ) : (
+        <SprintSettings draft={draft} universe={universe} readOnly={readOnly} patch={patch}/>
+      )}
+      <div className="settings-field">
+        <span className="settings-field__label">Effective query</span>
+        <code className="settings-code">{previewQuery(draft, linkedAgile) || '(all issues)'}</code>
+      </div>
+    </>
+  );
+};
+
 /** Asks whether to store the draft as a new board after the edited one was deleted meanwhile. */
 const confirmRecreate = async (): Promise<boolean> => {
   try {
@@ -260,6 +359,8 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
       .finally(() => setProjectsLoading(false));
   }, []);
 
+  const {agiles, linkedAgile, personalLink} = useAgileLink(draft);
+
   // A new board gets defaults as soon as its projects' fields are known.
   useEffect(() => {
     if (!defaultsApplied && draft.projects.length > 0 && !reference.loading && reference.universe.fields.length > 0) {
@@ -298,7 +399,11 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
   );
 
   const save = useCallback(async () => {
-    const problems = validateBoardConfig(draft);
+    const problems = [
+      ...validateBoardConfig(draft),
+      // Checked against the freshly loaded agile boards: one may have become personal since it was linked.
+      ...(draft.shared && personalLink ? [{field: 'agileSource', message: `A shared board cannot use the personal agile board ${linkedAgile?.name ?? ''}`}] : [])
+    ];
     if (problems.length > 0) {
       setErrors(problems.map(p => p.message));
       return;
@@ -323,7 +428,7 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
     } finally {
       setSaving(false);
     }
-  }, [draft, onSave, creating, base, onSaved]);
+  }, [draft, onSave, creating, base, onSaved, personalLink, linkedAgile]);
 
   const applyMerge = useCallback((choices: Partial<Record<MergeGroup, MergeChoice>>) => {
     if (!merge) {
@@ -371,16 +476,6 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
   }, [duplicating, board, onCancel]);
 
 
-  const sampleQuery = useMemo(
-    () =>
-      composeQuery({
-        projects: draft.projects.map(p => p.shortName),
-        query: draft.query,
-        sprintField: draft.sprints.enabled ? draft.sprints.field?.name : null,
-        sprint: draft.sprints.enabled && draft.sprints.field ? '<sprint>' : null
-      }),
-    [draft.projects, draft.query, draft.sprints]
-  );
 
   const cardFieldOptions = useMemo(
     () => reference.universe.fields.map(f => ({key: f.name, label: f.name, description: f.kind === 'other' ? f.typeId : f.kind})),
@@ -405,7 +500,7 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
         </div>
         <div className="settings-field">
           <span className="settings-field__label">Projects</span>
-          <ProjectsSelect projects={projects} loading={projectsLoading} disabled={readOnly} value={draft.projects} onChange={list => patch({projects: list})}/>
+          <ProjectsSelect projects={projects} loading={projectsLoading} disabled={readOnly || Boolean(draft.agileSource)} value={draft.projects} onChange={list => patch({projects: list})}/>
           <span className="settings-field__help">Only issues from these projects are shown; fields are resolved against them.</span>
         </div>
         {!creating && <OwnerField owner={board.owner} canTransfer={canDelete} onTransfer={login => onTransfer(board.id, login)}/>}
@@ -413,6 +508,7 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
           shared={draft.shared}
           showToggle={showShareToggle}
           canShare={canShareDraft}
+          blockedReason={personalLink ? `It shows the issues of ${linkedAgile?.name ?? 'a'} personal agile board, which others cannot see.` : undefined}
           readOnly={readOnly}
           onChange={shared => patch({shared})}
         />
@@ -420,32 +516,7 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
       </Section>
 
       <Section title="Issues">
-        <div className="settings-field">
-          <span className="settings-field__label">Query</span>
-          <QueryEditor value={draft.query} disabled={readOnly} searchAssist={youtrack.searchAssist} onChange={query => patch({query})} placeholder="e.g. #Unresolved"/>
-        </div>
-        <div className="settings-field">
-          <Toggle checked={draft.sprints.enabled} disabled={readOnly} onChange={event => patch({sprints: {...draft.sprints, enabled: event.target.checked}})}>
-            Use sprints
-          </Toggle>
-        </div>
-        {draft.sprints.enabled && (
-          <div className="settings-field">
-            <span className="settings-field__label">Sprint field</span>
-            <FieldSelect
-              universe={reference.universe}
-              kinds={SPRINT_FIELD_KINDS}
-              value={draft.sprints.field}
-              disabled={readOnly}
-              onChange={field => patch({sprints: {...draft.sprints, field}})}
-            />
-            <span className="settings-field__help">The sprint selector lists the values of this field.</span>
-          </div>
-        )}
-        <div className="settings-field">
-          <span className="settings-field__label">Effective query</span>
-          <code className="settings-code">{sampleQuery || '(all issues)'}</code>
-        </div>
+        <IssuesSection draft={draft} universe={reference.universe} readOnly={readOnly} patch={patch} agiles={agiles} linkedAgile={linkedAgile}/>
       </Section>
 
       <Section title="Columns">

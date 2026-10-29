@@ -72,7 +72,9 @@ export const ReBoardsApp: React.FC = () => {
       return;
     }
     const stored = prefs.lastSprintByBoard[routeBoardId];
-    const sprintsEnabled = boards.find(b => b.id === routeBoardId)?.sprints.enabled;
+    const routeBoard = boards.find(b => b.id === routeBoardId);
+    // A board linked to an agile board takes that board's sprints.
+    const sprintsEnabled = routeBoard && (routeBoard.agileSource ? true : routeBoard.sprints.enabled);
     if (routeSprint === null && stored && sprintsEnabled) {
       // Show the remembered sprint in the URL.
       navigate({kind: 'board', boardId: routeBoardId, sprint: stored}, true);

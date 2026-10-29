@@ -10,7 +10,7 @@ export const MERGE_GROUPS = {
   name: {label: 'Name', keys: ['name']},
   shared: {label: 'Sharing', keys: ['shared']},
   projects: {label: 'Projects', keys: ['projects']},
-  query: {label: 'Query', keys: ['query']},
+  query: {label: 'Query', keys: ['query', 'agileSource']},
   sprints: {label: 'Sprints', keys: ['sprints']},
   columns: {label: 'Columns', keys: ['columnField', 'columns', 'columnOptions', 'ignoredValues']},
   swimlanes: {label: 'Swimlanes', keys: ['row', 'innerRow']},

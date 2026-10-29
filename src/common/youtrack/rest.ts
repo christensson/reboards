@@ -1,6 +1,6 @@
 import type {HostAPI} from '../../../@types/globals';
 import type {IssueFieldUpdate} from './fields';
-import type {YtGeneralProfile, YtIssue, YtIssueLinkType, YtProject, YtProjectCustomField, YtSearchAssist, YtUser} from './types';
+import type {YtAgile, YtGeneralProfile, YtIssue, YtIssueLinkType, YtProject, YtProjectCustomField, YtSearchAssist, YtUser} from './types';
 
 export const ISSUE_FIELDS = [
   'id',
@@ -15,6 +15,10 @@ export const ISSUE_FIELDS = [
 
 export const PROJECT_FIELD_FIELDS =
   'id,$type,canBeEmpty,field(id,name,fieldType(id,valueType)),bundle(id,$type,values(id,name,ordinal,isResolved,startDate,releaseDate,released,archived,assembleDate,color(background,foreground)),aggregatedUsers(id,login,fullName,avatarUrl))';
+
+const AGILE_FIELDS =
+  'id,name,owner(login),projects(id,shortName,name),sprintsSettings(disableSprints),readSharingSettings(projectBased,permittedGroups(id),permittedUsers(id))';
+const AGILES_TOP = 500;
 
 export const LINK_TYPE_FIELDS = 'id,name,sourceToTarget,targetToSource,directed,aggregation';
 
@@ -57,6 +61,13 @@ export const createYouTrackClient = (host: HostAPI) => {
       });
       return me.profiles?.general ?? {};
     },
+
+    /** The agile boards the user can see. */
+    getAgiles: (): Promise<YtAgile[]> => get<YtAgile[]>('agiles', {fields: AGILE_FIELDS, $top: AGILES_TOP}),
+
+    /** One agile board with its sprints. */
+    getAgile: (agileId: string): Promise<YtAgile> =>
+      get<YtAgile>(`agiles/${encodeURIComponent(agileId)}`, {fields: `${AGILE_FIELDS},sprints(id,name,start,finish,archived)`}),
 
     getLinkTypes: (): Promise<YtIssueLinkType[]> => get<YtIssueLinkType[]>('issueLinkTypes', {fields: LINK_TYPE_FIELDS}),
 

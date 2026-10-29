@@ -13,7 +13,8 @@ import {useBoardIssues} from '../data/useBoardIssues';
 import {useBoardReference} from '../data/useBoardReference';
 import {toggleCollapsedColumn, toggleCollapsedGroup, toggleCollapsedOuterRow, toggleCollapsedRow} from '../hooks/usePrefs';
 import {computeEdges} from '../model/connectors';
-import type {FieldUniverse} from '../model/fieldUniverse';
+import type {FieldUniverse, UniverseValue} from '../model/fieldUniverse';
+import {type AgileSourceState, useAgileSource} from '../data/useAgileSource';
 import {sprintForDate} from '../model/sprints';
 import type {BoardIssue} from '../model/issue';
 import {type BoardLayout, type CardPlacement, type LayoutGroup, type Placement, cardLocation, computeLayout, revealColumnIds, walkGroups} from '../model/layout';
@@ -328,24 +329,43 @@ const useCardRegistry = (): CardRegistry => {
 
 /** Selects the sprint whose date range contains today when neither the URL nor storage names one. */
 const useAutoSprint = (
-  board: BoardConfig,
+  values: UniverseValue[] | null,
   sprint: string | null,
   hasStoredSprint: boolean,
-  reference: {loading: boolean; universe: FieldUniverse},
+  loading: boolean,
   onAutoSelectSprint: (sprint: string) => void
 ) => {
-  const fieldName = board.sprints.enabled ? board.sprints.field?.name : undefined;
-  const values = fieldName ? reference.universe.byName.get(fieldName)?.values : undefined;
   useEffect(() => {
-    if (sprint !== null || hasStoredSprint || reference.loading || !values) {
+    if (sprint !== null || hasStoredSprint || loading || !values) {
       return;
     }
     const current = sprintForDate(values, Date.now());
     if (current) {
       onAutoSelectSprint(current);
     }
-  }, [sprint, hasStoredSprint, reference.loading, values, onAutoSelectSprint]);
+  }, [sprint, hasStoredSprint, loading, values, onAutoSelectSprint]);
 };
+
+const isLoadingSprints = (referenceLoading: boolean, source: AgileSourceState): boolean => referenceLoading || source.status === 'loading';
+
+/** Owner's view of a shared board whose linked agile board became personal: nobody else sees its issues. */
+const PersonalAgileWarning: React.FC<{board: BoardConfig; source: AgileSourceState}> = ({board, source}) =>
+  source.status === 'ready' && board.shared && source.agile.personal
+    ? <div className="board-error">{`${source.agile.name} is now a personal agile board; others on this shared board see no issues.`}</div>
+    : null;
+
+/**
+ * The sprints the toolbar offers: a linked agile board's own sprints, else the values of the
+ * board's sprint field; null when the board has no sprints.
+ */
+const useSprintValues = (board: BoardConfig, source: AgileSourceState, universe: FieldUniverse): UniverseValue[] | null =>
+  useMemo(() => {
+    if (board.agileSource) {
+      return source.status === 'ready' && source.agile.sprintsEnabled ? source.agile.sprints : null;
+    }
+    const fieldName = board.sprints.enabled ? board.sprints.field?.name : undefined;
+    return fieldName ? (universe.byName.get(fieldName)?.values ?? []) : null;
+  }, [board.agileSource, board.sprints, source, universe]);
 
 export const BoardScreen: React.FC<Props> = ({
   board: configuredBoard,
@@ -363,9 +383,11 @@ export const BoardScreen: React.FC<Props> = ({
   // The board as displayed: the two swimlane levels may be swapped per user.
   const board = useMemo(() => (swapped ? swapSwimlanes(configuredBoard) : configuredBoard), [configuredBoard, swapped]);
   const reference = useBoardReference(board.projects);
-  const data = useBoardIssues(board, sprint);
+  const agileSource = useAgileSource(board);
+  const data = useBoardIssues(board, sprint, agileSource);
+  const sprintValues = useSprintValues(board, agileSource, reference.universe);
   const view = boardView(prefs, board.id);
-  useAutoSprint(board, sprint, board.id in prefs.lastSprintByBoard, reference, onAutoSelectSprint);
+  useAutoSprint(sprintValues, sprint, board.id in prefs.lastSprintByBoard, isLoadingSprints(reference.loading, agileSource), onAutoSelectSprint);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [quickFilter, setQuickFilter] = useState<string | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -991,6 +1013,7 @@ export const BoardScreen: React.FC<Props> = ({
         starredBoards={prefs.starredBoards}
         onToggleStar={boardId => updatePrefs(prev => toggleStar(prev, boardId))}
         rowModes={availableRowModes(board)}
+        sprintValues={sprintValues}
         rowMode={layout.rowMode}
         onRowMode={mode => {
           // Timing highlights only exist in the time layout.
@@ -1006,6 +1029,7 @@ export const BoardScreen: React.FC<Props> = ({
         }}
       />
       {error && <div className="board-error">{error}</div>}
+      <PersonalAgileWarning board={board} source={agileSource}/>
       {needsColumns(board, reference.universe) && !error && (
         <div className="board-empty">This board has no columns yet. Open the board settings to configure columns.</div>
       )}

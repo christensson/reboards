@@ -201,6 +201,8 @@ type Props = {
   /** Opens the list of keyboard shortcuts. */
   onShowShortcuts: () => void;
   onToggleStar: (boardId: string) => void;
+  /** Sprints to choose from (a linked agile board's, or the sprint field's values); null without sprints. */
+  sprintValues: UniverseValue[] | null;
   /** Row layouts the board has set up; with both, the toolbar switches between them. */
   rowModes: ('swimlanes' | 'time')[];
   rowMode: RowMode;
@@ -338,6 +340,7 @@ export const Toolbar: React.FC<Props> = ({
   onGroupByParent,
   onShowShortcuts,
   onToggleStar,
+  sprintValues,
   rowModes,
   rowMode,
   onRowMode,
@@ -350,11 +353,10 @@ export const Toolbar: React.FC<Props> = ({
     [board.cardFields, universe]
   );
   const formatDate = useDateFormat();
-  const sprintItems = useMemo<SelectItem[]>(() => {
-    const fieldName = board.sprints.field?.name;
-    const values = fieldName ? (universe.byName.get(fieldName)?.values ?? []) : [];
-    return buildSprintItems(values, formatDate, Date.now());
-  }, [board.sprints.field, universe, formatDate]);
+  const sprintItems = useMemo<SelectItem[]>(
+    () => buildSprintItems(sprintValues ?? [], formatDate, Date.now()),
+    [sprintValues, formatDate]
+  );
 
   return (
     <div className="toolbar">
@@ -379,7 +381,7 @@ export const Toolbar: React.FC<Props> = ({
           </ButtonGroup>
         </div>
       )}
-      {board.sprints.enabled && (
+      {sprintValues && (
         <div className="toolbar__group toolbar__group_sprint">
           <Select
             type={Select.Type.INLINE}

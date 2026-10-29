@@ -25,6 +25,7 @@ issues, far more insight.
 - **/** finds issues as you type, **R** shows or hides relations, and **?** lists every shortcut.
 
 **Columns, sprints and search**
+- **Link an existing agile board**: show its issues and sprints, and its backlog as "Unscheduled", without copying its query. An extra filter narrows them further.
 - Combine or hide column values, or build columns from the values in use.
 - Sprints from any version or enum field, with dates, the current sprint and an "Unscheduled" view.
 - Highlights for cards with a missing field.
