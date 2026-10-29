@@ -361,18 +361,19 @@ body {
 /* Dot standing in for a card; filled with the card color. */
 .issue-dot {
   display: inline-block;
+  /* Never squeezed by a narrow collapsed column (or a box inside one): it stays square. */
+  flex: none;
   box-sizing: border-box;
   width: 10px;
   height: 10px;
   border: 1px solid var(--ring-borders-color);
-  border-radius: 50%;
+  border-radius: 3px;
   background-color: var(--ring-tag-background-color);
   cursor: pointer;
 }
 
+/* Same outer size as the other dots (border-box): only the border is thicker. */
 .issue-dot_parent {
-  width: 12px;
-  height: 12px;
   border-width: 3px;
 }
 

@@ -7,7 +7,7 @@ type Props = {
   parent?: boolean;
 };
 
-/** Small filled circle standing in for a card; filled with the card color of the issue. */
+/** Small rounded square standing in for a card; filled with the card color of the issue. */
 const IssueDotComponent: React.FC<Props> = ({issueId, parent}) => {
   const ctx = useBoardContext();
   const issue = ctx.issuesById.get(issueId);
