@@ -479,8 +479,12 @@ const validateSwimlanes = (config: BoardConfig): ValidationIssue[] => {
 };
 
 /** On a sprint board the sprint field selects the issues, so it cannot also be a column or swimlane field. */
+/** The board's own sprint field, when it uses one: a linked agile board brings its own sprints instead. */
+export const ownSprintField = (config: BoardConfig): FieldRef | null =>
+  config.sprints.enabled && !config.agileSource ? config.sprints.field : null;
+
 const validateSprints = (config: BoardConfig): ValidationIssue[] => {
-  if (!config.sprints.enabled) {
+  if (!config.sprints.enabled || config.agileSource) {
     return [];
   }
   const sprintField = config.sprints.field?.name;
@@ -509,7 +513,7 @@ const validateTimeline = (config: BoardConfig): ValidationIssue[] => {
   if (periodField && (periodField.kind !== 'period' || !isDateKind(field.kind))) {
     issues.push({field: 'timeline', message: 'A period field can only be combined with a date field'});
   }
-  if (config.sprints.enabled && config.sprints.field?.name === field.name) {
+  if (ownSprintField(config)?.name === field.name) {
     issues.push({field: 'timeline', message: `The sprint field ${field.name} cannot also be the time field`});
   }
   return issues;

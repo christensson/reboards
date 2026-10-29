@@ -9,7 +9,7 @@ import duplicateIcon from '@jetbrains/icons/duplicate';
 import {FieldSelect} from '@/common/components/FieldSelect';
 import {ProjectsSelect} from '@/common/components/ProjectsSelect';
 import {QueryEditor} from '@/common/components/QueryEditor';
-import {type BoardConfig, DYNAMIC_KINDS, type FieldKind, type FieldRef, canBeDynamic, isDynamicField, isDynamicKind, validateBoardConfig} from '@/common/model/board-config';
+import {type BoardConfig, DYNAMIC_KINDS, ownSprintField, type FieldKind, type FieldRef, canBeDynamic, isDynamicField, isDynamicKind, validateBoardConfig} from '@/common/model/board-config';
 import {type MergeChoice, type MergeGroup, mergeBoards, resolveMerge} from '@/common/model/board-merge';
 import {currentUserLogin} from '@/common/youtrack/host';
 import {isPersonalAgile} from '@/common/model/agileSource';
@@ -128,7 +128,10 @@ const ShareField: React.FC<ShareFieldProps> = ({shared, showToggle, canShare, bl
 };
 
 /** On a sprint board the sprint field selects the issues, so it is not offered for columns or swimlanes. */
-const sprintExclusions = (board: BoardConfig): string[] => (board.sprints.enabled && board.sprints.field ? [board.sprints.field.name] : []);
+const sprintExclusions = (board: BoardConfig): string[] => {
+  const field = ownSprintField(board);
+  return field ? [field.name] : [];
+};
 
 type ColumnValuesProps = {
   draft: BoardConfig;

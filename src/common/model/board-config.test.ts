@@ -224,3 +224,18 @@ describe('row modes', () => {
       .toEqual(['timeline']);
   });
 });
+
+describe('sprint field and a linked agile board', () => {
+  it('lets the old sprint field be a column or swimlane field once an agile board brings the sprints', () => {
+    const board: BoardConfig = {
+      ...createEmptyBoard('me'),
+      name: 'B',
+      projects: [{id: '1', shortName: 'SAN'}],
+      sprints: {enabled: true, field: {name: 'Sprints', kind: 'version'}},
+      columnField: {name: 'Sprints', kind: 'version'},
+      columns: []
+    };
+    expect(validateBoardConfig(board).map(i => i.field)).toContain('sprints');
+    expect(validateBoardConfig({...board, agileSource: {id: '177-2', name: 'sandbox Board'}})).toEqual([]);
+  });
+});
