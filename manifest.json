@@ -2,9 +2,9 @@
   "$schema": "https://json.schemastore.org/youtrack-app.json",
   "name": "reboards",
   "title": "ReBoards",
-  "description": "Agile boards with relations, hierarchy and smarter swimlanes",
+  "description": "Revamped agile boards: see and create relations, group subtasks under their parent, use one or two swimlane levels and plan in time",
   "version": "0.1.0",
-  "minYouTrackVersion": "2025.3.0",
+  "minYouTrackVersion": "2026.2.0",
   "vendor": {
     "name": "Marcus Christensson",
     "url": "https://github.com/marcuschristensson"
@@ -15,7 +15,7 @@
     {
       "key": "reboards",
       "name": "ReBoards",
-      "description": "Agile boards with subtask grouping and relation connectors",
+      "description": "Revamped agile boards: see and create relations, group subtasks under their parent, use one or two swimlane levels and plan in time",
       "indexPath": "reboards/index.html",
       "extensionPoint": "MAIN_MENU_ITEM",
       "iconPath": "reboards/widget-icon.svg",
