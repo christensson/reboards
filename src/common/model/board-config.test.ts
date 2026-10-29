@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {type BoardConfig, BOARD_LIMITS, columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, swapSwimlanes, validateBoardConfig, defaultDynamicOptions} from './board-config';
+import {type BoardConfig, BOARD_LIMITS, columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, relatedBoardsOf, swapSwimlanes, validateBoardConfig, validateBoardSize, defaultDynamicOptions} from './board-config';
 
 describe('normalizeBoardConfig', () => {
   it('fills defaults for an empty document', () => {
@@ -164,3 +164,26 @@ describe('dynamic column and swimlane fields', () => {
   });
 });
 
+
+describe('relatedBoards', () => {
+  const board = (id: string, name: string, relatedBoards: string[] = []) => ({...createEmptyBoard('me'), id, name, relatedBoards});
+
+  it('drops duplicates, the board itself and non-strings', () => {
+    expect(normalizeBoardConfig({id: 'a', relatedBoards: ['b', 'b', 'a', 7, '']}).relatedBoards).toEqual(['b']);
+    expect(normalizeBoardConfig({id: 'a'}).relatedBoards).toEqual([]);
+  });
+
+  it('limits the number of related boards', () => {
+    const many = Array.from({length: BOARD_LIMITS.listItems + 1}, (_v, i) => `b${i}`);
+    expect(validateBoardSize({...board('a', 'A'), relatedBoards: many}).map(i => i.field)).toContain('relatedBoards');
+  });
+
+  it('finds related boards both ways, by name, ignoring boards that are gone or hidden', () => {
+    const sprint = board('s', 'Sprint', ['b', 'gone']);
+    const backlog = board('b', 'Backlog');
+    const other = board('o', 'Another backlog', ['s']);
+    const unrelated = board('u', 'Unrelated');
+    expect(relatedBoardsOf(sprint, [sprint, backlog, other, unrelated]).map(r => [r.board.id, r.direction])).toEqual([['o', 'in'], ['b', 'out']]);
+    expect(relatedBoardsOf(backlog, [sprint, backlog, other]).map(r => [r.board.id, r.direction])).toEqual([['s', 'in']]);
+  });
+});

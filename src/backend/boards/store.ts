@@ -87,6 +87,17 @@ export const MAX_BOARDS_PER_OWNER = 100;
 /** Upper bound of the stored document, in characters; saves that would exceed it are rejected. */
 export const MAX_DOCUMENT_LENGTH = 4_000_000;
 
+/**
+ * Removes a board and the links other boards have to it. The others keep their version: dropping a
+ * link to a board that is gone is no edit of theirs, and must not make their editors' saves conflict.
+ */
+export const removeBoard = (doc: BoardsDocument, id: string): BoardsDocument => ({
+  ...doc,
+  boards: doc.boards
+    .filter(b => b.id !== id)
+    .map(b => (b.relatedBoards.includes(id) ? {...b, relatedBoards: b.relatedBoards.filter(other => other !== id)} : b))
+});
+
 export const ownedBy = (doc: BoardsDocument, viewer: Viewer): number => doc.boards.filter(b => isOwner(b, viewer)).length;
 
 /** Login of the anonymous user; every visitor shares it, so it must not own boards. */

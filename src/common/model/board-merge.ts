@@ -16,7 +16,8 @@ export const MERGE_GROUPS = {
   swimlanes: {label: 'Swimlanes', keys: ['row', 'innerRow']},
   cardFields: {label: 'Card fields', keys: ['cardFields']},
   cardColorField: {label: 'Card color', keys: ['cardColorField']},
-  linkTypes: {label: 'Connectors', keys: ['linkTypes']}
+  linkTypes: {label: 'Connectors', keys: ['linkTypes']},
+  related: {label: 'Related boards', keys: ['relatedBoards']}
 } as const satisfies Record<string, {label: string; keys: readonly (keyof BoardConfig)[]}>;
 
 export type MergeGroup = keyof typeof MERGE_GROUPS;
@@ -93,7 +94,9 @@ const summaries: Record<MergeGroup, (board: BoardConfig) => string> = {
   swimlanes: board => [board.row.field?.name, board.innerRow?.field?.name].filter(Boolean).join(' › ') || 'None',
   cardFields: board => list(board.cardFields),
   cardColorField: board => board.cardColorField?.name ?? 'None',
-  linkTypes: board => list(board.linkTypes)
+  linkTypes: board => list(board.linkTypes),
+  // Only ids are stored here; the count tells the two sides apart.
+  related: board => (board.relatedBoards.length === 1 ? '1 related board' : `${board.relatedBoards.length || 'No'} related boards`)
 };
 
 /** One-line description of a group's value, for showing both sides of a conflict. */

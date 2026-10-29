@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {createEmptyBoard} from '@/common/model/board-config';
-import {canDelete, canEdit, canShare, isOwner, parseBoardsDocument, versionMatches, readBoards, serializeBoardsDocument, visibleBoards, writeBoards} from './store';
+import {canDelete, canEdit, canShare, isOwner, parseBoardsDocument, removeBoard, versionMatches, readBoards, serializeBoardsDocument, visibleBoards, writeBoards} from './store';
 
 const board = (id: string, owner: string, shared: boolean, projects = ['SAN']) => ({
   ...createEmptyBoard(owner),
@@ -86,5 +86,15 @@ describe('boards store', () => {
     expect(versionMatches(stored, 2)).toBe(false);
     expect(versionMatches(stored, undefined)).toBe(false);
     expect(versionMatches(board('old', 'alice', true), 0)).toBe(true);
+  });
+});
+
+describe('removeBoard', () => {
+  it('removes the board and the links to it, keeping the other boards\' versions', () => {
+    const a = {...createEmptyBoard('me'), id: 'a', relatedBoards: ['b', 'c'], version: 4};
+    const b = {...createEmptyBoard('me'), id: 'b', version: 2};
+    const doc = removeBoard({version: 1, boards: [a, b]}, 'b');
+    expect(doc.boards.map(x => x.id)).toEqual(['a']);
+    expect(doc.boards[0]).toMatchObject({relatedBoards: ['c'], version: 4});
   });
 });

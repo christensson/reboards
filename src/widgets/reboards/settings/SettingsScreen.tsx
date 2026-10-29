@@ -31,10 +31,13 @@ import {AsDynamicToggle, DynamicOptionsEditor} from './DynamicOptionsEditor';
 import {ListEditor} from './ListEditor';
 import {MergeDialog, type PendingMerge} from './MergeDialog';
 import {OwnerField} from './OwnerField';
+import {RelatedBoardsField} from './RelatedBoardsField';
 import {SwimlanesSection} from './SwimlanesSection';
 
 type Props = {
   board: BoardConfig;
+  /** Boards the user can see, to choose related boards from. */
+  boards: BoardConfig[];
   isNew: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -188,7 +191,7 @@ const screenTitle = (isNew: boolean, duplicating: boolean, name: string): string
   return duplicating ? `New board (copy of ${name})` : `Board settings: ${name}`;
 };
 
-export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelete, isAdmin, onSave, onDelete, onTransfer, onCancel, onSaved}) => {
+export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, canDelete, isAdmin, onSave, onDelete, onTransfer, onCancel, onSaved}) => {
   const [draft, setDraft] = useState<BoardConfig>(board);
   // The stored board the draft started from; the board prop follows later saves, so it cannot serve as the merge base.
   const [base, setBase] = useState<BoardConfig>(board);
@@ -375,6 +378,7 @@ export const SettingsScreen: React.FC<Props> = ({board, isNew, canEdit, canDelet
           readOnly={readOnly}
           onChange={shared => patch({shared})}
         />
+        <RelatedBoardsField boardId={draft.id} value={draft.relatedBoards} boards={boards} disabled={readOnly} onChange={relatedBoards => patch({relatedBoards})}/>
       </Section>
 
       <Section title="Issues">

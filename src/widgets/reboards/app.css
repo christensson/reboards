@@ -1482,3 +1482,12 @@ body {
   flex: none;
   pointer-events: none;
 }
+
+/* ---------- Related boards ---------- */
+
+.related-boards__incoming {
+  margin: calc(var(--ring-unit) / 2) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ring-secondary-color);
+}

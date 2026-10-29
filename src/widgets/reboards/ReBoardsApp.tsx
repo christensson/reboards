@@ -125,6 +125,7 @@ export const ReBoardsApp: React.FC = () => {
     <SettingsScreen
       key={board.id || 'new'}
       board={board}
+      boards={boards}
       isNew={isNew}
       canEdit={isNew || boardsState.editableIds.has(board.id)}
       canDelete={!isNew && boardsState.deletableIds.has(board.id)}

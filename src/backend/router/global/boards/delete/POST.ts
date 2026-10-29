@@ -2,7 +2,7 @@ import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
 import {HTTP_FORBIDDEN, HTTP_NOT_FOUND, respondError} from '@/backend/boards/http';
 import {projectAccessFor, projectAdminFor} from '@/backend/boards/access';
 import {loadBoards, viewerOf} from '@/backend/boards/owners';
-import {ADMIN_PERMISSION, GUEST_LOGIN, canDelete, isVisibleTo, writeBoards} from '@/backend/boards/store';
+import {ADMIN_PERMISSION, GUEST_LOGIN, canDelete, isVisibleTo, removeBoard, writeBoards} from '@/backend/boards/store';
 
 /**
  * @zod-to-schema
@@ -37,8 +37,7 @@ function handle(ctx: CtxPost<BoardDeleteReq, BoardDeleteRes, never, 'global'>): 
     respondError(ctx.response, HTTP_FORBIDDEN, 'Only the board owner, a system administrator or an admin of all its projects can delete this board');
     return;
   }
-  doc.boards.splice(index, 1);
-  writeBoards(ctx.globalStorage, doc);
+  writeBoards(ctx.globalStorage, removeBoard(doc, id));
   ctx.response.json({ok: true});
 }
 

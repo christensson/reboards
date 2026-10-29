@@ -106,6 +106,7 @@ export const boardConfigSchema = z.object({
   cardFields: z.array(z.string()),
   linkTypes: z.array(z.string()),
   cardColorField: fieldRefSchema.nullable(),
+  relatedBoards: z.array(z.string()),
   createdAt: z.number(),
   updatedAt: z.number(),
   version: z.number(),

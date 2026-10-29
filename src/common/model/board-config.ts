@@ -113,6 +113,8 @@ export type BoardConfig = {
   linkTypes: string[];
   /** Field whose value colors determine the card color; null for plain cards. */
   cardColorField: FieldRef | null;
+  /** Ids of boards this board links to; the linked boards show the link back. */
+  relatedBoards: string[];
   createdAt: number;
   updatedAt: number;
   /** Raised by the server on every write; a save must name the version it started from. */
@@ -155,6 +157,7 @@ export const createEmptyBoard = (owner: string): BoardConfig => ({
   innerRow: null,
   cardFields: [...DEFAULT_CARD_FIELDS],
   linkTypes: [...DEFAULT_LINK_TYPES],
+  relatedBoards: [],
   cardColorField: {name: 'Type', kind: 'enum'},
   createdAt: 0,
   updatedAt: 0,
@@ -255,6 +258,7 @@ export const normalizeBoardConfig = (raw: unknown, fallbackOwner = ''): BoardCon
     cardFields: 'cardFields' in input ? stringArray(input.cardFields) : base.cardFields,
     linkTypes: 'linkTypes' in input ? stringArray(input.linkTypes) : base.linkTypes,
     cardColorField: 'cardColorField' in input ? fieldRef(input.cardColorField) : base.cardColorField,
+    relatedBoards: Array.from(new Set(stringArray(input.relatedBoards))).filter(id => id && id !== str(input.id)),
     createdAt: num(input.createdAt),
     updatedAt: num(input.updatedAt),
     version: num(input.version)
@@ -300,6 +304,7 @@ const allTexts = (config: BoardConfig): string[] => [
   ...(config.innerRow?.customOrder ?? []),
   ...config.cardFields,
   ...config.linkTypes,
+  ...config.relatedBoards,
   config.row.field?.name ?? '',
   config.innerRow?.field?.name ?? '',
   config.sprints.field?.name ?? '',
@@ -328,6 +333,9 @@ export const validateBoardSize = (config: BoardConfig): ValidationIssue[] => {
   }
   if (config.cardFields.length > listItems || config.linkTypes.length > listItems) {
     issues.push({field: 'size', message: `Card fields and link types are limited to ${listItems} each`});
+  }
+  if (config.relatedBoards.length > listItems) {
+    issues.push({field: 'relatedBoards', message: `A board can have at most ${listItems} related boards`});
   }
   if (issues.length === 0 && JSON.stringify(config).length > serializedLength) {
     issues.push({field: 'size', message: 'The board configuration is too large'});
@@ -423,3 +431,21 @@ export const isTwoLevel = (config: BoardConfig): boolean => Boolean(config.row.f
 
 export const columnLabel = (column: ColumnConfig): string =>
   column.name?.trim() || column.values.join(' / ');
+
+/** A board related to another: `out` when the link is stored on that other board, `in` when this one links to it. */
+export type RelatedBoard = {board: BoardConfig; direction: 'out' | 'in'};
+
+/**
+ * Boards related to `board` either way, among `boards` (those the user can see), sorted by name.
+ * Links to boards that are gone or hidden from the user are left out.
+ */
+export const relatedBoardsOf = (board: BoardConfig, boards: BoardConfig[]): RelatedBoard[] =>
+  boards
+    .filter(other => other.id !== board.id)
+    .flatMap((other): RelatedBoard[] => {
+      if (board.relatedBoards.includes(other.id)) {
+        return [{board: other, direction: 'out'}];
+      }
+      return other.relatedBoards.includes(board.id) ? [{board: other, direction: 'in'}] : [];
+    })
+    .sort((a, b) => a.board.name.localeCompare(b.board.name, undefined, {numeric: true, sensitivity: 'base'}));

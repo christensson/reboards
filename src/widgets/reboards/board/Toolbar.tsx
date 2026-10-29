@@ -11,12 +11,13 @@ import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/selec
 import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
 import addIcon from '@jetbrains/icons/add';
 import chevronDownIcon from '@jetbrains/icons/chevron-down';
+import linkIcon from '@jetbrains/icons/link';
 import searchIcon from '@jetbrains/icons/search';
 import settingsIcon from '@jetbrains/icons/settings';
 import starEmptyIcon from '@jetbrains/icons/star-empty';
 import starFilledIcon from '@jetbrains/icons/star-filled';
 import updateIcon from '@jetbrains/icons/update';
-import {type BoardConfig} from '@/common/model/board-config';
+import {type BoardConfig, type RelatedBoard, relatedBoardsOf} from '@/common/model/board-config';
 import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
 import {orderBoards} from '../model/boardOrder';
 import type {FieldUniverse} from '../model/fieldUniverse';
@@ -71,6 +72,37 @@ const RELATION_OPTIONS: {mode: ConnectorsMode; label: string}[] = [
 ];
 
 const NEW_ISSUE_KEY = 'new-issue';
+
+const boardName = (board: BoardConfig): string => board.name || 'Untitled board';
+
+/** Switches to a related board: a button for one, a small menu for several. */
+const RelatedBoardsButton: React.FC<{related: RelatedBoard[]; onSelectBoard: (boardId: string) => void}> = ({related, onSelectBoard}) => {
+  if (related.length === 0) {
+    return null;
+  }
+  if (related.length === 1) {
+    const [{board}] = related;
+    return <Button icon={linkIcon} title={`Switch to related board ${boardName(board)}`} onClick={() => onSelectBoard(board.id)}/>;
+  }
+  const items: SelectItem[] = [
+    {key: 'related-title', label: 'Switch to related board', rgItemType: List.ListProps.Type.TITLE},
+    ...related.map(r => ({key: r.board.id, label: boardName(r.board)}))
+  ];
+  return (
+    <Dropdown anchor={<Button icon={linkIcon} title="Switch to a related board"/>}>
+      <PopupMenu
+        directions={[Directions.BOTTOM_RIGHT, Directions.BOTTOM_LEFT]}
+        closeOnSelect
+        data={items}
+        onSelect={(item: SelectItem) => {
+          if (item.key !== 'related-title') {
+            onSelectBoard(String(item.key));
+          }
+        }}
+      />
+    </Dropdown>
+  );
+};
 
 type ShowMenuProps = {
   connectorsMode: ConnectorsMode;
@@ -272,6 +304,7 @@ export const Toolbar: React.FC<Props> = ({
 }) => {
   const boardItems = useMemo(() => buildBoardItems(boards, starredBoards, onToggleStar), [boards, starredBoards, onToggleStar]);
   const isStarred = starredBoards.includes(board.id);
+  const related = useMemo(() => relatedBoardsOf(board, boards), [board, boards]);
   const filterFields = useMemo(
     () => board.cardFields.filter(name => universe.byName.get(name)?.canBeEmpty !== false),
     [board.cardFields, universe]
@@ -300,6 +333,7 @@ export const Toolbar: React.FC<Props> = ({
           title={isStarred ? 'Unstar board' : 'Star board'}
           onClick={() => onToggleStar(board.id)}
         />
+        <RelatedBoardsButton related={related} onSelectBoard={onSelectBoard}/>
         <Button icon={settingsIcon} title="Board settings" onClick={onOpenSettings}/>
         <Button icon={addIcon} title="New board" onClick={onNewBoard}/>
       </div>
