@@ -19,10 +19,15 @@ issues, far more insight.
 - Drag a card to change its column or row field. **Ctrl-drag** a card onto another to make it the parent; **Ctrl+Shift-drag** to add any other link.
 - A **+** in every cell creates an issue with that cell's values already set.
 
+**Work from the keyboard**
+- **Arrow keys** move the selection to the next card; **Enter** opens it, **P** jumps to its parent and **Shift+P** back.
+- **Ctrl+arrows** move the selected card to the next column or swimlane, with a preview of the change; **Enter** applies it.
+- **/** finds issues as you type, **R** shows or hides relations, and **?** lists every shortcut.
+
 **Columns, sprints and search**
 - Combine or hide column values, or build columns from the values in use.
 - Sprints from any version or enum field, with dates, the current sprint and an "Unscheduled" view.
-- Quick find, plus highlights for cards with a missing field.
+- Highlights for cards with a missing field.
 
 **Built for teams**
 - Personal or shared boards, with owner and admin rights and transferable ownership.
