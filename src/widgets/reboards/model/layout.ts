@@ -1043,3 +1043,37 @@ export const walkGroups = (groups: LayoutGroup[], visit: (group: LayoutGroup) =>
     walkGroups(group.children, visit);
   });
 };
+
+/** The list of cards an issue's card is rendered in: its box's members in that column, or the row's loose cards. */
+const cardListOf = (layout: BoardLayout, issueId: string): string[] | undefined => {
+  const placement = layout.placement[issueId];
+  if (!placement) {
+    return undefined;
+  }
+  if (placement.groupKey) {
+    let found: LayoutGroup | undefined;
+    walkGroups(layout.rows.flatMap(r => r.groups), group => {
+      if (group.key === placement.groupKey) {
+        found = group;
+      }
+    });
+    return (found as LayoutGroup | undefined)?.membersByColumn[placement.columnId];
+  }
+  return layout.rowsByKey[placement.rowKey]?.looseByColumn[placement.columnId];
+};
+
+/**
+ * Keeps a moved card about as high up as it was: in `preview` (a layout with the card already
+ * moved) it takes the same position in its new list of cards as it had in `before`, instead of
+ * where the issue order would put it. Changes `preview` in place.
+ */
+export const keepCardPosition = (preview: BoardLayout, before: BoardLayout, issueId: string): BoardLayout => {
+  const index = cardListOf(before, issueId)?.indexOf(issueId) ?? -1;
+  const list = cardListOf(preview, issueId);
+  const at = list?.indexOf(issueId) ?? -1;
+  if (list && index >= 0 && at >= 0) {
+    list.splice(at, 1);
+    list.splice(Math.min(index, list.length), 0, issueId);
+  }
+  return preview;
+};

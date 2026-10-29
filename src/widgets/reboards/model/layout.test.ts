@@ -3,7 +3,7 @@ import {type BoardConfig, UNCATEGORIZED_ROW_KEY, createEmptyBoard, defaultDynami
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
-import {ALL_COLUMN_ID, ASSIGN_COLUMN_ID, type BoardLayout, type LayoutGroup, NO_VALUE_COLUMN_ID, PICKER_ROW_SUFFIX, cardLocation, revealColumnIds, cardId, compositeRowKey, computeLayout, dynamicColumnId, groupKey, packGroups} from './layout';
+import {ALL_COLUMN_ID, ASSIGN_COLUMN_ID, type BoardLayout, type LayoutGroup, NO_VALUE_COLUMN_ID, PICKER_ROW_SUFFIX, cardLocation, keepCardPosition, revealColumnIds, cardId, compositeRowKey, computeLayout, dynamicColumnId, groupKey, packGroups} from './layout';
 
 const rowOf = (layout: BoardLayout, key: string) => {
   const row = layout.rows.find(r => r.key === key);
@@ -436,5 +436,23 @@ describe('computeLayout without a column field', () => {
     const layout = computeLayout({issues: [issue({id: '1', state: 'Open', priority: 'Major'}), issue({id: '2', state: 'Done', priority: 'Major'})], config: board, universe, parents: {}});
     expect(layout.columns.map(c => c.id)).toEqual([ALL_COLUMN_ID]);
     expect(rowOf(layout, 'Major').looseByColumn[ALL_COLUMN_ID]).toEqual(['1', '2']);
+  });
+});
+
+describe('keepCardPosition', () => {
+  it('keeps a moved subtask in its box, about as high up as it was', () => {
+    const issues = [
+      issue({id: '10', state: 'Open', priority: 'Major', children: ['11', '12', '14']}),
+      issue({id: '11', state: 'Open', priority: 'Major', parents: ['10']}),
+      issue({id: '12', state: 'Open', priority: 'Major', parents: ['10']}),
+      issue({id: '14', state: 'Done', priority: 'Major', parents: ['10']})
+    ];
+    const before = computeLayout({issues, config: config(), universe, parents: {}});
+    const moved = issues.map(i => (i.id === '12' ? issue({id: '12', state: 'Done', priority: 'Major', parents: ['10']}) : i));
+    const preview = keepCardPosition(computeLayout({issues: moved, config: config(), universe, parents: {}}), before, '12');
+    const box = rowOf(preview, 'Major').groups[0];
+    // Second in its old column, so second in the new one too, inside the same box.
+    expect(box.membersByColumn.done).toEqual(['14', '12']);
+    expect(box.membersByColumn.open).toEqual(['11']);
   });
 });

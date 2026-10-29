@@ -17,7 +17,7 @@ import type {FieldUniverse, UniverseValue} from '../model/fieldUniverse';
 import {type AgileSourceState, useAgileSource} from '../data/useAgileSource';
 import {sprintForDate} from '../model/sprints';
 import type {BoardIssue} from '../model/issue';
-import {type BoardLayout, type CardPlacement, type LayoutGroup, type Placement, cardLocation, computeLayout, revealColumnIds, walkGroups} from '../model/layout';
+import {type BoardLayout, type CardPlacement, type LayoutGroup, type Placement, cardLocation, computeLayout, keepCardPosition, revealColumnIds, walkGroups} from '../model/layout';
 import {type FieldChange, type MoveTarget, type ValueChoice, applyChanges, keysAfter, planMove, planRowChanges} from '../model/mutations';
 import {groupDragHint, issueDragHint, linkDragHint} from '../model/dragHint';
 import {isLinkDropData} from '../model/linkTargets';
@@ -402,9 +402,8 @@ export const BoardScreen: React.FC<Props> = ({
   const issuesById = useMemo(() => new Map(data.issues.map(i => [i.id, i])), [data.issues]);
   // Boards with both swimlanes and time: the layout this user picked, else the board's default.
   const rowMode = effectiveRowMode(board, prefs.rowModeByBoard[board.id]);
-  const layout = useMemo(
-    () => computeLayout({
-      issues: data.issues,
+  const layoutInput = useMemo(
+    () => ({
       config: board,
       universe: reference.universe,
       parents: data.parents,
@@ -412,8 +411,9 @@ export const BoardScreen: React.FC<Props> = ({
       rowMode,
       groupByParent: view.groupByParent
     }),
-    [data.issues, board, reference.universe, data.parents, prefs.visibleColumns, rowMode, view.groupByParent]
+    [board, reference.universe, data.parents, prefs.visibleColumns, rowMode, view.groupByParent]
   );
+  const layout = useMemo(() => computeLayout({...layoutInput, issues: data.issues}), [layoutInput, data.issues]);
   const collapsedRows = useMemo(() => new Set(prefs.collapsedRows[board.id] ?? []), [prefs.collapsedRows, board.id]);
   const collapsedGroups = useMemo(() => new Set(prefs.collapsedGroups[board.id] ?? []), [prefs.collapsedGroups, board.id]);
   const collapsedColumns = useMemo(() => new Set(prefs.collapsedColumns[board.id] ?? []), [prefs.collapsedColumns, board.id]);
@@ -814,15 +814,32 @@ export const BoardScreen: React.FC<Props> = ({
       }
     }
   });
-  // What a Ctrl+arrow move would change, shown over the card's shadow.
+  // A Ctrl+arrow move is previewed by laying the board out as if it were applied: the card lands in
+  // its new cell, inside its subtask box (which grows when needed), about as high up as before.
+  // Moves that still need a choice (a column of several values) show a shadow at the top instead.
+  const keyMovePreview = useMemo(() => {
+    const issue = keyMove ? issuesById.get(keyMove.issueId) : undefined;
+    if (!keyMove || !issue) {
+      return null;
+    }
+    const plan = planMove(board, keyMove.from, keyMove.to, layout.rowsByKey, layout.columns);
+    if (plan.pickColumn || (plan.choices?.length ?? 0) > 0 || plan.changes.length === 0) {
+      return null;
+    }
+    const moved = applyChanges(issue, plan.changes, reference.universe);
+    const preview = computeLayout({...layoutInput, issues: data.issues.map(i => (i.id === issue.id ? moved : i))});
+    return keepCardPosition(preview, layout, issue.id);
+  }, [keyMove, issuesById, board, layout, layoutInput, data.issues, reference.universe]);
+  const shownLayout = keyMovePreview ?? layout;
+  // What a Ctrl+arrow move would change, shown on the moved card or its shadow.
   const keyMoveView = useMemo(() => {
     const issue = keyMove ? issuesById.get(keyMove.issueId) : undefined;
     if (!keyMove || !issue) {
       return null;
     }
     const hint = issueDragHint(board, reference.universe, issue, keyMove.from, keyMove.to, layout.rowsByKey, layout.columns);
-    return {issueId: issue.id, rowKey: keyMove.to.rowKey, columnId: keyMove.to.columnId, hint};
-  }, [keyMove, issuesById, board, reference.universe, layout.rowsByKey, layout.columns]);
+    return {issueId: issue.id, rowKey: keyMove.to.rowKey, columnId: keyMove.to.columnId, hint, inPlace: Boolean(keyMovePreview)};
+  }, [keyMove, issuesById, board, reference.universe, layout.rowsByKey, layout.columns, keyMovePreview]);
   useEffect(() => {
     if (keyMoveView) {
       requestAnimationFrame(() => document.querySelector('[data-key-move]')?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'}));
@@ -973,8 +990,8 @@ export const BoardScreen: React.FC<Props> = ({
     collapsedColumns.size + assignColumns
   );
   const layoutVersion = useMemo(
-    () => [layout, view.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading],
-    [layout, view.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading]
+    () => [shownLayout, view.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading],
+    [shownLayout, view.cardSize, collapsedRows, collapsedOuterRows, collapsedGroups, collapsedColumns, colWidth, data.loading]
   );
   const onToggleRow = useCallback((rowKey: string) => updatePrefs(prev => toggleCollapsedRow(prev, board.id, rowKey)), [updatePrefs, board.id]);
   const onToggleGroup = useCallback((groupKey: string) => updatePrefs(prev => toggleCollapsedGroup(prev, board.id, groupKey)), [updatePrefs, board.id]);
@@ -1064,7 +1081,7 @@ export const BoardScreen: React.FC<Props> = ({
                 />
               )}
               <BoardRows
-                layout={layout}
+                layout={shownLayout}
                 collapsedRows={collapsedRows}
                 collapsedOuterRows={collapsedOuterRows}
                 collapsedGroups={collapsedGroups}

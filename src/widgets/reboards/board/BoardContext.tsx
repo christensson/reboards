@@ -57,7 +57,14 @@ export type BoardContextValue = {
   /** Time layout: the timing problems of an issue, for its card icons; empty otherwise. */
   timingNotes: (issueId: string) => TimingNote[];
   /** A card being moved with Ctrl+arrows: the cell its shadow is in and what the move would change. */
-  keyMove: {issueId: string; rowKey: string; columnId: string; hint: string} | null;
+  keyMove: {
+    issueId: string;
+    rowKey: string;
+    columnId: string;
+    hint: string;
+    /** The board shows the move as if applied: the card itself is the preview, else a shadow at the cell's top. */
+    inPlace: boolean;
+  } | null;
 };
 
 export const BoardContext = createContext<BoardContextValue | null>(null);

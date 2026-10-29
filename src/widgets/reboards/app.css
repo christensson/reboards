@@ -1735,3 +1735,9 @@ body {
   font-family: inherit;
   text-align: center;
 }
+
+/* A card moved with Ctrl+arrows, previewed in its new place: a cell slot like any card. */
+.key-move_in-place {
+  grid-column: auto;
+  max-width: none;
+}

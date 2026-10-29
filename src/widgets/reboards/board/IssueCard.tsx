@@ -142,6 +142,32 @@ const TimingIcons: React.FC<{notes: TimingNote[]}> = ({notes}) => (
   </>
 );
 
+/** On a card moved with Ctrl+arrows: what the move changes on its first line, the keys on its last. */
+export const KeyMoveLabels: React.FC<{hint: string}> = ({hint}) => {
+  // "Set SAN-5 State to Done." reads as "State to Done" on the card itself.
+  const change = hint.replace(/^Set \S+ /u, '').replace(/\.$/u, '');
+  return (
+    <>
+      <span className="key-move__label key-move__label_change" title={hint}>{change}</span>
+      <span className="key-move__label key-move__label_keys">Enter applies · Esc cancels</span>
+    </>
+  );
+};
+
+/** A Ctrl+arrow move previewed in place: the moved card shows where it would go, as a shadow with labels. */
+const KeyMoveFrame: React.FC<{issueId: string; children: React.ReactElement}> = ({issueId, children}) => {
+  const {keyMove} = useBoardContext();
+  if (!keyMove?.inPlace || keyMove.issueId !== issueId) {
+    return children;
+  }
+  return (
+    <div className="key-move key-move_in-place" data-key-move>
+      {children}
+      <KeyMoveLabels hint={keyMove.hint}/>
+    </div>
+  );
+};
+
 /** Shown on a card whose issue has other cards (multi-value fields): lists them, a click goes to the next. */
 const CopiesBadge: React.FC<{cardId: string; copies: string[]}> = ({cardId, copies}) => {
   const ctx = useBoardContext();
@@ -227,7 +253,7 @@ const IssueCardComponent: React.FC<Props> = ({issueId, cardId = issueId, isParen
   if (!issue) {
     return null;
   }
-  return (
+  const card = (
     <IssueCardView
       ref={setRef}
       issue={issue}
@@ -255,6 +281,7 @@ const IssueCardComponent: React.FC<Props> = ({issueId, cardId = issueId, isParen
       {...listeners}
     />
   );
+  return primary ? <KeyMoveFrame issueId={issueId}>{card}</KeyMoveFrame> : card;
 };
 
 export const IssueCard = memo(IssueCardComponent);

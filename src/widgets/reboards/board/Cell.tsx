@@ -4,7 +4,7 @@ import Icon from '@jetbrains/ring-ui-built/components/icon/icon';
 import addIcon from '@jetbrains/icons/add-12px';
 import {ASSIGN_COLUMN_ID} from '../model/layout';
 import {type BoardContextValue, cellDroppableId, isHighlightedCell, useBoardContext} from './BoardContext';
-import {IssueCard, IssueCardView} from './IssueCard';
+import {IssueCard, IssueCardView, KeyMoveLabels} from './IssueCard';
 import {IssueDot} from './IssueDot';
 
 type Props = {
@@ -26,20 +26,17 @@ const KeyMoveShadow: React.FC = () => {
   if (!ctx.keyMove || !issue) {
     return null;
   }
-  // "Set SAN-5 State to Done." reads as "State to Done" on the card itself.
-  const change = ctx.keyMove.hint.replace(/^Set \S+ /u, '').replace(/\.$/u, '');
   return (
     <div className="key-move" data-key-move>
       <IssueCardView issue={issue} size={ctx.cardSize} cardFields={ctx.cardFields} cardColorField={ctx.cardColorField} dragging/>
-      <span className="key-move__label key-move__label_change" title={ctx.keyMove.hint}>{change}</span>
-      <span className="key-move__label key-move__label_keys">Enter applies · Esc cancels</span>
+      <KeyMoveLabels hint={ctx.keyMove.hint}/>
     </div>
   );
 };
 
-/** The background cell the Ctrl+arrow shadow is in; cells inside boxes never hold it. */
+/** The background cell a Ctrl+arrow shadow is in, for moves not previewed in place; cells inside boxes never hold it. */
 const isKeyMoveCell = (keyMove: BoardContextValue['keyMove'], rowKey: string, columnId: string, groupKey: string | undefined): boolean =>
-  !groupKey && keyMove?.rowKey === rowKey && keyMove.columnId === columnId;
+  !groupKey && !keyMove?.inPlace && keyMove?.rowKey === rowKey && keyMove.columnId === columnId;
 
 /** Discreet "+" that expands to "New issue…" on hover and opens the new-issue page with presets. */
 export const AddIssueLink: React.FC<{href: string; label?: string; title?: string}> = ({href, label = 'New issue…', title = label}) => (
