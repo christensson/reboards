@@ -83,9 +83,15 @@ body {
   font-size: var(--ring-font-size-smaller);
 }
 
+.toolbar__group_sprint {
+  margin-left: var(--ring-unit);
+}
+
 .toolbar__group_search {
   flex: 1 1 240px;
   min-width: 200px;
+  /* A little more room after the board buttons ("New board") before "Highlight issues". */
+  margin-left: var(--ring-unit);
 }
 
 .toolbar__find-hint {
@@ -1065,8 +1071,7 @@ body {
 }
 
 .board-star:hover,
-.board-star_active,
-.star-button_active {
+.board-star_active {
   color: var(--ring-warning-color);
 }
 

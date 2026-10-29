@@ -302,7 +302,6 @@ export const Toolbar: React.FC<Props> = ({
   onToggleStar
 }) => {
   const boardItems = useMemo(() => buildBoardItems(boards, starredBoards, onToggleStar), [boards, starredBoards, onToggleStar]);
-  const isStarred = starredBoards.includes(board.id);
   const related = useMemo(() => relatedBoardsOf(board, boards), [board, boards]);
   const filterFields = useMemo(
     () => board.cardFields.filter(name => universe.byName.get(name)?.canBeEmpty !== false),
@@ -326,18 +325,12 @@ export const Toolbar: React.FC<Props> = ({
           selected={boardItems.find(item => item.key === board.id) ?? null}
           onChange={(item: SelectItem | null) => item && onSelectBoard(String(item.key))}
         />
-        <Button
-          icon={isStarred ? starFilledIcon : starEmptyIcon}
-          className={isStarred ? 'star-button star-button_active' : 'star-button'}
-          title={isStarred ? 'Unstar board' : 'Star board'}
-          onClick={() => onToggleStar(board.id)}
-        />
         <RelatedBoardsButton related={related} onSelectBoard={onSelectBoard}/>
         <Button icon={settingsIcon} title="Board settings" onClick={onOpenSettings}/>
         <Button icon={addIcon} title="New board" onClick={onNewBoard}/>
       </div>
       {board.sprints.enabled && (
-        <div className="toolbar__group">
+        <div className="toolbar__group toolbar__group_sprint">
           <Select
             type={Select.Type.INLINE}
             label="Sprint"
