@@ -24,7 +24,31 @@ const topMatch = (matchIds: Set<string>, registry: CardRegistry): HTMLElement | 
 };
 
 /**
- * Interactive find: "/" opens a box (term !== null); while typing, the topmost match is scrolled into view.
+ * Matches in reading order on the board: top to bottom, then left to right. Matches whose card is
+ * not rendered (collapsed away) come last, so cycling still reaches them.
+ */
+export const orderMatches = (matchIds: Set<string>, registry: CardRegistry): string[] => {
+  const positions = new Map<string, {top: number; left: number}>();
+  matchIds.forEach(id => {
+    const element = registry.get(id);
+    if (element) {
+      const {top, left} = element.getBoundingClientRect();
+      positions.set(id, {top, left});
+    }
+  });
+  return Array.from(matchIds).sort((a, b) => {
+    const pa = positions.get(a);
+    const pb = positions.get(b);
+    if (!pa || !pb) {
+      return (pa ? 0 : 1) - (pb ? 0 : 1);
+    }
+    return pa.top - pb.top || pa.left - pb.left;
+  });
+};
+
+/**
+ * Interactive find: "/" opens a box (term !== null); while typing, the topmost match is scrolled
+ * into view, unless the user is cycling through the matches (`cursor`).
  * `blocked` suppresses "/" while dialogs of the board are open.
  */
 export const useQuickFind = (
@@ -32,7 +56,8 @@ export const useQuickFind = (
   setTerm: (term: string | null) => void,
   matchIds: Set<string>,
   registry: CardRegistry,
-  blocked: boolean
+  blocked: boolean,
+  cursor: string | null
 ): void => {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -50,9 +75,9 @@ export const useQuickFind = (
   }, [term, setTerm, blocked]);
 
   useEffect(() => {
-    if (term === null || !term.trim()) {
+    if (term === null || !term.trim() || cursor) {
       return;
     }
     topMatch(matchIds, registry)?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'});
-  }, [term, matchIds, registry]);
+  }, [term, matchIds, registry, cursor]);
 };

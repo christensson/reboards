@@ -37,7 +37,7 @@ import {RelationPickerDialog} from './RelationPickerDialog';
 import {useLinkDrag} from './useLinkDrag';
 import {useProjectPermissions} from '../data/useProjectPermissions';
 import {QuickFind} from './QuickFind';
-import {useQuickFind} from './useQuickFind';
+import {orderMatches, useQuickFind} from './useQuickFind';
 
 type Props = {
   board: BoardConfig;
@@ -66,6 +66,10 @@ type PendingMove = {
 const DRAG_ACTIVATION_DISTANCE = 6;
 
 const NO_NOTES: TimingNote[] = [];
+
+/** 1-based position of the match cycled to, in board order; null before cycling. */
+const findPositionOf = (cursor: string | null, matchIds: Set<string>, registry: CardRegistry): number | null =>
+  cursor && matchIds.has(cursor) ? orderMatches(matchIds, registry).indexOf(cursor) + 1 : null;
 
 /** A configured column field (not a dynamic one) without columns: the board has nothing to show yet. */
 const needsColumns = (board: BoardConfig, universe: FieldUniverse): boolean =>
@@ -389,6 +393,8 @@ export const BoardScreen: React.FC<Props> = ({
   const highlightIds = useMemo(() => computeMatchIds(data.issues, '', quickFilter, layout.flagsByIssue), [data.issues, quickFilter, layout.flagsByIssue]);
   // While the "/" find box is open, its text drives matching and highlighting instead of the toolbar's.
   const [quickFindTerm, setQuickFindTerm] = useState<string | null>(null);
+  // The match Enter cycled to; null until the user cycles.
+  const [findCursor, setFindCursor] = useState<string | null>(null);
   const activeTerm = quickFindTerm ?? '';
   const matchIds = useMemo(
     () => (quickFindTerm === null ? highlightIds : computeMatchIds(data.issues, quickFindTerm, quickFilter, layout.flagsByIssue)),
@@ -535,6 +541,45 @@ export const BoardScreen: React.FC<Props> = ({
     return true;
   }, [matchIds, expandFor, registry]);
 
+  /** Find: Enter goes to the next match (or back), selecting it and scrolling it into view. */
+  const stepFind = useCallback((direction: 1 | -1) => {
+    const ordered = orderMatches(matchIds, registry);
+    if (ordered.length === 0) {
+      return;
+    }
+    const at = findCursor ? ordered.indexOf(findCursor) : -1;
+    const next = at === -1 ? ordered[direction > 0 ? 0 : ordered.length - 1] : ordered[(at + direction + ordered.length) % ordered.length];
+    setFindCursor(next);
+    setSelectedIds(new Set([next]));
+    expandFor(next);
+    const SCROLL_DELAY = 50;
+    window.setTimeout(() => registry.get(next)?.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'smooth'}), SCROLL_DELAY);
+  }, [matchIds, registry, findCursor, expandFor]);
+
+  /** Find: Ctrl+Enter selects the match cycled to, or every match before cycling. */
+  const commitFind = useCallback((): boolean => {
+    if (findCursor && matchIds.has(findCursor)) {
+      setSelectedIds(new Set([findCursor]));
+      return true;
+    }
+    return selectMatches();
+  }, [findCursor, matchIds, selectMatches]);
+
+  // Typing on: the match cycled to stays current only while it still matches.
+  useEffect(() => {
+    if (findCursor && !matchIds.has(findCursor)) {
+      setFindCursor(null);
+    }
+  }, [findCursor, matchIds]);
+
+  // "2 of 5": where the match cycled to is among the matches, in board order.
+  const findPosition = findPositionOf(findCursor, matchIds, registry);
+
+  const closeFind = useCallback(() => {
+    setQuickFindTerm(null);
+    setFindCursor(null);
+  }, []);
+
   // Opened from the toolbar menu: wait a tick so the closing menu's focus change can't blur the new box.
   const onOpenQuickFind = useCallback(() => {
     window.setTimeout(() => setQuickFindTerm(''), 0);
@@ -579,7 +624,7 @@ export const BoardScreen: React.FC<Props> = ({
   );
 
   const link = useLinkDrag({issuesById, linkTypes: reference.linkTypes, data, canLink: canLinkIssue});
-  useQuickFind(quickFindTerm, setQuickFindTerm, matchIds, registry, pendingMove !== null || link.dialog.from !== null);
+  useQuickFind(quickFindTerm, setQuickFindTerm, matchIds, registry, pendingMove !== null || link.dialog.from !== null, findCursor);
   const {start: startLinkDrag, onOver: onLinkOver, end: endLinkDrag, drop: dropLink} = link;
 
   const onDragStart = useCallback(
@@ -932,9 +977,11 @@ export const BoardScreen: React.FC<Props> = ({
         <QuickFind
           term={quickFindTerm}
           matchCount={matchIds.size}
+          position={findPosition}
           onChange={setQuickFindTerm}
-          onSubmit={selectMatches}
-          onClose={() => setQuickFindTerm(null)}
+          onStep={stepFind}
+          onSubmit={commitFind}
+          onClose={closeFind}
         />
       )}
     </div>

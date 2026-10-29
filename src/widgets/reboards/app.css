@@ -674,9 +674,11 @@ body {
 }
 
 .issue-card__match {
-  background-color: var(--ring-warning-color, #f5d76e);
+  /* A soft tint of the warning color: readable dark text in light mode, light text in dark mode. */
+  background-color: color-mix(in srgb, var(--ring-warning-color, #f5d76e) 35%, transparent);
   color: inherit;
   border-radius: 2px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ring-warning-color, #f5d76e) 60%, transparent);
 }
 
 .issue-card__tag {
