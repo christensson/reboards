@@ -347,6 +347,7 @@ body {
 
 .board-band_loose > .board-cell:first-child,
 .board-band_group > .band-drop:first-child,
+.board-band_flow > .band-drop:first-child,
 .board-band_picker > .band-drop:first-child {
   border-left: none;
 }
