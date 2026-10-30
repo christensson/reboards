@@ -3,7 +3,8 @@
   "name": "reboards",
   "title": "ReBoards",
   "description": "Revamped agile boards: work with relations, group subtasks under their parent, use multiple swimlane levels and plan in time.",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "changeNotes": "Version 1.1.0:<br/>- Add board page support.",
   "minYouTrackVersion": "2026.2.0",
   "aiToolPrefix": "reboards",
   "vendor": {
