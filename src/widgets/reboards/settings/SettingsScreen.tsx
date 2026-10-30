@@ -13,7 +13,7 @@ import {type BoardConfig, DYNAMIC_KINDS, ownSprintField, type FieldKind, type Fi
 import {type MergeChoice, type MergeGroup, mergeBoards, resolveMerge} from '@/common/model/board-merge';
 import {currentUserLogin} from '@/common/youtrack/host';
 import {isPersonalAgile} from '@/common/model/agileSource';
-import {composeQuery, effectiveQuery} from '@/common/youtrack/query';
+import {composeQuery, effectiveQuery, pageQuery} from '@/common/youtrack/query';
 import {errorMessage} from '@/common/youtrack/rest';
 import type {YtAgile, YtProject} from '@/common/youtrack/types';
 import {api, youtrack} from '../data/api';
@@ -35,6 +35,7 @@ import {OwnerField} from './OwnerField';
 import {RelatedBoardsField} from './RelatedBoardsField';
 import {AgileSourceField} from './AgileSourceField';
 import {RowLayoutSection} from './RowLayoutSection';
+import {PagesSection} from './PagesSection';
 
 type Props = {
   board: BoardConfig;
@@ -231,7 +232,7 @@ const useAgileLink = (draft: BoardConfig) => {
   return {agiles, linkedAgile, personalLink: Boolean(linkedAgile && isPersonalAgile(linkedAgile))};
 };
 
-/** The query preview: a linked agile board's issues, or the projects, query and sprint field. */
+/** The query preview: a linked agile board's issues, or the projects, query (the first query page's) and sprint field. */
 const previewQuery = (draft: BoardConfig, linkedAgile: YtAgile | undefined): string => {
   if (draft.agileSource) {
     const agile = linkedAgile ? {name: linkedAgile.name, sprintsEnabled: !linkedAgile.sprintsSettings?.disableSprints} : undefined;
@@ -239,7 +240,7 @@ const previewQuery = (draft: BoardConfig, linkedAgile: YtAgile | undefined): str
   }
   return composeQuery({
     projects: draft.projects.map(p => p.shortName),
-    query: draft.query,
+    query: draft.pages.mode === 'queries' ? pageQuery(draft, draft.pages.pages[0]?.id) : draft.query,
     sprintField: draft.sprints.enabled ? draft.sprints.field?.name : null,
     sprint: draft.sprints.enabled && draft.sprints.field ? '<sprint>' : null
   });
@@ -281,17 +282,24 @@ const SprintSettings: React.FC<Omit<IssuesSectionProps, 'agiles' | 'linkedAgile'
 /** Which issues the board shows: an agile board's, or its projects and query, plus the sprints. */
 const IssuesSection: React.FC<IssuesSectionProps> = ({draft, universe, readOnly, patch, agiles, linkedAgile}) => {
   const linked = draft.agileSource;
+  const queryPages = draft.pages.mode === 'queries';
   // Linking an agile board takes its projects, which decide the fields and who can see the board.
   const onAgileSource = (agile: YtAgile | null) => patch(agile
     ? {agileSource: {id: agile.id, name: agile.name}, projects: (agile.projects ?? []).map(p => ({id: p.id, shortName: p.shortName}))}
     : {agileSource: null});
   return (
     <>
-      <AgileSourceField agiles={agiles} value={linked} shared={draft.shared} disabled={readOnly} onChange={onAgileSource}/>
-      <div className="settings-field">
-        <span className="settings-field__label">{linked ? 'Extra filter (optional)' : 'Query'}</span>
-        <QueryEditor value={draft.query} disabled={readOnly} searchAssist={youtrack.searchAssist} onChange={query => patch({query})} placeholder="e.g. #Unresolved"/>
-      </div>
+      {queryPages ? (
+        <span className="settings-field__help">The board uses query pages: each page has its own query (see Pages), so there is no board query or linked agile board.</span>
+      ) : (
+        <>
+          <AgileSourceField agiles={agiles} value={linked} shared={draft.shared} disabled={readOnly} onChange={onAgileSource}/>
+          <div className="settings-field">
+            <span className="settings-field__label">{linked ? 'Extra filter (optional)' : 'Query'}</span>
+            <QueryEditor value={draft.query} disabled={readOnly} searchAssist={youtrack.searchAssist} onChange={query => patch({query})} placeholder="e.g. #Unresolved"/>
+          </div>
+        </>
+      )}
       {linked ? (
         <span className="settings-field__help">
           {linkedAgile?.sprintsSettings?.disableSprints ? `${linked.name} has no sprints.` : `Sprints come from ${linked.name}.`}
@@ -300,7 +308,7 @@ const IssuesSection: React.FC<IssuesSectionProps> = ({draft, universe, readOnly,
         <SprintSettings draft={draft} universe={universe} readOnly={readOnly} patch={patch}/>
       )}
       <div className="settings-field">
-        <span className="settings-field__label">Effective query</span>
+        <span className="settings-field__label">{queryPages ? 'Effective query of the first page' : 'Effective query'}</span>
         <code className="settings-code">{previewQuery(draft, linkedAgile) || '(all issues)'}</code>
       </div>
     </>
@@ -519,6 +527,10 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
 
       <Section title="Issues">
         <IssuesSection draft={draft} universe={reference.universe} readOnly={readOnly} patch={patch} agiles={agiles} linkedAgile={linkedAgile}/>
+      </Section>
+
+      <Section title="Pages">
+        <PagesSection draft={draft} universe={reference.universe} readOnly={readOnly} patch={patch}/>
       </Section>
 
       <Section title="Columns">

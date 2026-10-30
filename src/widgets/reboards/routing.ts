@@ -3,7 +3,7 @@ import type {AppLocation} from '../../../@types/globals';
 export type Route =
   | {kind: 'home'}
   | {kind: 'new'}
-  | {kind: 'board'; boardId: string; sprint: string | null}
+  | {kind: 'board'; boardId: string; sprint: string | null; page: string | null}
   | {kind: 'settings'; boardId: string};
 
 export const parseRoute = (location: Pick<AppLocation, 'pathname' | 'search'>): Route => {
@@ -18,8 +18,8 @@ export const parseRoute = (location: Pick<AppLocation, 'pathname' | 'search'>): 
   if (segments[2] === 'settings') {
     return {kind: 'settings', boardId};
   }
-  const sprint = new URLSearchParams(location.search).get('sprint');
-  return {kind: 'board', boardId, sprint};
+  const params = new URLSearchParams(location.search);
+  return {kind: 'board', boardId, sprint: params.get('sprint'), page: params.get('page')};
 };
 
 export const buildLocation = (route: Route): Pick<AppLocation, 'pathname' | 'search'> => {
@@ -32,6 +32,9 @@ export const buildLocation = (route: Route): Pick<AppLocation, 'pathname' | 'sea
       return {pathname: `/boards/${encodeURIComponent(route.boardId)}/settings`, search: ''};
     case 'board': {
       const params = new URLSearchParams();
+      if (route.page) {
+        params.set('page', route.page);
+      }
       if (route.sprint) {
         params.set('sprint', route.sprint);
       }

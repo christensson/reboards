@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {type BoardConfig, BOARD_LIMITS, availableRowModes, effectiveRowMode, emptyTimeline, columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, relatedBoardsOf, swapSwimlanes, validateBoardConfig, validateBoardSize, defaultDynamicOptions} from './board-config';
+import {type BoardConfig, BOARD_LIMITS, availableRowModes, effectiveRowMode, emptyTimeline, columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, relatedBoardsOf, swapSwimlanes, validateBoardConfig, validateBoardSize, defaultDynamicOptions, emptyPages} from './board-config';
 
 describe('normalizeBoardConfig', () => {
   it('fills defaults for an empty document', () => {
@@ -237,5 +237,44 @@ describe('sprint field and a linked agile board', () => {
     };
     expect(validateBoardConfig(board).map(i => i.field)).toContain('sprints');
     expect(validateBoardConfig({...board, agileSource: {id: '177-2', name: 'sandbox Board'}})).toEqual([]);
+  });
+});
+
+describe('pages', () => {
+  const valid = (): BoardConfig => ({...createEmptyBoard('me'), name: 'B', projects: [{id: '0-1', shortName: 'SP'}], columnField: null});
+
+  it('gives boards stored before pages existed no pages', () => {
+    const {pages: _pages, ...old} = valid();
+    expect(normalizeBoardConfig(old).pages).toEqual(emptyPages());
+  });
+
+  it('round-trips pages and cleans hand-edited ones', () => {
+    const board = {...valid(), pages: {mode: 'queries' as const, field: null, values: [], pages: [{id: 'p1', name: 'Bugs', query: 'Type: Bug'}]}};
+    expect(normalizeBoardConfig(JSON.parse(JSON.stringify(board))).pages).toEqual(board.pages);
+    expect(normalizeBoardConfig({...board, pages: {mode: 'weird'}}).pages.mode).toBe('none');
+    expect(normalizeBoardConfig({...board, pages: {mode: 'field', field: null}}).pages.mode).toBe('none');
+    expect(normalizeBoardConfig({...board, pages: {mode: 'queries', pages: [{name: ''}, {name: 'X', query: 3}, 'y']}}).pages.pages)
+      .toEqual([{id: 'page-0', name: 'X', query: ''}]);
+  });
+
+  it('validates field pages', () => {
+    expect(validateBoardConfig({...valid(), pages: {...emptyPages(), mode: 'field', field: {name: 'Priority', kind: 'enum'}}})).toEqual([]);
+    expect(validateBoardConfig({...valid(), pages: {...emptyPages(), mode: 'field', field: {name: 'Due', kind: 'date'}}}).map(i => i.field)).toEqual(['pages']);
+    const sprintBoard = {...valid(), sprints: {enabled: true, field: {name: 'Sprint', kind: 'version' as const}}};
+    expect(validateBoardConfig({...sprintBoard, pages: {...emptyPages(), mode: 'field', field: {name: 'Sprint', kind: 'version'}}}).map(i => i.field)).toEqual(['pages']);
+  });
+
+  it('validates query pages', () => {
+    const page = (name: string) => ({id: name, name, query: ''});
+    const queries = (pages: ReturnType<typeof page>[]) => ({...emptyPages(), mode: 'queries' as const, pages});
+    expect(validateBoardConfig({...valid(), pages: queries([page('A'), page('B')])})).toEqual([]);
+    expect(validateBoardConfig({...valid(), pages: queries([])}).map(i => i.message)).toEqual(['Add at least one page']);
+    expect(validateBoardConfig({...valid(), pages: queries([page('A'), page('a ')])}).map(i => i.message)).toEqual(['Page names must be unique']);
+    expect(validateBoardConfig({...valid(), query: '#Unresolved', agileSource: {id: '1', name: 'Agile'}, pages: queries([page('A')])})).toHaveLength(2);
+  });
+
+  it('limits page queries', () => {
+    const long = {id: 'a', name: 'A', query: 'x'.repeat(BOARD_LIMITS.queryLength + 1)};
+    expect(validateBoardSize({...valid(), pages: {...emptyPages(), mode: 'queries', pages: [long]}}).map(i => i.field)).toEqual(['pages']);
   });
 });

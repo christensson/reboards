@@ -18,7 +18,8 @@ export const MERGE_GROUPS = {
   cardColorField: {label: 'Card color', keys: ['cardColorField']},
   linkTypes: {label: 'Connectors', keys: ['linkTypes']},
   related: {label: 'Related boards', keys: ['relatedBoards']},
-  timeline: {label: 'Time layout', keys: ['timeline', 'defaultRowMode']}
+  timeline: {label: 'Time layout', keys: ['timeline', 'defaultRowMode']},
+  pages: {label: 'Pages', keys: ['pages']}
 } as const satisfies Record<string, {label: string; keys: readonly (keyof BoardConfig)[]}>;
 
 export type MergeGroup = keyof typeof MERGE_GROUPS;
@@ -98,6 +99,13 @@ const summaries: Record<MergeGroup, (board: BoardConfig) => string> = {
   linkTypes: board => list(board.linkTypes),
   // Only ids are stored here; the count tells the two sides apart.
   timeline: board => (board.timeline.field ? `${board.timeline.field.name}, ${board.timeline.sort === 'asc' ? 'oldest' : 'newest'} first` : 'Off'),
+  pages: board => {
+    const {mode, field, values, pages} = board.pages;
+    if (mode === 'field') {
+      return `${field?.name ?? 'No field'}${values.length > 0 ? `: ${list(values)}` : ''}`;
+    }
+    return mode === 'queries' ? list(pages.map(p => p.name)) : 'None';
+  },
   related: board => (board.relatedBoards.length === 1 ? '1 related board' : `${board.relatedBoards.length || 'No'} related boards`)
 };
 

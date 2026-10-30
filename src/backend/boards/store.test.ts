@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {createEmptyBoard} from '@/common/model/board-config';
-import {canDelete, canEdit, canShare, isOwner, parseBoardsDocument, removeBoard, versionMatches, readBoards, serializeBoardsDocument, visibleBoards, writeBoards} from './store';
+import {canDelete, canEdit, canShare, isOwner, keepOmittedSettings, parseBoardsDocument, removeBoard, versionMatches, readBoards, serializeBoardsDocument, visibleBoards, writeBoards} from './store';
 
 const board = (id: string, owner: string, shared: boolean, projects = ['SAN']) => ({
   ...createEmptyBoard(owner),
@@ -96,5 +96,19 @@ describe('removeBoard', () => {
     const doc = removeBoard({version: 1, boards: [a, b]}, 'b');
     expect(doc.boards.map(x => x.id)).toEqual(['a']);
     expect(doc.boards[0]).toMatchObject({relatedBoards: ['c'], version: 4});
+  });
+});
+
+describe('keepOmittedSettings', () => {
+  const existing = {...createEmptyBoard('me'), id: 'b', pages: {mode: 'queries' as const, field: null, values: [], pages: [{id: 'p', name: 'P', query: ''}]}};
+  const incoming = {...createEmptyBoard('me'), id: 'b', name: 'Renamed'};
+
+  it('keeps the stored pages when an older widget saves without them', () => {
+    const {pages: _pages, ...raw} = incoming;
+    expect(keepOmittedSettings(incoming, raw, existing)).toEqual({...incoming, pages: existing.pages});
+  });
+
+  it('takes the sent pages, even when they are none', () => {
+    expect(keepOmittedSettings(incoming, incoming, existing)).toBe(incoming);
   });
 });

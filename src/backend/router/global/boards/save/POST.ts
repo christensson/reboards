@@ -13,6 +13,7 @@ import {
   canShare,
   isOwner,
   isVisibleTo,
+  keepOmittedSettings,
   ownedBy,
   serializeBoardsDocument,
   versionMatches,
@@ -36,6 +37,17 @@ export type BoardSaveRes = {
   canEdit: boolean;
   canDelete: boolean;
 };
+
+/** The board with the settings an older widget left out kept from the stored one; null, after responding, when that is not valid. */
+function withOmittedSettings(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>, incoming: BoardConfig, raw: unknown, existing: BoardConfig): BoardConfig | null {
+  const kept = keepOmittedSettings(incoming, raw, existing);
+  const problems = kept === incoming ? [] : validateBoardConfig(kept);
+  if (problems.length > 0) {
+    respondError(ctx.response, HTTP_BAD_REQUEST, problems.map(p => p.message).join('; '));
+    return null;
+  }
+  return kept;
+}
 
 function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void {
   const viewer = viewerOf(ctx.currentUser);
@@ -87,7 +99,11 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
     }
     // The owner's save refreshes the stored login, which may have been renamed since.
     const owner = isOwner(existing, viewer) ? viewer.login : existing.owner;
-    stored = {...incoming, id: existing.id, owner, ownerId: existing.ownerId, createdAt: existing.createdAt, updatedAt: now, version: existing.version + 1};
+    const kept = withOmittedSettings(ctx, incoming, body.board, existing);
+    if (!kept) {
+      return;
+    }
+    stored = {...kept, id: existing.id, owner, ownerId: existing.ownerId, createdAt: existing.createdAt, updatedAt: now, version: existing.version + 1};
     doc.boards[existingIndex] = stored;
   }
 

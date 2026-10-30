@@ -26,6 +26,13 @@ export const parseBoardsDocument = (raw: string | null | undefined): BoardsDocum
   }
 };
 
+/**
+ * Settings a save leaves out keep their stored value. A browser still running an older widget sends
+ * boards without the settings added since (such as `pages`), which would otherwise be reset.
+ */
+export const keepOmittedSettings = (incoming: BoardConfig, raw: unknown, existing: BoardConfig): BoardConfig =>
+  typeof raw === 'object' && raw !== null && !('pages' in raw) ? {...incoming, pages: existing.pages} : incoming;
+
 export const serializeBoardsDocument = (doc: BoardsDocument): string => JSON.stringify(doc);
 
 export const readBoards = (storage: GlobalStorageLike): BoardsDocument =>

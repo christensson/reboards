@@ -1,4 +1,4 @@
-import type {BoardConfig} from '@/common/model/board-config';
+import {ALL_PAGE, type BoardConfig, NO_VALUE_PAGE} from '@/common/model/board-config';
 
 /** The search name of an agile board, as used in `{Board <name>}: {<sprint>}`. */
 export const boardSearchField = (agileName: string): string => `Board ${agileName}`;
@@ -59,23 +59,61 @@ export const composeAgileQuery = ({boardField, sprintsEnabled, sprint, query, pr
   return trimmed ? `${board} and (${trimmed})` : board;
 };
 
+/** Field pages: the clause of one value, or of issues without one; null for "All" and no page. */
+const fieldPageClause = (fieldName: string, page: string | null | undefined): string | null => {
+  if (!page || page === ALL_PAGE) {
+    return null;
+  }
+  return page === NO_VALUE_PAGE ? `has: -${quoteToken(fieldName)}` : `${quoteToken(fieldName)}: ${quoteToken(page)}`;
+};
+
+/** Query pages without a page (every page at once): any page's issues; an empty page query matches all. */
+const anyPageQuery = (queries: string[]): string =>
+  queries.some(query => !query) ? '' : queries.map(query => (queries.length > 1 ? `(${query})` : query)).join(' or ');
+
+/**
+ * The query the board filters by on a page: the board query, narrowed to a field page's value, or
+ * replaced by a query page's query. Without a page, query pages show any page's issues.
+ */
+export const pageQuery = (config: BoardConfig, page?: string | null): string => {
+  const {mode, field, pages} = config.pages;
+  if (mode === 'queries') {
+    const queries = pages.map(p => p.query.trim());
+    const selected = pages.find(p => p.id === page);
+    return selected ? selected.query.trim() : anyPageQuery(queries);
+  }
+  const trimmed = config.query.trim();
+  const clause = mode === 'field' && field ? fieldPageClause(field.name, page) : null;
+  if (!clause) {
+    return trimmed;
+  }
+  return trimmed ? `(${trimmed}) and ${clause}` : clause;
+};
+
 /**
  * The board's search query. A board linked to an agile board shows that board's issues (by its
- * live name, else the one saved), with the board's own query as an extra filter.
+ * live name, else the one saved), with the board's own query as an extra filter. `page` is the
+ * key of the page shown (see `pageQuery`).
  */
-export const effectiveQuery = (config: BoardConfig, sprint: string | null, agile?: {name: string; sprintsEnabled: boolean}): string => {
+export const effectiveQuery = (
+  config: BoardConfig,
+  sprint: string | null,
+  agile?: {name: string; sprintsEnabled: boolean},
+  page?: string | null
+): string => {
+  const query = pageQuery(config, page);
   if (config.agileSource) {
     return composeAgileQuery({
       boardField: boardSearchField(agile?.name ?? config.agileSource.name),
       sprintsEnabled: agile?.sprintsEnabled ?? true,
       sprint,
-      query: config.query,
+      query,
       projects: config.projects.map(p => p.shortName)
     });
   }
   return composeQuery({
     projects: config.projects.map(p => p.shortName),
-    query: config.query,
+    query,
     sprintField: config.sprints.enabled ? config.sprints.field?.name : null,
     sprint: config.sprints.enabled ? sprint : null
   });

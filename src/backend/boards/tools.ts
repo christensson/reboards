@@ -1,7 +1,7 @@
 import * as entities from '@jetbrains/youtrack-scripting-api/entities';
 import * as search from '@jetbrains/youtrack-scripting-api/search';
 import type {User} from '@jetbrains/youtrack-scripting-api/entities';
-import {type BoardConfig, type FieldRef, availableRowModes, isDynamicField, ownSprintField} from '@/common/model/board-config';
+import {ALL_PAGE, type BoardConfig, type FieldRef, NO_VALUE_PAGE, availableRowModes, isDynamicField, ownSprintField} from '@/common/model/board-config';
 import {type FieldValues, placeIssue} from '@/common/model/placement';
 import {effectiveQuery} from '@/common/youtrack/query';
 import {sprintForDate} from '@/widgets/reboards/model/sprints';
@@ -154,7 +154,8 @@ export const boardFieldNames = (board: BoardConfig): string[] =>
     board.innerRow?.field?.name,
     ownSprintField(board)?.name,
     board.timeline.field?.name,
-    board.timeline.periodField?.name
+    board.timeline.periodField?.name,
+    board.pages.mode === 'field' ? board.pages.field?.name : undefined
   ].filter((name): name is string => Boolean(name))));
 
 export type ListedIssue = {
@@ -179,11 +180,67 @@ type IssueLike = {
 /** Which issues to list: one sprint, the issues in no sprint, or (linked agile boards) every issue on the board. */
 export type SprintChoice = {kind: 'sprint'; name: string} | {kind: 'unscheduled'} | {kind: 'all'};
 
-/** Runs the board's query as the calling user and describes each issue's place on the board. */
-export const boardIssues = (ctx: ToolContext<unknown>, board: BoardConfig, choice: SprintChoice): ListedIssue[] => {
+/**
+ * The pages of the board's page selector, for describing the board; null without pages. Field pages
+ * list the chosen values, or say that every value is a page.
+ */
+export const pagesOf = (board: BoardConfig) => {
+  const {mode, field, values, pages} = board.pages;
+  if (mode === 'queries') {
+    return {source: 'queries', pages: pages.map(p => ({name: p.name, query: p.query})), note: 'Each page has its own query, combined with the projects and the sprint.'};
+  }
+  if (mode !== 'field' || !field) {
+    return null;
+  }
+  const noValue = `No ${field.name}`;
+  return {
+    source: 'field',
+    field: field.name,
+    ...(values.length > 0
+      ? {pages: ['All', ...values.map(value => (value === NO_VALUE_PAGE ? noValue : value))]}
+      : {note: `"All", one page per value of ${field.name} (pass the value name, or the login for users) and "${noValue}" (pass "none").`})
+  };
+};
+
+/**
+ * The page key for a tool's `page` argument: "all", "none", a field value or a query page's name.
+ * Without one, field pages show all issues and query pages any page's issues.
+ */
+export const pageArgument = (board: BoardConfig, page: string | undefined): string | null => {
+  const wanted = page?.trim();
+  const {mode, field, values, pages} = board.pages;
+  if (mode === 'none' || !wanted) {
+    return mode === 'field' ? ALL_PAGE : null;
+  }
+  const lower = wanted.toLowerCase();
+  if (mode === 'queries') {
+    const match = pages.find(p => p.name.trim().toLowerCase() === lower) ?? pages.find(p => p.id === wanted);
+    if (!match) {
+      throw new Error(`Unknown page "${wanted}"; pass one of: ${pages.map(p => p.name).join(', ')}.`);
+    }
+    return match.id;
+  }
+  if (lower === 'all') {
+    return ALL_PAGE;
+  }
+  if (lower === 'none' || lower === `no ${field?.name ?? ''}`.toLowerCase()) {
+    return NO_VALUE_PAGE;
+  }
+  if (values.length === 0) {
+    return wanted;
+  }
+  const match = values.find(value => value.toLowerCase() === lower);
+  if (!match) {
+    throw new Error(`Unknown page "${wanted}"; pass "all" or one of: ${values.map(v => (v === NO_VALUE_PAGE ? 'none' : v)).join(', ')}.`);
+  }
+  return match;
+};
+
+/** Runs the board's query (on a page, when given) as the calling user and describes each issue's place on the board. */
+export const boardIssues = (ctx: ToolContext<unknown>, board: BoardConfig, choice: SprintChoice, page: string | null = null): ListedIssue[] => {
   const sprint = choice.kind === 'sprint' ? choice.name : null;
   const agile = board.agileSource ? {name: board.agileSource.name, sprintsEnabled: choice.kind !== 'all'} : undefined;
-  const query = effectiveQuery(board, sprint, agile);
+  const query = effectiveQuery(board, sprint, agile, page);
   const names = boardFieldNames(board);
   const found = iterate<IssueLike>(search.search(null as never, query, ctx.currentUser));
   return found.map(issue => {

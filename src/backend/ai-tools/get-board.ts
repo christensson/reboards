@@ -1,4 +1,4 @@
-import {type ToolContext, fieldInfo, findBoard, lanesFromValues, layoutsOf, sprintsOf} from '@/backend/boards/tools';
+import {type ToolContext, fieldInfo, findBoard, lanesFromValues, layoutsOf, pagesOf, sprintsOf} from '@/backend/boards/tools';
 import {type BoardConfig, type RowConfig, columnLabel, ownSprintField} from '@/common/model/board-config';
 
 const columnsOf = (board: BoardConfig) => {
@@ -66,7 +66,7 @@ exports.aiTool = {
   name: 'get_board',
   description:
     'Describes a ReBoards board so issues can be moved on it: the column field and its columns (with the field values each ' +
-    'column holds), the swimlane fields, the time layout, the sprints with the current sprint, and which field to set with ' +
+    'column holds), the swimlane fields, the time layout, the sprints with the current sprint, the pages of its page selector, and which field to set with ' +
     'update_issue to move an issue to another column, swimlane or sprint. Takes a board id or name from reboards_list_boards.',
   inputSchema: {
     type: 'object',
@@ -95,6 +95,7 @@ exports.aiTool = {
         }
         : null,
       sprints: sprintPart(board),
+      pages: pagesOf(board),
       howToMove: howToMove(board)
     };
   }

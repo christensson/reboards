@@ -91,6 +91,19 @@ export const contextResSchema = z.object({
   baseUrl: z.string().nullable(),
 });
 
+export const pageQuerySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  query: z.string(),
+});
+
+export const pagesConfigSchema = z.object({
+  mode: z.union([z.literal("none"), z.literal("field"), z.literal("queries")]),
+  field: fieldRefSchema.nullable(),
+  values: z.array(z.string()),
+  pages: z.array(pageQuerySchema),
+});
+
 export const projectsPermissionsReqSchema = z.object({
   shortNames: z.array(z.string()),
 });
@@ -128,6 +141,7 @@ export const boardConfigSchema = z.object({
   relatedBoards: z.array(z.string()),
   timeline: timelineConfigSchema,
   defaultRowMode: z.union([z.literal("swimlanes"), z.literal("time")]),
+  pages: pagesConfigSchema,
   createdAt: z.number(),
   updatedAt: z.number(),
   version: z.number(),

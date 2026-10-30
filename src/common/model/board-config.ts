@@ -111,6 +111,33 @@ export type TimelineConfig = {
   assigneeField: FieldRef | null;
 };
 
+/**
+ * @zod-to-schema
+ */
+export type PageQuery = {
+  /** Stable id; the URL and starred pages refer to it, so renaming keeps them. */
+  id: string;
+  name: string;
+  query: string;
+};
+
+// Pages split a board into views picked in the toolbar: one per value of a field (plus "All" and,
+// for fields that can be empty, "No <field>"), or named queries. Query pages replace the board
+// query and cannot be combined with a linked agile board; sprints apply to every page.
+/**
+ * @zod-to-schema
+ */
+export type PagesConfig = {
+  mode: 'none' | 'field' | 'queries';
+  field: FieldRef | null;
+  /** Field mode: value keys shown as pages, in order; empty shows every value. NO_VALUE_PAGE stands for "No <field>". */
+  values: string[];
+  /** Queries mode: the pages in order. */
+  pages: PageQuery[];
+};
+
+export type PagesMode = PagesConfig['mode'];
+
 /** How a board lays out its rows: by swimlane fields, by time, or as one row. */
 export type RowMode = 'none' | 'swimlanes' | 'time';
 
@@ -154,6 +181,8 @@ export type BoardConfig = {
   timeline: TimelineConfig;
   /** The layout used when both swimlanes and time are set up, until the user picks the other. */
   defaultRowMode: 'swimlanes' | 'time';
+  /** Page selector; mode 'none' for boards without pages. */
+  pages: PagesConfig;
   createdAt: number;
   updatedAt: number;
   /** Raised by the server on every write; a save must name the version it started from. */
@@ -186,6 +215,16 @@ export const emptyTimeline = (): TimelineConfig => ({
   assigneeField: {name: 'Assignee', kind: 'user'}
 });
 
+/** Page key of the "All" page of a field page selector; it is never in the URL. */
+export const ALL_PAGE = '__all__';
+/** Page key (and URL value) of the "No <field>" page of a field page selector. */
+export const NO_VALUE_PAGE = '__none__';
+
+/** Kinds a page field may have. Owned fields are enums. */
+export const PAGE_FIELD_KINDS: FieldKind[] = ['enum', 'state', 'version', 'user', 'build'];
+
+export const emptyPages = (): PagesConfig => ({mode: 'none', field: null, values: [], pages: []});
+
 /** A swimlane level without a field. */
 export const emptyRow = (): RowConfig => ({field: null, sort: 'custom', customOrder: [], dynamic: defaultDynamicOptions()});
 
@@ -210,6 +249,7 @@ export const createEmptyBoard = (owner: string): BoardConfig => ({
   relatedBoards: [],
   timeline: emptyTimeline(),
   defaultRowMode: 'swimlanes',
+  pages: emptyPages(),
   cardColorField: {name: 'Type', kind: 'enum'},
   createdAt: 0,
   updatedAt: 0,
@@ -300,6 +340,27 @@ const normalizeSprints = (value: unknown): SprintConfig => {
 };
 
 const str = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback);
+
+const normalizePageQueries = (value: unknown): PageQuery[] =>
+  Array.isArray(value)
+    ? value
+      .filter(isRecord)
+      .filter(p => typeof p.name === 'string' && p.name.trim())
+      .map((p, index) => ({id: typeof p.id === 'string' && p.id ? p.id : `page-${index}`, name: p.name as string, query: str(p.query)}))
+    : [];
+
+/** Pages written by older versions are missing: those boards have no pages. */
+const normalizePages = (value: unknown): PagesConfig => {
+  const input = isRecord(value) ? value : {};
+  const mode = oneOf(input.mode, ['none', 'field', 'queries'] as const, 'none');
+  const field = fieldRef(input.field);
+  return {
+    mode: mode === 'field' && !field ? 'none' : mode,
+    field,
+    values: Array.from(new Set(stringArray(input.values))),
+    pages: normalizePageQueries(input.pages)
+  };
+};
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
 
 /**
@@ -333,6 +394,7 @@ export const normalizeBoardConfig = (raw: unknown, fallbackOwner = ''): BoardCon
     relatedBoards: Array.from(new Set(stringArray(input.relatedBoards))).filter(id => id && id !== str(input.id)),
     timeline: normalizeTimeline(input.timeline),
     defaultRowMode: oneOf(input.defaultRowMode, ['swimlanes', 'time'] as const, base.defaultRowMode),
+    pages: normalizePages(input.pages),
     createdAt: num(input.createdAt),
     updatedAt: num(input.updatedAt),
     version: num(input.version)
@@ -361,7 +423,9 @@ export const BOARD_LIMITS = {
   /** The whole board as stored JSON, in characters. */
   serializedLength: 100_000,
   /** Upper bound of the default column count of a dynamic column field. */
-  dynamicColumns: 50
+  dynamicColumns: 50,
+  /** Query pages, and values shown as field pages. */
+  pages: 100
 } as const;
 
 const tooLong = (value: string, max: number): boolean => value.length > max;
@@ -380,6 +444,8 @@ const allTexts = (config: BoardConfig): string[] => [
   ...config.relatedBoards,
   config.agileSource?.name ?? '',
   config.agileSource?.id ?? '',
+  ...config.pages.values,
+  ...config.pages.pages.flatMap(p => [p.id, p.name]),
   ...[
     config.columnField,
     config.row.field,
@@ -388,8 +454,18 @@ const allTexts = (config: BoardConfig): string[] => [
     config.timeline.field,
     config.timeline.periodField,
     config.timeline.assigneeField,
-    config.cardColorField
+    config.cardColorField,
+    config.pages.field
   ].map(field => field?.name ?? '')
+];
+
+const validatePagesSize = ({pages, values}: PagesConfig): ValidationIssue[] => [
+  ...(pages.some(page => tooLong(page.query, BOARD_LIMITS.queryLength))
+    ? [{field: 'pages', message: `Page queries can be at most ${BOARD_LIMITS.queryLength} characters`}]
+    : []),
+  ...(pages.length > BOARD_LIMITS.pages || values.length > BOARD_LIMITS.pages
+    ? [{field: 'pages', message: `A board can have at most ${BOARD_LIMITS.pages} pages`}]
+    : [])
 ];
 
 /** Checks the size limits; problems are reported per limit, not per value. */
@@ -402,6 +478,7 @@ export const validateBoardSize = (config: BoardConfig): ValidationIssue[] => {
   if (tooLong(config.query, queryLength)) {
     issues.push({field: 'query', message: `The query can be at most ${queryLength} characters`});
   }
+  issues.push(...validatePagesSize(config.pages));
   if (config.projects.length > projects) {
     issues.push({field: 'projects', message: `A board can have at most ${projects} projects`});
   }
@@ -495,6 +572,37 @@ const validateSprints = (config: BoardConfig): ValidationIssue[] => {
   return used.includes(sprintField) ? [{field: 'sprints', message: `The sprint field ${sprintField} cannot also be a column or swimlane field`}] : [];
 };
 
+const validatePages = (config: BoardConfig): ValidationIssue[] => {
+  const {mode, field, pages} = config.pages;
+  if (mode === 'field') {
+    if (!field || !PAGE_FIELD_KINDS.includes(field.kind)) {
+      return [{field: 'pages', message: 'Select a page field: an enum, state, version, user or build field'}];
+    }
+    return ownSprintField(config)?.name === field.name ? [{field: 'pages', message: `The sprint field ${field.name} cannot also be the page field`}] : [];
+  }
+  if (mode !== 'queries') {
+    return [];
+  }
+  const issues: ValidationIssue[] = [];
+  if (pages.length === 0) {
+    issues.push({field: 'pages', message: 'Add at least one page'});
+  }
+  const names = pages.map(page => page.name.trim().toLowerCase());
+  if (names.some(name => !name)) {
+    issues.push({field: 'pages', message: 'Every page needs a name'});
+  }
+  if (new Set(names).size !== names.length) {
+    issues.push({field: 'pages', message: 'Page names must be unique'});
+  }
+  if (config.agileSource) {
+    issues.push({field: 'pages', message: 'Query pages cannot be combined with a linked agile board'});
+  }
+  if (config.query.trim()) {
+    issues.push({field: 'pages', message: 'Query pages replace the board query; clear the query'});
+  }
+  return issues;
+};
+
 /** Kinds a time field may have. */
 export const TIME_FIELD_KINDS: FieldKind[] = ['date', 'datetime', 'version', 'build'];
 
@@ -528,7 +636,7 @@ export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
   if (config.projects.length === 0) {
     issues.push({field: 'projects', message: 'Select at least one project'});
   }
-  return [...issues, ...validateColumns(config), ...validateSprints(config), ...validateSwimlanes(config), ...validateTimeline(config)];
+  return [...issues, ...validateColumns(config), ...validateSprints(config), ...validateSwimlanes(config), ...validateTimeline(config), ...validatePages(config)];
 };
 
 /** The row layouts a board has set up. */

@@ -85,6 +85,7 @@ body {
   font-size: var(--ring-font-size-smaller);
 }
 
+.toolbar__group_page,
 .toolbar__group_sprint {
   margin-left: var(--ring-unit);
 }
@@ -1048,6 +1049,19 @@ body {
   flex-wrap: wrap;
   gap: var(--ring-unit);
   margin: var(--ring-unit) 0;
+}
+
+.pages-editor__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ring-unit);
+  width: 100%;
+}
+
+.pages-editor__query {
+  flex: 1 1 240px;
+  min-width: 0;
 }
 
 .columns-editor__row {

@@ -2,8 +2,8 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {DndContext, type DragEndEvent, type DragOverEvent, type DragStartEvent, DragOverlay, PointerSensor, useSensor, useSensors} from '@dnd-kit/core';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
 import confirm from '@jetbrains/ring-ui-built/components/confirm-service/confirm-service';
-import {type BoardConfig, type DynamicOptions, type FieldRef, availableRowModes, effectiveRowMode, isDynamicField, swapSwimlanes} from '@/common/model/board-config';
-import {type ConnectorsMode, type UserPrefs, boardView, setBoardView, toggleStar} from '@/common/storage/prefs';
+import {ALL_PAGE, type BoardConfig, type DynamicOptions, type FieldRef, availableRowModes, effectiveRowMode, isDynamicField, swapSwimlanes} from '@/common/model/board-config';
+import {type ConnectorsMode, type UserPrefs, boardView, setBoardView, toggleStar, toggleStarredPage} from '@/common/storage/prefs';
 import {buildFieldUpdate, buildMultiFieldUpdate} from '@/common/youtrack/fields';
 import {errorMessage} from '@/common/youtrack/rest';
 import {issueUrl, newIssueUrl} from '@/common/youtrack/urls';
@@ -16,6 +16,7 @@ import {computeEdges} from '../model/connectors';
 import type {FieldUniverse, UniverseValue} from '../model/fieldUniverse';
 import {type AgileSourceState, useAgileSource} from '../data/useAgileSource';
 import {sprintForDate} from '../model/sprints';
+import {boardPages, pageParam, resolvePage} from '../model/pages';
 import type {BoardIssue} from '../model/issue';
 import {type BoardLayout, type CardPlacement, type LayoutGroup, type Placement, cardLocation, computeLayout, keepCardPosition, revealColumnIds, walkGroups} from '../model/layout';
 import {type FieldChange, type MoveTarget, type ValueChoice, applyChanges, keysAfter, planMove, planRowChanges} from '../model/mutations';
@@ -47,12 +48,18 @@ type Props = {
   board: BoardConfig;
   boards: BoardConfig[];
   sprint: string | null;
+  /** The `page` URL parameter; null for none (the default page). */
+  page: string | null;
   prefs: UserPrefs;
   updatePrefs: (patch: Partial<UserPrefs> | ((prev: UserPrefs) => Partial<UserPrefs>)) => void;
   onSelectBoard: (boardId: string) => void;
   onSelectSprint: (sprint: string | null) => void;
   /** Shows a sprint picked automatically (by date) without remembering it. */
   onAutoSelectSprint: (sprint: string) => void;
+  /** Picks a page (its URL parameter; null for "All"). */
+  onSelectPage: (page: string | null) => void;
+  /** Shows the default page instead of a missing or unknown one, without remembering it. */
+  onAutoSelectPage: (page: string | null) => void;
   onNewBoard: () => void;
   onOpenSettings: () => void;
 };
@@ -392,15 +399,44 @@ const useSprintValues = (board: BoardConfig, source: AgileSourceState, universe:
     return fieldName ? (universe.byName.get(fieldName)?.values ?? []) : null;
   }, [board.agileSource, board.sprints, source, universe]);
 
+const NO_STARS: string[] = [];
+
+/**
+ * The page the board shows: the one asked for, else the remembered one, else the default. Field pages
+ * wait for the field's values; until then the requested page is used as is.
+ */
+const useBoardPage = (board: BoardConfig, universe: FieldUniverse, referenceLoading: boolean, page: string | null, prefs: UserPrefs, onAutoSelectPage: (page: string | null) => void) => {
+  const pages = useMemo(() => boardPages(board, universe), [board, universe]);
+  const starred = prefs.starredPagesByBoard[board.id] ?? NO_STARS;
+  const stored = prefs.lastPageByBoard[board.id] || null;
+  const waiting = board.pages.mode === 'field' && referenceLoading;
+  const requested = page ?? stored;
+  const resolved = waiting ? (requested ?? ALL_PAGE) : resolvePage(pages, requested, starred);
+  useEffect(() => {
+    // A remembered page is put in the URL by the app first.
+    if (waiting || (page === null && stored)) {
+      return;
+    }
+    const wanted = pageParam(resolved);
+    if (wanted !== page) {
+      onAutoSelectPage(wanted);
+    }
+  }, [waiting, page, stored, resolved, onAutoSelectPage]);
+  return {pages, page: resolved, starred};
+};
+
 export const BoardScreen: React.FC<Props> = ({
   board: configuredBoard,
   boards,
   sprint,
+  page: routePage,
   prefs,
   updatePrefs,
   onSelectBoard,
   onSelectSprint,
   onAutoSelectSprint,
+  onSelectPage,
+  onAutoSelectPage,
   onNewBoard,
   onOpenSettings
 }) => {
@@ -409,7 +445,8 @@ export const BoardScreen: React.FC<Props> = ({
   const board = useMemo(() => (swapped ? swapSwimlanes(configuredBoard) : configuredBoard), [configuredBoard, swapped]);
   const reference = useBoardReference(board.projects);
   const agileSource = useAgileSource(board);
-  const data = useBoardIssues(board, sprint, agileSource);
+  const boardPage = useBoardPage(board, reference.universe, reference.loading, routePage, prefs, onAutoSelectPage);
+  const data = useBoardIssues(board, sprint, agileSource, boardPage.page);
   const sprintValues = useSprintValues(board, agileSource, reference.universe);
   const view = boardView(prefs, board.id);
   useAutoSprint(sprintValues, sprint, board.id in prefs.lastSprintByBoard, isLoadingSprints(reference.loading, agileSource), onAutoSelectSprint);
@@ -1055,6 +1092,11 @@ export const BoardScreen: React.FC<Props> = ({
         starredBoards={prefs.starredBoards}
         onToggleStar={boardId => updatePrefs(prev => toggleStar(prev, boardId))}
         rowModes={availableRowModes(board)}
+        pages={boardPage.pages}
+        page={boardPage.page}
+        starredPages={boardPage.starred}
+        onSelectPage={key => onSelectPage(pageParam(key))}
+        onToggleStarPage={key => updatePrefs(prev => toggleStarredPage(prev, board.id, key, (boardPage.pages ?? []).map(p => p.key)))}
         sprintValues={sprintValues}
         rowMode={layout.rowMode}
         onRowMode={mode => {

@@ -23,6 +23,7 @@ import {TIMING_FLAGS, type TimingFlag, timingFilterKey, timingFlagOfFilter} from
 import type {FieldUniverse} from '../model/fieldUniverse';
 import type {UniverseValue} from '../model/fieldUniverse';
 import {currentSprints, sortSprintsByDate, sprintDateRange} from '../model/sprints';
+import {type BoardPage, orderPages} from '../model/pages';
 import {type DateFormatter, useDateFormat} from '../data/useDateFormat';
 
 /** Selector key for issues without a sprint; it is also what an unset sprint (null) shows. */
@@ -201,6 +202,13 @@ type Props = {
   /** Opens the list of keyboard shortcuts. */
   onShowShortcuts: () => void;
   onToggleStar: (boardId: string) => void;
+  /** Pages to choose from; null for a board without pages. */
+  pages: BoardPage[] | null;
+  /** Key of the page shown. */
+  page: string | null;
+  starredPages: string[];
+  onSelectPage: (key: string) => void;
+  onToggleStarPage: (key: string) => void;
   /** Sprints to choose from (a linked agile board's, or the sprint field's values); null without sprints. */
   sprintValues: UniverseValue[] | null;
   /** Row layouts the board has set up; with both, the toolbar switches between them. */
@@ -211,12 +219,12 @@ type Props = {
   timingFlags: TimingFlag[];
 };
 
-const StarToggle: React.FC<{starred: boolean; onToggle: () => void}> = ({starred, onToggle}) => (
+const StarToggle: React.FC<{starred: boolean; onToggle: () => void; noun?: string}> = ({starred, onToggle, noun = 'board'}) => (
   <span
     role="button"
     tabIndex={-1}
     className={`board-star${starred ? ' board-star_active' : ''}`}
-    title={starred ? 'Unstar board' : 'Star board'}
+    title={starred ? `Unstar ${noun}` : `Star ${noun}`}
     onMouseDown={event => {
       event.preventDefault();
       event.stopPropagation();
@@ -314,6 +322,27 @@ const buildBoardItems = (boards: BoardConfig[], starredIds: string[], onToggleSt
   ];
 };
 
+/** Page selector items: "All" (field pages), then starred pages under "Starred", then the others; each in configured order. */
+const buildPageItems = (pages: BoardPage[], starredKeys: string[], onToggleStar: (key: string) => void): SelectItem[] => {
+  const {pinned, starred, others} = orderPages(pages, starredKeys);
+  const item = (p: BoardPage, isStarred: boolean): SelectItem => ({
+    key: p.key,
+    label: p.label,
+    selectedLabel: p.selectedLabel,
+    rightNodes: <StarToggle starred={isStarred} noun="page" onToggle={() => onToggleStar(p.key)}/>
+  });
+  const pinnedItems: SelectItem[] = pinned.map(p => ({key: p.key, label: p.label, selectedLabel: p.selectedLabel}));
+  if (starred.length === 0) {
+    return [...pinnedItems, ...others.map(p => item(p, false))];
+  }
+  return [
+    ...pinnedItems,
+    separator('__starred', 'Starred'),
+    ...starred.map(p => item(p, true)),
+    ...(others.length > 0 ? [separator('__others', 'Other pages'), ...others.map(p => item(p, false))] : [])
+  ];
+};
+
 export const Toolbar: React.FC<Props> = ({
   boards,
   board,
@@ -342,6 +371,11 @@ export const Toolbar: React.FC<Props> = ({
   onGroupByParent,
   onShowShortcuts,
   onToggleStar,
+  pages,
+  page,
+  starredPages,
+  onSelectPage,
+  onToggleStarPage,
   sprintValues,
   rowModes,
   rowMode,
@@ -354,6 +388,7 @@ export const Toolbar: React.FC<Props> = ({
     () => board.cardFields.filter(name => universe.byName.get(name)?.canBeEmpty !== false),
     [board.cardFields, universe]
   );
+  const pageItems = useMemo(() => buildPageItems(pages ?? [], starredPages, onToggleStarPage), [pages, starredPages, onToggleStarPage]);
   const formatDate = useDateFormat();
   const sprintItems = useMemo<SelectItem[]>(
     () => buildSprintItems(sprintValues ?? [], formatDate, Date.now()),
@@ -381,6 +416,18 @@ export const Toolbar: React.FC<Props> = ({
             <Button active={rowMode === 'swimlanes'} title="Rows by swimlane fields" onClick={() => onRowMode('swimlanes')}>Swimlanes</Button>
             <Button active={rowMode === 'time'} title="Rows by time" onClick={() => onRowMode('time')}>Time</Button>
           </ButtonGroup>
+        </div>
+      )}
+      {pages && (
+        <div className="toolbar__group toolbar__group_page">
+          <Select
+            type={Select.Type.INLINE}
+            label="Page"
+            filter={sectionedFilter}
+            data={pageItems}
+            selected={pageItems.find(item => item.key === page) ?? null}
+            onChange={(item: SelectItem | null) => item && onSelectPage(String(item.key))}
+          />
         </div>
       )}
       {sprintValues && (

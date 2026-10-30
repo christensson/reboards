@@ -39,6 +39,25 @@ const useRoute = () => {
   return {route, ready, navigate};
 };
 
+const NO_BOARD_ROUTE = {boardId: null, sprint: null, page: null};
+
+/**
+ * The sprint and page to show: those in the URL, else the remembered ones when the board uses
+ * sprints (its own, or a linked agile board's) or pages.
+ */
+const withRemembered = (board: BoardConfig | undefined, sprint: string | null, page: string | null, storedSprint?: string, storedPage?: string) => {
+  const sprintsEnabled = Boolean(board?.agileSource) || Boolean(board?.sprints.enabled);
+  const pagesEnabled = Boolean(board) && board?.pages.mode !== 'none';
+  return {
+    sprint: sprint === null && storedSprint && sprintsEnabled ? storedSprint : sprint,
+    page: page === null && storedPage && pagesEnabled ? storedPage : page
+  };
+};
+
+/** A sprint or page in the URL that is not the remembered one, and was not picked automatically, becomes remembered. */
+const isNewChoice = (value: string | null, stored: string | undefined, auto: string | undefined): value is string =>
+  value !== null && value !== stored && value !== auto;
+
 export const ReBoardsApp: React.FC = () => {
   const boardsState = useBoards();
   const {prefs, ready: prefsReady, update: updatePrefs} = usePrefs();
@@ -53,8 +72,8 @@ export const ReBoardsApp: React.FC = () => {
       return;
     }
     const last = boards.find(b => b.id === prefs.lastBoardId) ?? boards[0];
-    navigate({kind: 'board', boardId: last.id, sprint: prefs.lastSprintByBoard[last.id] ?? null}, true);
-  }, [ready, route.kind, boards, prefs.lastBoardId, prefs.lastSprintByBoard, navigate]);
+    navigate({kind: 'board', boardId: last.id, sprint: prefs.lastSprintByBoard[last.id] ?? null, page: prefs.lastPageByBoard[last.id] || null}, true);
+  }, [ready, route.kind, boards, prefs.lastBoardId, prefs.lastSprintByBoard, prefs.lastPageByBoard, navigate]);
 
   useEffect(() => {
     if (route.kind === 'board' && prefs.lastBoardId !== route.boardId) {
@@ -62,36 +81,59 @@ export const ReBoardsApp: React.FC = () => {
     }
   }, [route, prefs.lastBoardId, updatePrefs]);
 
-  // Sprints picked by date are shown in the URL but not remembered, so a later visit picks the then-current sprint.
+  // Sprints picked by date, and default pages, are shown in the URL but not remembered, so a later
+  // visit picks the then-current sprint and the then-default page.
   const autoSprints = useRef<Record<string, string>>({});
-  const routeBoardId = route.kind === 'board' ? route.boardId : null;
-  const routeSprint = route.kind === 'board' ? route.sprint : null;
+  const autoPages = useRef<Record<string, string>>({});
+  const {boardId: routeBoardId, sprint: routeSprint, page: routePage} = route.kind === 'board' ? route : NO_BOARD_ROUTE;
 
   useEffect(() => {
     if (!ready || !routeBoardId) {
       return;
     }
-    const stored = prefs.lastSprintByBoard[routeBoardId];
-    const routeBoard = boards.find(b => b.id === routeBoardId);
-    // A board linked to an agile board takes that board's sprints.
-    const sprintsEnabled = routeBoard && (routeBoard.agileSource ? true : routeBoard.sprints.enabled);
-    if (routeSprint === null && stored && sprintsEnabled) {
-      // Show the remembered sprint in the URL.
-      navigate({kind: 'board', boardId: routeBoardId, sprint: stored}, true);
-    } else if (routeSprint !== null && routeSprint !== stored && autoSprints.current[routeBoardId] !== routeSprint) {
-      // A link that names a sprint becomes the remembered sprint.
+    const storedSprint = prefs.lastSprintByBoard[routeBoardId];
+    const storedPage = prefs.lastPageByBoard[routeBoardId];
+    // Show the remembered sprint and page in the URL; both in one step, so neither undoes the other.
+    const {sprint, page} = withRemembered(boards.find(b => b.id === routeBoardId), routeSprint, routePage, storedSprint, storedPage);
+    if (sprint !== routeSprint || page !== routePage) {
+      navigate({kind: 'board', boardId: routeBoardId, sprint, page}, true);
+      return;
+    }
+    // A link that names a sprint or a page makes it the remembered one.
+    if (isNewChoice(routeSprint, storedSprint, autoSprints.current[routeBoardId])) {
       updatePrefs(prev => ({lastSprintByBoard: {...prev.lastSprintByBoard, [routeBoardId]: routeSprint}}));
     }
-  }, [ready, routeBoardId, routeSprint, boards, prefs.lastSprintByBoard, navigate, updatePrefs]);
+    if (isNewChoice(routePage, storedPage, autoPages.current[routeBoardId])) {
+      updatePrefs(prev => ({lastPageByBoard: {...prev.lastPageByBoard, [routeBoardId]: routePage}}));
+    }
+  }, [ready, routeBoardId, routeSprint, routePage, boards, prefs.lastSprintByBoard, prefs.lastPageByBoard, navigate, updatePrefs]);
 
   const onAutoSelectSprint = useCallback(
     (sprint: string) => {
       if (routeBoardId) {
         autoSprints.current[routeBoardId] = sprint;
-        navigate({kind: 'board', boardId: routeBoardId, sprint}, true);
+        navigate({kind: 'board', boardId: routeBoardId, sprint, page: routePage}, true);
       }
     },
-    [routeBoardId, navigate]
+    [routeBoardId, routePage, navigate]
+  );
+
+  // The board shows its default page instead of a missing or unknown one: a remembered page that is gone is forgotten.
+  const onAutoSelectPage = useCallback(
+    (page: string | null) => {
+      if (!routeBoardId) {
+        return;
+      }
+      if (page) {
+        autoPages.current[routeBoardId] = page;
+      }
+      updatePrefs(prev => {
+        const {[routeBoardId]: _gone, ...rest} = prev.lastPageByBoard;
+        return {lastPageByBoard: rest};
+      });
+      navigate({kind: 'board', boardId: routeBoardId, sprint: routeSprint, page}, true);
+    },
+    [routeBoardId, routeSprint, navigate, updatePrefs]
   );
 
   // Forget stars of boards that no longer exist.
@@ -106,8 +148,8 @@ export const ReBoardsApp: React.FC = () => {
   }, [ready, boardsState.boards, prefs.starredBoards, updatePrefs]);
 
   const openBoard = useCallback(
-    (boardId: string) => navigate({kind: 'board', boardId, sprint: prefs.lastSprintByBoard[boardId] ?? null}),
-    [navigate, prefs.lastSprintByBoard]
+    (boardId: string) => navigate({kind: 'board', boardId, sprint: prefs.lastSprintByBoard[boardId] ?? null, page: prefs.lastPageByBoard[boardId] || null}),
+    [navigate, prefs.lastSprintByBoard, prefs.lastPageByBoard]
   );
 
   if (!ready) {
@@ -139,7 +181,7 @@ export const ReBoardsApp: React.FC = () => {
           navigate({kind: 'home'});
         }
       }}
-      onCancel={() => (isNew && boards.length === 0 ? navigate({kind: 'home'}) : navigate(isNew ? {kind: 'home'} : {kind: 'board', boardId: board.id, sprint: null}))}
+      onCancel={() => (isNew && boards.length === 0 ? navigate({kind: 'home'}) : navigate(isNew ? {kind: 'home'} : {kind: 'board', boardId: board.id, sprint: null, page: null}))}
       onSaved={saved => openBoard(saved.id)}
     />
   );
@@ -172,6 +214,7 @@ export const ReBoardsApp: React.FC = () => {
         board={board}
         boards={boards}
         sprint={route.sprint}
+        page={route.page}
         prefs={prefs}
         updatePrefs={updatePrefs}
         onSelectBoard={openBoard}
@@ -179,7 +222,13 @@ export const ReBoardsApp: React.FC = () => {
         onSelectSprint={sprint => {
           delete autoSprints.current[board.id];
           updatePrefs(prev => ({lastSprintByBoard: {...prev.lastSprintByBoard, [board.id]: sprint ?? ''}}));
-          navigate({kind: 'board', boardId: board.id, sprint});
+          navigate({kind: 'board', boardId: board.id, sprint, page: route.page});
+        }}
+        onAutoSelectPage={onAutoSelectPage}
+        onSelectPage={page => {
+          delete autoPages.current[board.id];
+          updatePrefs(prev => ({lastPageByBoard: {...prev.lastPageByBoard, [board.id]: page ?? ''}}));
+          navigate({kind: 'board', boardId: board.id, sprint: route.sprint, page});
         }}
         onNewBoard={() => navigate({kind: 'new'})}
         onOpenSettings={() => navigate({kind: 'settings', boardId: board.id})}

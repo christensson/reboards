@@ -41,6 +41,10 @@ export type UserPrefs = {
   visibleColumns: Record<string, string[]>;
   /** Boards with both swimlanes and time set up: the layout the user picked per board id. */
   rowModeByBoard: Record<string, 'swimlanes' | 'time'>;
+  /** Explicitly chosen page per board id; '' means "All" (field pages). */
+  lastPageByBoard: Record<string, string>;
+  /** Starred page keys per board id. */
+  starredPagesByBoard: Record<string, string[]>;
 };
 
 export const PREFS_KEY = 'reboards.prefs.v1';
@@ -59,8 +63,25 @@ export const defaultPrefs = (): UserPrefs => ({
   swappedSwimlanes: {},
   collapsedGroups: {},
   visibleColumns: {},
-  rowModeByBoard: {}
+  rowModeByBoard: {},
+  lastPageByBoard: {},
+  starredPagesByBoard: {}
 });
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** Keeps the string entries of a stored map; anything else becomes an empty map. */
+const stringMap = (value: unknown): Record<string, string> =>
+  isRecord(value) ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {};
+
+/** Keeps the string lists of a stored map, without their non-string items. */
+const stringListMap = (value: unknown): Record<string, string[]> =>
+  isRecord(value)
+    ? Object.fromEntries(Object.entries(value)
+      .filter((entry): entry is [string, unknown[]] => Array.isArray(entry[1]))
+      .map(([key, list]) => [key, list.filter((item): item is string => typeof item === 'string')]))
+    : {};
 
 const readRaw = async (host: HostAPI): Promise<string | null> => {
   try {
@@ -96,7 +117,8 @@ export const loadPrefs = async (host: HostAPI): Promise<UserPrefs> => {
     if (!stored.connectorsMode && stored.alwaysShowConnectors !== undefined) {
       migrated.connectorsMode = stored.alwaysShowConnectors ? 'all' : 'selected';
     }
-    return {...defaultPrefs(), ...migrated};
+    // Prefs written before pages existed lack these maps; the checks also keep corrupt values out.
+    return {...defaultPrefs(), ...migrated, lastPageByBoard: stringMap(stored.lastPageByBoard), starredPagesByBoard: stringListMap(stored.starredPagesByBoard)};
   } catch {
     return defaultPrefs();
   }
@@ -122,3 +144,13 @@ export const toggleStar = (prefs: UserPrefs, boardId: string): Partial<UserPrefs
     ? prefs.starredBoards.filter(id => id !== boardId)
     : [...prefs.starredBoards, boardId]
 });
+
+/**
+ * Stars or unstars a page of a board. Stars of pages the board no longer has (`keys`) are dropped
+ * on the way, so the list does not grow with pages long gone.
+ */
+export const toggleStarredPage = (prefs: UserPrefs, boardId: string, pageKey: string, keys: string[]): Partial<UserPrefs> => {
+  const current = (prefs.starredPagesByBoard[boardId] ?? []).filter(key => keys.includes(key));
+  const next = current.includes(pageKey) ? current.filter(key => key !== pageKey) : [...current, pageKey];
+  return {starredPagesByBoard: {...prefs.starredPagesByBoard, [boardId]: next}};
+};

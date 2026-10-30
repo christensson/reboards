@@ -40,21 +40,21 @@ const fetchParents = async (ids: string[]): Promise<Record<string, ParentInfo>> 
 };
 
 /** The query to load, or why there is none yet: a linked agile board still loading, or not readable. */
-const queryFor = (config: BoardConfig, sprint: string | null, source: AgileSourceState): {query: string | null; error: string | null} => {
+const queryFor = (config: BoardConfig, sprint: string | null, source: AgileSourceState, page: string | null): {query: string | null; error: string | null} => {
   if (source.status === 'loading') {
     return {query: null, error: null};
   }
   if (source.status === 'error') {
     return {query: null, error: `The linked agile board ${config.agileSource?.name ?? ''} is not available to you (${source.message})`};
   }
-  return {query: effectiveQuery(config, sprint, source.status === 'ready' ? source.agile : undefined), error: null};
+  return {query: effectiveQuery(config, sprint, source.status === 'ready' ? source.agile : undefined, page), error: null};
 };
 
-/** Loads the issues of a board (paged) plus the parents of subtasks that are not on the board. */
-export const useBoardIssues = (config: BoardConfig, sprint: string | null, source: AgileSourceState = {status: 'none'}) => {
+/** Loads the issues of a board's page (paged) plus the parents of subtasks that are not on the board. */
+export const useBoardIssues = (config: BoardConfig, sprint: string | null, source: AgileSourceState = {status: 'none'}, page: string | null = null) => {
   const [state, setState] = useState<IssuesState>({issues: [], parents: {}, loading: true, loadedCount: 0, truncated: false, error: null});
   const [version, setVersion] = useState(0);
-  const {query, error: sourceError} = queryFor(config, sprint, source);
+  const {query, error: sourceError} = queryFor(config, sprint, source, page);
   const requestId = useRef(0);
 
   useEffect(() => {
