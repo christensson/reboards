@@ -19,7 +19,7 @@ type Options = {
   canMove: (issueId: string) => boolean;
   onOpen: (issueId: string) => void;
   onParent: (issueId: string) => void;
-  /** Shift+P: back to the subtask "P" came from, when the parent is still the selected issue. */
+  /** Shift+P: back to the subtask "P" came from, when the parent is still the selected issue; else to the first subtask. */
   onBackToChild: (issueId: string) => void;
   onToggleConnectors: () => void;
   onHelp: () => void;
@@ -62,7 +62,8 @@ const nextCard = (registry: CardRegistry, anchor: string | null, direction: Dire
  * - arrows move the selection to the nearest card that way, scrolling it into view;
  * - Ctrl+arrows move a shadow of the selected card to the next column or row; Enter applies
  *   the move, Escape cancels it;
- * - Enter opens the selected issue, P selects its parent and Shift+P goes back to the subtask,
+ * - Enter opens the selected issue, P selects its parent and Shift+P goes back to the subtask
+ *   (or down to the first subtask),
  *   R shows or hides relations, ? lists the keys;
  * - Escape clears the selection.
  */

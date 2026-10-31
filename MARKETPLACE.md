@@ -20,7 +20,7 @@ issues, far more insight.
 - A **+** in every cell creates an issue with that cell's values already set.
 
 **Work from the keyboard**
-- **Arrow keys** move the selection to the next card; **Enter** opens it, **P** jumps to its parent and **Shift+P** back.
+- **Arrow keys** move the selection to the next card; **Enter** opens it, **P** jumps to its parent and **Shift+P** back down, to the subtask you came from or the first one.
 - **Ctrl+arrows** move the selected card to the next column or swimlane, with a preview of the change; **Enter** applies it.
 - **/** finds issues as you type, **R** shows or hides relations, and **?** lists every shortcut.
 

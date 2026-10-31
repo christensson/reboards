@@ -3,7 +3,7 @@ import {type BoardConfig, UNCATEGORIZED_ROW_KEY, createEmptyBoard, defaultDynami
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
-import {ALL_COLUMN_ID, ASSIGN_COLUMN_ID, type BoardLayout, type LayoutGroup, NO_VALUE_COLUMN_ID, PICKER_ROW_SUFFIX, cardLocation, keepCardPosition, revealColumnIds, cardId, compositeRowKey, computeLayout, dynamicColumnId, groupKey, packGroups} from './layout';
+import {ALL_COLUMN_ID, ASSIGN_COLUMN_ID, type BoardLayout, type LayoutGroup, NO_VALUE_COLUMN_ID, PICKER_ROW_SUFFIX, cardLocation, firstOnBoard, keepCardPosition, revealColumnIds, cardId, compositeRowKey, computeLayout, dynamicColumnId, groupKey, packGroups} from './layout';
 
 const rowOf = (layout: BoardLayout, key: string) => {
   const row = layout.rows.find(r => r.key === key);
@@ -454,5 +454,21 @@ describe('keepCardPosition', () => {
     // Second in its old column, so second in the new one too, inside the same box.
     expect(box.membersByColumn.done).toEqual(['14', '12']);
     expect(box.membersByColumn.open).toEqual(['11']);
+  });
+});
+
+describe('firstOnBoard', () => {
+  it('picks the subtask shown first: by swimlane, then column', () => {
+    const layout = computeLayout({
+      issues: [
+        issue({id: '1', state: 'Open', priority: 'Normal', children: ['2', '3', '4', '5']}),
+        issue({id: '2', state: 'Done', priority: 'Major', parents: ['1']}),
+        issue({id: '3', state: 'In Progress', priority: 'Major', parents: ['1']}),
+        issue({id: '4', state: 'Open', priority: 'Normal', parents: ['1']})
+      ],
+      config: config(), universe, parents: {}
+    });
+    expect(firstOnBoard(layout, ['2', '3', '4', '5'])).toBe('3');
+    expect(firstOnBoard(layout, ['5'])).toBeNull();
   });
 });

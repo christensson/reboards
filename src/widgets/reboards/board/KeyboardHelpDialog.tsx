@@ -14,7 +14,7 @@ const SHORTCUTS: {keys: string[]; text: string}[] = [
   {keys: ['Enter'], text: 'Open the selected issue in a new tab'},
   {keys: ['Ctrl', '+ arrows'], text: 'Move the selected card to the next column or swimlane; Enter applies, Esc cancels'},
   {keys: ['P'], text: 'Select the parent of the selected issue'},
-  {keys: ['Shift', '+ P'], text: 'Go back to the subtask you came from'},
+  {keys: ['Shift', '+ P'], text: 'Go back to the subtask you came from, else to the first subtask'},
   {keys: ['R'], text: 'Show or hide relation connectors'},
   {keys: ['/'], text: 'Find issues by ID or summary; Enter goes to the next match, Ctrl+Enter selects'},
   {keys: ['Esc'], text: 'Clear the selection'},

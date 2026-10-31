@@ -1076,6 +1076,19 @@ const cardListOf = (layout: BoardLayout, issueId: string): string[] | undefined 
   return layout.rowsByKey[placement.rowKey]?.looseByColumn[placement.columnId];
 };
 
+/** The issue among `ids` shown first on the board: by swimlane, then column, then place in its cell; null when none is shown. */
+export const firstOnBoard = (layout: BoardLayout, ids: string[]): string | null => {
+  const rowIndex = new Map(layout.rows.map((row, index) => [row.key, index]));
+  const columnIndex = new Map(layout.columns.map(column => [column.id, column.index]));
+  const position = (id: string): number[] => {
+    const placement = layout.placement[id];
+    return [rowIndex.get(placement.rowKey) ?? 0, columnIndex.get(placement.columnId) ?? 0, cardListOf(layout, id)?.indexOf(id) ?? 0];
+  };
+  const shown = ids.filter(id => layout.placement[id]).map(id => ({id, at: position(id)}));
+  shown.sort((a, b) => a.at[0] - b.at[0] || a.at[1] - b.at[1] || a.at[2] - b.at[2]);
+  return shown[0]?.id ?? null;
+};
+
 /**
  * Keeps a moved card about as high up as it was: in `preview` (a layout with the card already
  * moved) it takes the same position in its new list of cards as it had in `before`, instead of

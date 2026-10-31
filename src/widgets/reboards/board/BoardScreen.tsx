@@ -18,7 +18,7 @@ import {type AgileSourceState, useAgileSource} from '../data/useAgileSource';
 import {sprintForDate} from '../model/sprints';
 import {boardPages, pageParam, resolvePage} from '../model/pages';
 import type {BoardIssue} from '../model/issue';
-import {type BoardLayout, type CardPlacement, type LayoutGroup, type Placement, cardLocation, computeLayout, keepCardPosition, revealColumnIds, walkGroups} from '../model/layout';
+import {type BoardLayout, type CardPlacement, type LayoutGroup, type Placement, cardLocation, computeLayout, firstOnBoard, keepCardPosition, revealColumnIds, walkGroups} from '../model/layout';
 import {type FieldChange, type MoveTarget, type ValueChoice, applyChanges, keysAfter, planMove, planRowChanges} from '../model/mutations';
 import {groupDragHint, issueDragHint, linkDragHint} from '../model/dragHint';
 import {type LinkMode, isLinkDropData} from '../model/linkTargets';
@@ -812,6 +812,21 @@ export const BoardScreen: React.FC<Props> = ({
   // Subtasks "P" went up from, most recent last, each with the parent it went to.
   const parentTrail = useRef<{child: string; parent: string}[]>([]);
 
+  /**
+   * P and Shift+P: select the card and give it keyboard focus, as the arrows do, so the focus
+   * ring does not stay behind on the card left and look like it is still selected.
+   */
+  const goToCard = useCallback((issueId: string) => {
+    setSelectedIds(new Set([issueId]));
+    expandFor(issueId);
+    const SCROLL_DELAY = 50;
+    window.setTimeout(() => {
+      const element = registry.get(issueId);
+      element?.focus({preventScroll: true});
+      element?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'});
+    }, SCROLL_DELAY);
+  }, [expandFor, registry]);
+
   /** "P": select the parent on the board, or offer to open it when it is not on the board. */
   const goToParent = useCallback((issueId: string) => {
     const issue = issuesById.get(issueId);
@@ -822,10 +837,7 @@ export const BoardScreen: React.FC<Props> = ({
     const onBoard = issue.parentIds.find(id => layout.placement[id]);
     if (onBoard) {
       parentTrail.current.push({child: issueId, parent: onBoard});
-      setSelectedIds(new Set([onBoard]));
-      expandFor(onBoard);
-      const SCROLL_DELAY = 50;
-      window.setTimeout(() => registry.get(onBoard)?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'}), SCROLL_DELAY);
+      goToCard(onBoard);
       return;
     }
     const parentId = issue.parentIds[0];
@@ -833,25 +845,32 @@ export const BoardScreen: React.FC<Props> = ({
     confirm({text: `The parent of ${issue.idReadable}, ${idReadable}, is not on this board.`, confirmLabel: `Open ${idReadable}…`, rejectLabel: 'Cancel'})
       .then(() => onOpen(parentId))
       .catch(() => undefined);
-  }, [issuesById, layout.placement, expandFor, registry, data.parents, onOpen]);
+  }, [issuesById, layout.placement, goToCard, data.parents, onOpen]);
 
-  /** Shift+P: back down to the subtask "P" came from, while its parent is still the one selected. */
+  /**
+   * Shift+P: back down to the subtask "P" came from, while its parent is still the one selected;
+   * without such a trail, down to the first subtask on the board.
+   */
   const backToChild = useCallback((issueId: string) => {
     const last = parentTrail.current[parentTrail.current.length - 1];
-    if (!last || last.parent !== issueId) {
+    let child: string | null;
+    if (last && last.parent === issueId) {
+      parentTrail.current.pop();
+      child = layout.placement[last.child] ? last.child : null;
+    } else {
       // The user went elsewhere since: the trail no longer leads anywhere.
       parentTrail.current = [];
-      return;
+      const issue = issuesById.get(issueId);
+      child = firstOnBoard(layout, issue?.childIds ?? []);
+      if (!child) {
+        const idReadable = issue?.idReadable ?? 'The issue';
+        alertService.message(issue?.childIds.length ? `No subtask of ${idReadable} is on this board` : `${idReadable} has no subtasks`);
+      }
     }
-    parentTrail.current.pop();
-    if (!layout.placement[last.child]) {
-      return;
+    if (child) {
+      goToCard(child);
     }
-    setSelectedIds(new Set([last.child]));
-    expandFor(last.child);
-    const SCROLL_DELAY = 50;
-    window.setTimeout(() => registry.get(last.child)?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'}), SCROLL_DELAY);
-  }, [layout.placement, expandFor, registry]);
+  }, [layout, issuesById, goToCard]);
 
   const {keyMove} = useBoardKeys({
     enabled: !hasOverlay(quickFindTerm, pendingMove, link.dialog.from, showShortcuts),
