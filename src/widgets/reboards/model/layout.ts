@@ -20,6 +20,8 @@ export type LayoutColumn = {
   values: string[];
   index: number;
   count: number;
+  /** Configured columns given a name in the settings: the header shows the name instead of the value pills. */
+  named?: boolean;
   /** Dynamic column fields: the column's value key, or null for the "No <field>" column; undefined for configured columns. */
   columnKey?: string | null;
   /** The rightmost "Assign <field>…" column of a dynamic field: a drop target that asks for the value. */
@@ -347,7 +349,9 @@ const configuredColumns = (config: BoardConfig, fieldName: string): ColumnPlan =
       valueToColumn.set(v, c.id);
     }
   }));
-  const columns = config.columns.map((c, index) => ({id: c.id, label: columnLabel(c), values: c.values, index, count: 0}));
+  const columns = config.columns.map((c, index) => ({
+    id: c.id, label: columnLabel(c), values: c.values, index, count: 0, ...(c.name?.trim() ? {named: true} : {})
+  }));
   return {
     columns,
     availableColumns: [],

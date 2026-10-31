@@ -245,6 +245,10 @@ body {
   min-width: 0;
 }
 
+.board-header__name {
+  font-weight: bold;
+}
+
 .board-header__values .value-pill {
   font-weight: bold;
 }

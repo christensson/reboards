@@ -56,19 +56,22 @@ const ColumnHeadersComponent: React.FC<Props> = ({
           );
         }
         const isCollapsed = collapsedColumns.has(column.id);
+        const valueLabels = column.values.map(value => field?.values.find(v => v.key === value)?.label ?? value);
+        const action = `${isCollapsed ? 'Expand' : 'Collapse'} column ${column.label}`;
         return (
           <button
             key={column.id}
             type="button"
             className={`board-header__column${isCollapsed ? ' board-header__column_collapsed' : ''}`}
-            title={isCollapsed ? `Expand column ${column.label}` : `Collapse column ${column.label}`}
+            title={column.named ? `${action} (${valueLabels.join(', ')})` : action}
             onClick={() => onToggleColumn(column.id)}
           >
             <div className="board-header__values">
               {isCollapsed && <span className="board-header__collapsed-label" title={column.label}>{column.label}</span>}
               {/* The "No <field>" column of a dynamic field has no value to show as a pill. */}
               {!isCollapsed && column.values.length === 0 && <span className="board-header__no-value">{column.label}</span>}
-              {!isCollapsed && column.values.map(value => {
+              {!isCollapsed && column.named && <span className="board-header__name">{column.label}</span>}
+              {!isCollapsed && !column.named && column.values.map(value => {
                 const meta = field?.values.find(v => v.key === value);
                 return <ValuePill key={value} label={meta?.label ?? value} color={meta?.color}/>;
               })}
