@@ -1789,7 +1789,7 @@ body {
   max-width: none;
 }
 
-.subtask-nav-banner {
+.nav-mode-banner {
   position: fixed;
   bottom: calc(var(--ring-unit) * 3);
   left: 50%;
@@ -1808,31 +1808,37 @@ body {
   font-size: var(--ring-font-size-smaller);
 }
 
-.subtask-nav-banner__text {
+.nav-mode-banner__text {
   text-align: center;
 }
 
-.subtask-nav-banner__status {
+.nav-mode-banner__status {
   margin-top: calc(var(--ring-unit) / 2);
   color: var(--ring-secondary-color);
 }
 
-.subtask-nav-banner__close {
+.nav-mode-banner__close {
   flex-shrink: 0;
 }
 
 /*
  * A card scrolled into view stops clear of what is stuck over the board: the column header above,
- * the first-level swimlane titles on the left, and the subtask navigation banner below.
+ * the first-level swimlane titles on the left, and the navigation mode banner below.
  */
 [data-card-id] {
   scroll-margin-top: calc(var(--board-header-height, 0px) + var(--ring-unit));
-  scroll-margin-bottom: calc(var(--subtask-nav-banner-space, 0px) + var(--ring-unit));
+  scroll-margin-bottom: calc(var(--nav-mode-banner-space, 0px) + var(--ring-unit));
 }
 
 /* The "parent" badge sticks out above the card's top border. */
 [data-card-id].issue-card_parent {
   scroll-margin-top: calc(var(--board-header-height, 0px) + var(--ring-unit) * 2);
+}
+
+/* Swimlane navigation scrolls a swimlane's header to just under the column header. */
+[data-row-key],
+[data-outer-key] {
+  scroll-margin-top: var(--board-header-height, 0px);
 }
 
 .board-screen_two-level [data-card-id] {

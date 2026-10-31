@@ -22,8 +22,8 @@ type SubtaskNav = {
   /** P and Shift+P: go up or down, starting the mode when they get somewhere. */
   upToParent: (issueId: string) => void;
   downToChild: (issueId: string) => void;
-  /** An arrow key while the mode is on. */
-  step: (direction: Direction) => void;
+  /** An arrow key while the mode is on; it takes them all. */
+  step: (direction: Direction) => boolean;
   exit: () => void;
 };
 
@@ -45,9 +45,9 @@ export const useSubtaskNav = ({layout, issuesById, selectedIds, goToParent, goTo
   const upToParent = useCallback((issueId: string) => enter(goToParent(issueId, nav?.parent ?? null), null), [enter, goToParent, nav]);
   const downToChild = useCallback((issueId: string) => enter(goToChild(issueId), issueId), [enter, goToChild]);
 
-  const step = useCallback((direction: Direction) => {
+  const step = useCallback((direction: Direction): boolean => {
     if (!nav) {
-      return;
+      return false;
     }
     const {current, parent} = nav;
     if (direction === 'up') {
@@ -64,6 +64,7 @@ export const useSubtaskNav = ({layout, issuesById, selectedIds, goToParent, goTo
         setNav({current: next, parent});
       }
     }
+    return true;
   }, [nav, upToParent, downToChild, layout, issuesById, goToCard]);
 
   const exit = useCallback(() => setNav(null), []);

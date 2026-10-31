@@ -42,10 +42,11 @@ import {useLinkDrag} from './useLinkDrag';
 import {useProjectPermissions} from '../data/useProjectPermissions';
 import {QuickFind} from './QuickFind';
 import {orderMatches, useQuickFind} from './useQuickFind';
-import {useBoardKeys} from './useBoardKeys';
+import {type NavMode, useBoardKeys} from './useBoardKeys';
 import {KeyboardHelpDialog} from './KeyboardHelpDialog';
-import {SubtaskNavBanner} from './SubtaskNavBanner';
+import {NavModeBanner} from './NavModeBanner';
 import {useSubtaskNav} from './useSubtaskNav';
+import {useSwimlaneNav} from './useSwimlaneNav';
 
 type Props = {
   board: BoardConfig;
@@ -84,6 +85,17 @@ const NO_NOTES: TimingNote[] = [];
 /** The find box or a dialog is open: board keys are theirs. */
 const hasOverlay = (findTerm: string | null, pendingMove: unknown, relationFrom: unknown, shortcuts: boolean): boolean =>
   findTerm !== null || pendingMove !== null || relationFrom !== null || shortcuts;
+
+const SUBTASK_BANNER = 'Subtask navigation mode. Use arrow keys to move within the subtask hierarchy. Esc exits mode.';
+const SWIMLANE_BANNER = 'Swimlane navigation mode. Use up/down arrow keys to move between swimlanes. Esc exits mode.';
+
+/** The banner of the navigation mode that is on; its status is null (hidden) when none is. */
+const navBanner = (
+  subtask: {status: string | null; exit: () => void},
+  swimlane: {status: string | null; exit: () => void}
+): React.ComponentProps<typeof NavModeBanner> => (subtask.status !== null
+  ? {title: SUBTASK_BANNER, status: subtask.status, modeName: 'subtask navigation mode', onClose: subtask.exit}
+  : {title: SWIMLANE_BANNER, status: swimlane.status, modeName: 'swimlane navigation mode', onClose: swimlane.exit});
 
 /** 1-based position of the match cycled to, in board order; null before cycling. */
 const findPositionOf = (cursor: string | null, matchIds: Set<string>, registry: CardRegistry): number | null =>
@@ -881,6 +893,32 @@ export const BoardScreen: React.FC<Props> = ({
   }, [layout, issuesById, goToCard]);
 
   const subtaskNav = useSubtaskNav({layout, issuesById, selectedIds, goToParent, goToChild: backToChild, goToCard});
+  const swimlaneNav = useSwimlaneNav({layout, collapsedRows, collapsedOuterRows, selectedIds, setSelectedIds, registry, scrollRef});
+  // One navigation mode at a time: starting one ends the other.
+  const navMode = useMemo((): NavMode | null => {
+    if (subtaskNav.active) {
+      return {onArrow: subtaskNav.step, exit: subtaskNav.exit};
+    }
+    return swimlaneNav.active ? {onArrow: swimlaneNav.onArrow, exit: swimlaneNav.exit} : null;
+  }, [subtaskNav.active, subtaskNav.step, subtaskNav.exit, swimlaneNav.active, swimlaneNav.onArrow, swimlaneNav.exit]);
+  const onParentKey = useCallback((issueId: string) => {
+    swimlaneNav.exit();
+    subtaskNav.upToParent(issueId);
+  }, [swimlaneNav, subtaskNav]);
+  const onChildKey = useCallback((issueId: string) => {
+    swimlaneNav.exit();
+    subtaskNav.downToChild(issueId);
+  }, [swimlaneNav, subtaskNav]);
+  const onSwimlaneKey = useCallback((direction: 'up' | 'down') => {
+    subtaskNav.exit();
+    swimlaneNav.start(direction === 'down' ? 1 : -1);
+  }, [swimlaneNav, subtaskNav]);
+  const banner = navBanner(subtaskNav, swimlaneNav);
+  // A click outside the cards clears the selection; S then starts from the swimlane clicked.
+  const onBoardClick = useCallback((event: React.MouseEvent) => {
+    swimlaneNav.onBoardClick(event.target);
+    setSelectedIds(new Set());
+  }, [swimlaneNav]);
 
   const {keyMove} = useBoardKeys({
     enabled: !hasOverlay(quickFindTerm, pendingMove, link.dialog.from, showShortcuts),
@@ -894,11 +932,10 @@ export const BoardScreen: React.FC<Props> = ({
       return Boolean(issue && canUpdateIssue(issue));
     },
     onOpen,
-    onParent: subtaskNav.upToParent,
-    onBackToChild: subtaskNav.downToChild,
-    subtaskMode: subtaskNav.active,
-    onSubtaskArrow: subtaskNav.step,
-    onExitSubtaskMode: subtaskNav.exit,
+    onParent: onParentKey,
+    onBackToChild: onChildKey,
+    navMode,
+    onSwimlane: onSwimlaneKey,
     onToggleConnectors: toggleConnectors,
     onHelp: () => setShowShortcuts(true),
     onCommitMove: move => {
@@ -1162,7 +1199,7 @@ export const BoardScreen: React.FC<Props> = ({
             endLinkDrag();
           }}
         >
-          <div className="board-scroll" ref={scrollRef} onClick={() => setSelectedIds(new Set())} role="presentation">
+          <div className="board-scroll" ref={scrollRef} onClick={onBoardClick} role="presentation">
             <div className="board-content" ref={contentRef}>
               {/* Without a column field there is one column and no header. */}
               {board.columnField && (
@@ -1214,7 +1251,7 @@ export const BoardScreen: React.FC<Props> = ({
       />
       <RelationPickerDialog {...link.dialog}/>
       <KeyboardHelpDialog show={showShortcuts} onClose={() => setShowShortcuts(false)}/>
-      <SubtaskNavBanner status={subtaskNav.status} onClose={subtaskNav.exit}/>
+      <NavModeBanner {...banner}/>
       {quickFindTerm !== null && (
         <QuickFind
           term={quickFindTerm}

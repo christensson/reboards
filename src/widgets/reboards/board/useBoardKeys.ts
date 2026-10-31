@@ -21,13 +21,20 @@ type Options = {
   onParent: (issueId: string) => void;
   /** Shift+P: back to the subtask "P" came from, when the parent is still the selected issue; else to the first subtask. */
   onBackToChild: (issueId: string) => void;
-  /** Subtask navigation mode: the arrows move within the subtask hierarchy, Esc leaves it. */
-  subtaskMode: boolean;
-  onSubtaskArrow: (direction: Direction) => void;
-  onExitSubtaskMode: () => void;
+  /** The navigation mode on (subtask or swimlane), or null: it takes the plain arrows, Esc leaves it. */
+  navMode: NavMode | null;
+  /** S (down) and Shift+S (up): the next or previous swimlane, in swimlane navigation mode. */
+  onSwimlane: (direction: 'up' | 'down') => void;
   onToggleConnectors: () => void;
   onHelp: () => void;
   onCommitMove: (move: KeyMove) => void;
+};
+
+/** A keyboard navigation mode: the plain arrows go to it first. */
+export type NavMode = {
+  /** False for an arrow the mode leaves to the board: the mode then ends and the arrow does its usual. */
+  onArrow: (direction: Direction) => boolean;
+  exit: () => void;
 };
 
 const isPressable = (element: Element | null): boolean => element instanceof HTMLButtonElement || element instanceof HTMLAnchorElement;
@@ -68,7 +75,9 @@ const nextCard = (registry: CardRegistry, anchor: string | null, direction: Dire
  *   the move, Escape cancels it;
  * - Enter opens the selected issue, P selects its parent and Shift+P goes back to the subtask
  *   (or down to the first subtask); either starts subtask navigation mode, where the arrows move
- *   up to the parent, down to a subtask and sideways between subtasks until Escape,
+ *   up to the parent, down to a subtask and sideways between subtasks until Escape;
+ * - S and Shift+S go to the next or previous swimlane and start swimlane navigation mode, where
+ *   Up and Down step between swimlanes until Escape,
  *   R shows or hides relations, ? lists the keys;
  * - Escape clears the selection.
  */
@@ -133,28 +142,39 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
       }
     };
     const onDirection = (event: KeyboardEvent, direction: Direction): void => {
-      const {subtaskMode, onSubtaskArrow, onExitSubtaskMode} = latest.current;
-      if (subtaskMode && !event.ctrlKey && !event.metaKey) {
-        onSubtaskArrow(direction);
+      const {navMode} = latest.current;
+      if (navMode && !event.ctrlKey && !event.metaKey && navMode.onArrow(direction)) {
         return;
       }
-      if (subtaskMode) {
-        // A keyboard move ends subtask navigation.
-        onExitSubtaskMode();
-      }
+      // A keyboard move, or an arrow the mode leaves to the board, ends the mode.
+      navMode?.exit();
       onArrow(event, direction);
     };
     const onEscape = (): void => {
-      const {subtaskMode, onExitSubtaskMode, setSelectedIds} = latest.current;
-      if (subtaskMode) {
+      const {navMode, setSelectedIds} = latest.current;
+      if (navMode) {
         // Leaving the mode keeps the selection; the next Escape clears it.
-        onExitSubtaskMode();
+        navMode.exit();
       } else {
         setSelectedIds(new Set());
       }
     };
+    /** The keys that act on the selected card: Enter, P and Shift+P. */
+    const onCardKey = (key: string, anchor: string): boolean => {
+      const {onOpen, onParent, onBackToChild} = latest.current;
+      if (key === 'Enter') {
+        onOpen(anchor);
+      } else if (key === 'p') {
+        onParent(anchor);
+      } else if (key === 'P') {
+        onBackToChild(anchor);
+      } else {
+        return false;
+      }
+      return true;
+    };
     const onKey = (event: KeyboardEvent): boolean => {
-      const {onOpen, onParent, onBackToChild, onToggleConnectors, onHelp} = latest.current;
+      const {onSwimlane, onToggleConnectors, onHelp} = latest.current;
       const anchor = anchorRef.current;
       const direction = directionOf(event.key);
       if (direction) {
@@ -165,14 +185,13 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
       if (event.ctrlKey || event.metaKey) {
         return false;
       }
+      if (anchor && onCardKey(event.key, anchor)) {
+        return true;
+      }
       if (event.key === 'Escape') {
         onEscape();
-      } else if (event.key === 'Enter' && anchor) {
-        onOpen(anchor);
-      } else if (event.key === 'p' && anchor) {
-        onParent(anchor);
-      } else if (event.key === 'P' && anchor) {
-        onBackToChild(anchor);
+      } else if (event.key === 's' || event.key === 'S') {
+        onSwimlane(event.key === 's' ? 'down' : 'up');
       } else if (event.key === 'r') {
         // Plain R only: Shift+R and Ctrl+R are left to the browser.
         onToggleConnectors();
