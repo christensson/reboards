@@ -175,6 +175,7 @@ export const PagesSection: React.FC<Props> = props => {
           type={Select.Type.BUTTON}
           disabled={readOnly}
           data={data}
+          minWidth={400}
           selected={data.find(item => item.key === draft.pages.mode) ?? data[0]}
           onChange={(item: SelectItem | null) => item && item.key !== draft.pages.mode && onMode(item.key as PagesMode)}
         />
