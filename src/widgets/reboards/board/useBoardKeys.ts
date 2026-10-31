@@ -6,7 +6,7 @@ import type {CardRegistry} from './BoardContext';
 import {isDialogOpen, isTypingTarget} from './useQuickFind';
 
 /** A card being moved with Ctrl+arrows: a shadow of it shows where it would go. */
-export type KeyMove = {issueId: string; from: MoveTarget; to: MoveTarget};
+export type KeyMove = {issueId: string; from: MoveTarget; to: MoveTarget; /** The card moved, of an issue with several. */ cardId: string};
 
 type Options = {
   /** False while the find box or a dialog of the board is open. */
@@ -28,6 +28,10 @@ type Options = {
   onToggleConnectors: () => void;
   onHelp: () => void;
   onCommitMove: (move: KeyMove) => void;
+  /** The card of a selected issue the keys start from: the one the user picked when it has several. */
+  activeCardOf: (issueId: string) => string;
+  /** An arrow picked this card (null: none), so later keys start from it. */
+  onCardPicked: (cardId: string | null) => void;
 };
 
 /** A keyboard navigation mode: the plain arrows go to it first. */
@@ -45,27 +49,39 @@ const boxOf = (element: HTMLElement) => {
 };
 
 /**
+ * Every rendered card by card id: an issue's first card (id = issue id) and its further cards for
+ * further values of a multi-value field. Read from the dataset: card ids may hold a NUL.
+ */
+const cardElements = (): Map<string, HTMLElement> =>
+  new Map(Array.from(document.querySelectorAll<HTMLElement>('[data-card-id]')).map(element => [element.dataset.cardId ?? '', element]));
+
+/** A card's element, falling back to the issue's first card. */
+const cardElement = (registry: CardRegistry, cardId: string, issueId: string): HTMLElement | undefined =>
+  cardElements().get(cardId) ?? registry.get(issueId);
+
+/**
  * Scrolls a card into view and gives it keyboard focus. Focus moves along with the selection,
  * so the focus ring does not stay on the card the user left and look like a second selection.
  */
-const scrollToCard = (registry: CardRegistry, issueId: string): void => {
-  const element = registry.get(issueId);
+const scrollToCard = (element: HTMLElement | undefined): void => {
   element?.focus({preventScroll: true});
   element?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'});
 };
 
-/** The card an arrow goes to: the nearest one that way, or the top left one when nothing is selected. */
-const nextCard = (registry: CardRegistry, anchor: string | null, direction: Direction): string | null => {
-  const candidates = registry.ids().flatMap(id => {
-    const element = registry.get(id);
-    return element && id !== anchor ? [{id, box: boxOf(element)}] : [];
-  });
-  const from = anchor ? registry.get(anchor) : undefined;
+/**
+ * The card an arrow goes to from `from` (the card the keys start from): the nearest one that way
+ * among the other issues' cards, or the top left one when nothing is selected.
+ */
+const nextCard = (from: HTMLElement | undefined, direction: Direction): HTMLElement | null => {
+  const fromIssue = from?.dataset.issueId;
+  const candidates = Array.from(cardElements().values()).flatMap(element =>
+    (element.dataset.issueId === fromIssue ? [] : [{id: element.dataset.cardId ?? '', element, box: boxOf(element)}]));
   if (!from) {
     const first = [...candidates].sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left)[0];
-    return first?.id ?? null;
+    return first?.element ?? null;
   }
-  return nearestInDirection(boxOf(from), candidates, direction);
+  const id = nearestInDirection(boxOf(from), candidates, direction);
+  return candidates.find(candidate => candidate.id === id)?.element ?? null;
 };
 
 /**
@@ -95,10 +111,12 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
   moveRef.current = keyMove;
 
   useEffect(() => {
-    const select = (id: string) => {
+    const select = (element: HTMLElement) => {
+      const id = element.dataset.issueId ?? '';
       anchorRef.current = id;
       latest.current.setSelectedIds(new Set([id]));
-      scrollToCard(latest.current.registry, id);
+      latest.current.onCardPicked(element.dataset.cardId ?? id);
+      scrollToCard(element);
     };
     const onMoveKey = (event: KeyboardEvent, move: KeyMove): boolean => {
       const direction = directionOf(event.key);
@@ -107,7 +125,7 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
         if (to.rowKey === move.from.rowKey && to.columnId === move.from.columnId) {
           // Back where it started: nothing to apply, so the move ends.
           setKeyMove(null);
-          scrollToCard(latest.current.registry, move.issueId);
+          scrollToCard(cardElement(latest.current.registry, move.cardId, move.issueId));
         } else {
           setKeyMove({...move, to});
         }
@@ -122,21 +140,23 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
       return true;
     };
     const onArrow = (event: KeyboardEvent, direction: Direction): void => {
-      const {layout, collapsed, canMove, registry} = latest.current;
+      const {layout, collapsed, canMove, registry, activeCardOf} = latest.current;
       const anchor = anchorRef.current;
+      // The card the keys start from: the one picked of an issue with several.
+      const cardId = anchor ? activeCardOf(anchor) : null;
       if (event.ctrlKey || event.metaKey) {
-        const from = anchor ? layout.placement[anchor] : undefined;
-        if (anchor && from && canMove(anchor)) {
+        const from = cardId ? layout.cards[cardId] ?? layout.placement[cardId] : undefined;
+        if (anchor && cardId && from && canMove(anchor)) {
           const start = {rowKey: from.rowKey, columnId: from.columnId};
           const to = stepTarget(layout, start, direction, collapsed);
           // At the edge of the board there is nowhere to go.
           if (to.rowKey !== start.rowKey || to.columnId !== start.columnId) {
-            setKeyMove({issueId: anchor, from: start, to});
+            setKeyMove({issueId: anchor, cardId, from: start, to});
           }
         }
         return;
       }
-      const next = nextCard(registry, anchor, direction);
+      const next = nextCard(anchor && cardId ? cardElement(registry, cardId, anchor) : undefined, direction);
       if (next) {
         select(next);
       }

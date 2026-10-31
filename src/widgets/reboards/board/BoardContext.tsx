@@ -36,7 +36,8 @@ export type BoardContextValue = {
   selectedIds: Set<string>;
   matchIds: Set<string>;
   searchTerm: string;
-  onSelect: (issueId: string, additive: boolean) => void;
+  /** `cardId`: the card clicked, for issues with a card in several swimlanes or columns. */
+  onSelect: (issueId: string, additive: boolean, cardId?: string) => void;
   onOpen: (issueId: string) => void;
   /** New-issue page for a cell; with a parent ID the new issue becomes its subtask. */
   newIssueHref: (rowKey: string, columnId: string, parentIdReadable?: string) => string | null;

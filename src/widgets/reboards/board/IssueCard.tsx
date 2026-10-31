@@ -237,9 +237,9 @@ const IssueCardComponent: React.FC<Props> = ({issueId, cardId = issueId, isParen
   const onClick = useCallback(
     (event: React.MouseEvent) => {
       event.stopPropagation();
-      ctx.onSelect(issueId, event.ctrlKey || event.metaKey);
+      ctx.onSelect(issueId, event.ctrlKey || event.metaKey, cardId);
     },
-    [ctx, issueId]
+    [ctx, issueId, cardId]
   );
   const onDoubleClick = useCallback(
     (event: React.MouseEvent) => {

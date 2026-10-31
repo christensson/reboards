@@ -58,12 +58,15 @@ export const swimlaneStops = (layout: BoardLayout, collapsedOuterRows: Set<strin
 /** The stop holding a row, or -1. */
 export const stopIndexOfRow = (stops: LaneStop[], rowKey: string): number => stops.findIndex(stop => stop.rowKeys.includes(rowKey));
 
-/** The issues with their card in a swimlane; none when it is collapsed. */
+/**
+ * The cards in a swimlane, by card id: first cards (id = issue id) and the further cards of issues
+ * with several values of a multi-value field. None when the swimlane is collapsed.
+ */
 export const laneCardIds = (layout: BoardLayout, stop: LaneStop, collapsedRows: Set<string>): string[] => {
   if (stop.kind === 'outer' || collapsedRows.has(stop.key)) {
     return [];
   }
-  return Object.keys(layout.placement).filter(id => layout.placement[id].rowKey === stop.key);
+  return Object.keys(layout.cards).filter(id => layout.cards[id].rowKey === stop.key);
 };
 
 /** Cards whose tops differ by at most this many pixels count as level. */

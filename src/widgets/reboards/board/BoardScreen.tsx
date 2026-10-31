@@ -515,7 +515,11 @@ export const BoardScreen: React.FC<Props> = ({
   const edges = useMemo(() => computeEdges(data.issues, visibleIds, board.linkTypes), [data.issues, visibleIds, board.linkTypes]);
 
 
-  const onSelect = useCallback((issueId: string, additive: boolean) => {
+  // The card last clicked: an issue with several cards (multi-value fields) is selected on all of
+  // them, but keys that move from the selection (S, Shift+S) start from this one.
+  const clickedCard = useRef<string | null>(null);
+  const onSelect = useCallback((issueId: string, additive: boolean, cardId?: string) => {
+    clickedCard.current = cardId ?? null;
     setSelectedIds(prev => {
       const next = additive ? new Set(prev) : new Set<string>();
       if (prev.has(issueId) && (additive || prev.size === 1)) {
@@ -832,6 +836,7 @@ export const BoardScreen: React.FC<Props> = ({
    * ring does not stay behind on the card left and look like it is still selected.
    */
   const goToCard = useCallback((issueId: string) => {
+    clickedCard.current = null;
     setSelectedIds(new Set([issueId]));
     expandFor(issueId);
     const SCROLL_DELAY = 50;
@@ -893,7 +898,19 @@ export const BoardScreen: React.FC<Props> = ({
   }, [layout, issuesById, goToCard]);
 
   const subtaskNav = useSubtaskNav({layout, issuesById, selectedIds, goToParent, goToChild: backToChild, goToCard});
-  const swimlaneNav = useSwimlaneNav({layout, collapsedRows, collapsedOuterRows, selectedIds, setSelectedIds, registry, scrollRef});
+  const onCardPicked = useCallback((cardId: string | null) => {
+    clickedCard.current = cardId;
+  }, []);
+  /** The card of a selected issue that keys start from: the one clicked or picked when it is one of the issue's, else its first. */
+  const activeCardOf = useCallback(
+    (issueId: string): string => (clickedCard.current && layout.cards[clickedCard.current]?.issueId === issueId ? clickedCard.current : issueId),
+    [layout.cards]
+  );
+  /** The swimlane row of a selected issue, from the card the keys start from. */
+  const selectedRowOf = useCallback((issueId: string): string | undefined => layout.cards[activeCardOf(issueId)]?.rowKey, [layout.cards, activeCardOf]);
+  const swimlaneNav = useSwimlaneNav({
+    layout, collapsedRows, collapsedOuterRows, selectedIds, setSelectedIds, scrollRef, selectedRowOf, onCardPicked
+  });
   // One navigation mode at a time: starting one ends the other.
   const navMode = useMemo((): NavMode | null => {
     if (subtaskNav.active) {
@@ -938,6 +955,8 @@ export const BoardScreen: React.FC<Props> = ({
     onSwimlane: onSwimlaneKey,
     onToggleConnectors: toggleConnectors,
     onHelp: () => setShowShortcuts(true),
+    activeCardOf,
+    onCardPicked,
     onCommitMove: move => {
       const issue = issuesById.get(move.issueId);
       if (issue) {

@@ -2,7 +2,6 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import alertService from '@jetbrains/ring-ui-built/components/alert-service/alert-service';
 import type {BoardLayout} from '../model/layout';
 import {type LaneStop, laneCardIds, laneStatus, stopIndexOfRow, swimlaneStops, topLeftCard} from '../model/swimlaneNav';
-import type {CardRegistry} from './BoardContext';
 
 type Options = {
   layout: BoardLayout;
@@ -10,8 +9,11 @@ type Options = {
   collapsedOuterRows: Set<string>;
   selectedIds: Set<string>;
   setSelectedIds: (ids: Set<string>) => void;
-  registry: CardRegistry;
   scrollRef: React.RefObject<HTMLDivElement | null>;
+  /** The swimlane row of a selected issue, from the card the user picked when it has several. */
+  selectedRowOf: (issueId: string) => string | undefined;
+  /** The card the mode selected, so that later moves start from it rather than the issue's first card. */
+  onCardPicked: (cardId: string | null) => void;
 };
 
 type SwimlaneNav = {
@@ -38,6 +40,10 @@ const elementOf = (content: Element, stop: LaneStop): HTMLElement | null => {
 };
 
 const SCROLL_DELAY = 50;
+
+/** The rendered cards by card id. Read from the dataset: card ids hold row keys, which may hold a NUL. */
+const cardElementsById = (content: Element): Map<string, HTMLElement> =>
+  new Map(Array.from(content.querySelectorAll<HTMLElement>('[data-card-id]')).map(element => [element.dataset.cardId ?? '', element]));
 
 const headerHeight = (scroller: HTMLElement): number => scroller.querySelector<HTMLElement>('.board-header')?.offsetHeight ?? 0;
 
@@ -79,7 +85,7 @@ const clickedOrTopIndex = (scroller: HTMLElement, stops: LaneStop[], clickedKey:
  * swimlane above or below, scrolled so its header sits under the column header, and select the
  * card nearest its header (the leftmost of those). It ends with Escape, Left or Right, or when the selection changes some other way.
  */
-export const useSwimlaneNav = ({layout, collapsedRows, collapsedOuterRows, selectedIds, setSelectedIds, registry, scrollRef}: Options): SwimlaneNav => {
+export const useSwimlaneNav = ({layout, collapsedRows, collapsedOuterRows, selectedIds, setSelectedIds, scrollRef, selectedRowOf, onCardPicked}: Options): SwimlaneNav => {
   const stops = useMemo(() => swimlaneStops(layout, collapsedOuterRows), [layout, collapsedOuterRows]);
   // The swimlane the mode is at, and the card it selected there (null: none).
   const [nav, setNav] = useState<{key: string; selected: string | null} | null>(null);
@@ -94,22 +100,25 @@ export const useSwimlaneNav = ({layout, collapsedRows, collapsedOuterRows, selec
       return;
     }
     // The card nearest the swimlane header, then the leftmost, as laid out on screen.
+    const cardElements = cardElementsById(scroller);
     const card = topLeftCard(laneCardIds(layout, stop, collapsedRows).flatMap(id => {
-      const box = registry.get(id)?.getBoundingClientRect();
+      const box = cardElements.get(id)?.getBoundingClientRect();
       return box ? [{id, top: box.top, left: box.left}] : [];
     }));
-    setSelectedIds(new Set(card ? [card] : []));
-    setNav({key: stop.key, selected: card});
+    const issueId = card ? layout.cards[card].issueId : null;
+    setSelectedIds(new Set(issueId ? [issueId] : []));
+    setNav({key: stop.key, selected: issueId});
+    onCardPicked(card);
     // After the selection has rendered: focus first, since moving focus cancels a smooth scroll in
     // progress, then scroll the header to just under the column header (rows keep clear of it with
     // scroll-margin-top). The same order and delay as P and Shift+P.
     window.setTimeout(() => {
       if (card) {
-        registry.get(card)?.focus({preventScroll: true});
+        cardElements.get(card)?.focus({preventScroll: true});
       }
       elementOf(scroller, stop)?.scrollIntoView({block: 'start', inline: 'nearest', behavior: 'smooth'});
     }, SCROLL_DELAY);
-  }, [stops, scrollRef, layout, collapsedRows, setSelectedIds, registry]);
+  }, [stops, scrollRef, layout, collapsedRows, setSelectedIds, onCardPicked]);
 
   const start = useCallback((step: 1 | -1) => {
     if (stops.length === 0) {
@@ -125,13 +134,13 @@ export const useSwimlaneNav = ({layout, collapsedRows, collapsedOuterRows, selec
       return;
     }
     const selected = Array.from(selectedIds).pop();
-    const rowKey = selected ? layout.placement[selected]?.rowKey : undefined;
+    const rowKey = selected ? selectedRowOf(selected) : undefined;
     const fromSelection = rowKey ? stopIndexOfRow(stops, rowKey) : -1;
     const scroller = scrollRef.current;
     const current = fromSelection !== -1 || !scroller ? Math.max(0, fromSelection) : clickedOrTopIndex(scroller, stops, clickedKey.current);
     // At the first or last swimlane the mode still starts, on the current one.
     goTo(Math.min(stops.length - 1, Math.max(0, current + step)));
-  }, [stops, index, goTo, selectedIds, layout.placement, scrollRef]);
+  }, [stops, index, goTo, selectedIds, selectedRowOf, scrollRef]);
 
   const onArrow = useCallback((direction: 'up' | 'down' | 'left' | 'right'): boolean => {
     if (direction === 'left' || direction === 'right') {
