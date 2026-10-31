@@ -47,6 +47,7 @@ import {KeyboardHelpDialog} from './KeyboardHelpDialog';
 import {NavModeBanner} from './NavModeBanner';
 import {useSubtaskNav} from './useSubtaskNav';
 import {useSwimlaneNav} from './useSwimlaneNav';
+import {useHighlightNav} from './useHighlightNav';
 
 type Props = {
   board: BoardConfig;
@@ -89,13 +90,15 @@ const hasOverlay = (findTerm: string | null, pendingMove: unknown, relationFrom:
 const SUBTASK_BANNER = 'Subtask navigation mode. Use arrow keys to move within the subtask hierarchy. Esc exits mode.';
 const SWIMLANE_BANNER = 'Swimlane navigation mode. Use up/down arrow keys to move between swimlanes. Esc exits mode.';
 
+const HIGHLIGHT_BANNER = 'Highlight navigation mode. Use up/down arrows to move between matches. Esc exits mode.';
+
+type BannerMode = {status: string | null; title: string; modeName: string; exit: () => void};
+
 /** The banner of the navigation mode that is on; its status is null (hidden) when none is. */
-const navBanner = (
-  subtask: {status: string | null; exit: () => void},
-  swimlane: {status: string | null; exit: () => void}
-): React.ComponentProps<typeof NavModeBanner> => (subtask.status !== null
-  ? {title: SUBTASK_BANNER, status: subtask.status, modeName: 'subtask navigation mode', onClose: subtask.exit}
-  : {title: SWIMLANE_BANNER, status: swimlane.status, modeName: 'swimlane navigation mode', onClose: swimlane.exit});
+const navBanner = (modes: BannerMode[]): React.ComponentProps<typeof NavModeBanner> => {
+  const mode = modes.find(m => m.status !== null) ?? modes[0];
+  return {title: mode.title, status: mode.status, modeName: mode.modeName, onClose: mode.exit};
+};
 
 /** 1-based position of the match cycled to, in board order; null before cycling. */
 const findPositionOf = (cursor: string | null, matchIds: Set<string>, registry: CardRegistry): number | null =>
@@ -912,25 +915,50 @@ export const BoardScreen: React.FC<Props> = ({
     layout, collapsedRows, collapsedOuterRows, selectedIds, setSelectedIds, scrollRef, selectedRowOf, onCardPicked
   });
   // One navigation mode at a time: starting one ends the other.
+  const highlightMatches = useMemo(() => new Set(Array.from(highlightIds).filter(id => layout.placement[id])), [highlightIds, layout.placement]);
+  const highlightNav = useHighlightNav({
+    matchIds: highlightMatches, issuesById, registry, selectedIds, setSelectedIds, expandFor, onCardPicked
+  });
   const navMode = useMemo((): NavMode | null => {
     if (subtaskNav.active) {
       return {onArrow: subtaskNav.step, exit: subtaskNav.exit};
     }
+    if (highlightNav.active) {
+      return {onArrow: highlightNav.onArrow, exit: highlightNav.exit, finish: highlightNav.finish};
+    }
     return swimlaneNav.active ? {onArrow: swimlaneNav.onArrow, exit: swimlaneNav.exit} : null;
-  }, [subtaskNav.active, subtaskNav.step, subtaskNav.exit, swimlaneNav.active, swimlaneNav.onArrow, swimlaneNav.exit]);
+  }, [subtaskNav.active, subtaskNav.step, subtaskNav.exit, highlightNav.active, highlightNav.onArrow, highlightNav.exit, highlightNav.finish,
+    swimlaneNav.active, swimlaneNav.onArrow, swimlaneNav.exit]);
   const onParentKey = useCallback((issueId: string) => {
     swimlaneNav.exit();
+    highlightNav.exit();
     subtaskNav.upToParent(issueId);
-  }, [swimlaneNav, subtaskNav]);
+  }, [swimlaneNav, highlightNav, subtaskNav]);
   const onChildKey = useCallback((issueId: string) => {
     swimlaneNav.exit();
+    highlightNav.exit();
     subtaskNav.downToChild(issueId);
-  }, [swimlaneNav, subtaskNav]);
+  }, [swimlaneNav, highlightNav, subtaskNav]);
   const onSwimlaneKey = useCallback((direction: 'up' | 'down') => {
     subtaskNav.exit();
+    highlightNav.exit();
     swimlaneNav.start(direction === 'down' ? 1 : -1);
-  }, [swimlaneNav, subtaskNav]);
-  const banner = navBanner(subtaskNav, swimlaneNav);
+  }, [swimlaneNav, highlightNav, subtaskNav]);
+  /** The magnifying glass menu: choosing a highlight starts highlight navigation on its first match. */
+  const onQuickFilter = useCallback((filter: string | null) => {
+    setQuickFilter(filter);
+    subtaskNav.exit();
+    swimlaneNav.exit();
+    highlightNav.exit();
+    if (filter) {
+      highlightNav.requestStart();
+    }
+  }, [subtaskNav, swimlaneNav, highlightNav]);
+  const banner = navBanner([
+    {status: subtaskNav.status, title: SUBTASK_BANNER, modeName: 'subtask navigation mode', exit: subtaskNav.exit},
+    {status: swimlaneNav.status, title: SWIMLANE_BANNER, modeName: 'swimlane navigation mode', exit: swimlaneNav.exit},
+    {status: highlightNav.status, title: HIGHLIGHT_BANNER, modeName: 'highlight navigation mode', exit: highlightNav.finish}
+  ]);
   // A click outside the cards clears the selection; S then starts from the swimlane clicked.
   const onBoardClick = useCallback((event: React.MouseEvent) => {
     swimlaneNav.onBoardClick(event.target);
@@ -1160,7 +1188,7 @@ export const BoardScreen: React.FC<Props> = ({
         selectedCount={selectedIds.size}
         matchCount={quickFilter ? highlightIds.size : null}
         quickFilter={quickFilter}
-        onQuickFilter={setQuickFilter}
+        onQuickFilter={onQuickFilter}
         cardSize={view.cardSize}
         connectorsMode={view.connectorsMode}
         loading={data.loading || reference.loading}

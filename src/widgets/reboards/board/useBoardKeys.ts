@@ -39,6 +39,8 @@ export type NavMode = {
   /** False for an arrow the mode leaves to the board: the mode then ends and the arrow does its usual. */
   onArrow: (direction: Direction) => boolean;
   exit: () => void;
+  /** Escape (and Enter, when set): leave the mode as finished; without it Escape just exits. */
+  finish?: () => void;
 };
 
 const isPressable = (element: Element | null): boolean => element instanceof HTMLButtonElement || element instanceof HTMLAnchorElement;
@@ -174,7 +176,7 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
       const {navMode, setSelectedIds} = latest.current;
       if (navMode) {
         // Leaving the mode keeps the selection; the next Escape clears it.
-        navMode.exit();
+        (navMode.finish ?? navMode.exit)();
       } else {
         setSelectedIds(new Set());
       }
@@ -204,6 +206,12 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
       // With Ctrl or Cmd the key belongs to the browser (Ctrl+R reloads, Ctrl+P prints).
       if (event.ctrlKey || event.metaKey) {
         return false;
+      }
+      // A mode that can be finished takes Enter for that, instead of opening the issue.
+      const {navMode} = latest.current;
+      if (event.key === 'Enter' && navMode?.finish) {
+        navMode.finish();
+        return true;
       }
       if (anchor && onCardKey(event.key, anchor)) {
         return true;

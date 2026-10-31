@@ -28,7 +28,7 @@ issues, far more insight.
 - **Link an existing agile board**: show its issues and sprints, and its backlog as "Unscheduled", without copying its query. An extra filter narrows them further.
 - Combine or hide column values, or build columns from the values in use.
 - Sprints from any version or enum field, with dates, the current sprint and an "Unscheduled" view.
-- Highlights for cards with a missing field.
+- Highlights for cards with a missing field; choosing one selects the first match, and ↑/↓ step through the rest.
 
 **Works with AI assistants (MCP)**
 - Three read-only tools for YouTrack's MCP server: **`reboards_list_boards`** lists your boards with their sprints, **`reboards_get_board`** describes a board's columns, swimlanes and sprints and which field to change to move an issue, and **`reboards_list_board_issues`** lists a board's issues with the column and swimlane each one is in.
