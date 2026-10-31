@@ -1490,18 +1490,23 @@ body {
 
 /* ---------- Cards shown more than once (multi-value fields) ---------- */
 
-.issue-card:has(> .issue-card__corner) {
-  padding-bottom: calc(var(--ring-unit) * 2.5);
-}
-
-/* Lower right corner: timing icons, then the "also shown in" icon. */
+/*
+ * Lower right corner: timing icons, then the "also shown in" icon, at the right end of the card's
+ * last row: after the field values, or floated right after the title's text.
+ */
 .issue-card__corner {
-  position: absolute;
-  right: 2px;
-  bottom: 2px;
   display: inline-flex;
   align-items: center;
   gap: 2px;
+}
+
+.issue-card__fields > .issue-card__corner {
+  margin-left: auto;
+}
+
+.issue-card__title > .issue-card__corner {
+  float: right;
+  margin-left: calc(var(--ring-unit) / 2);
 }
 
 .issue-card__timing {

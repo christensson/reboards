@@ -77,6 +77,36 @@ const FieldChip: React.FC<{name: string; value: FieldValue | null}> = ({name, va
   );
 };
 
+/** The card's class names, from its size and state. */
+const cardClasses = ({size, selected, highlighted, dragging, isParent, colored, className}: {
+  size: CardSize; selected?: boolean; highlighted?: boolean; dragging?: boolean; isParent?: boolean; colored: boolean; className?: string;
+}): string => [
+  'issue-card',
+  `issue-card_${size}`,
+  selected ? 'issue-card_selected' : '',
+  highlighted ? 'issue-card_highlighted' : '',
+  dragging ? 'issue-card_dragging' : '',
+  isParent ? 'issue-card_parent' : '',
+  className ?? '',
+  colored ? 'issue-card_colored' : ''
+].filter(Boolean).join(' ');
+
+/** The issue's tags, after the title on normal-size cards. */
+const CardTags: React.FC<{tags: BoardIssue['tags']}> = ({tags}) => (
+  <>
+    {tags.map(tag => (
+      <span
+        key={tag.id}
+        className={`issue-card__tag${tag.color ? '' : ' issue-card__tag_plain'}`}
+        style={tag.color ? {backgroundColor: tag.color.background, color: tag.color.foreground} : undefined}
+        title={`Tag: ${tag.name}`}
+      >
+        {tag.name}
+      </span>
+    ))}
+  </>
+);
+
 /** Pure card rendering, also used for the drag overlay. */
 export const IssueCardView = React.forwardRef<HTMLDivElement, ViewProps & React.HTMLAttributes<HTMLDivElement>>(
   ({issue, size, cardFields, cardColorField, selected, highlighted, resolved, searchTerm = '', dragging, isParent, corner, className, style, ...rest}, ref) => {
@@ -84,39 +114,25 @@ export const IssueCardView = React.forwardRef<HTMLDivElement, ViewProps & React.
     const colorStyle: React.CSSProperties | undefined = color
       ? ({'--card-color': color.background} as React.CSSProperties)
       : undefined;
-    const classes = [
-      'issue-card',
-      `issue-card_${size}`,
-      selected ? 'issue-card_selected' : '',
-      highlighted ? 'issue-card_highlighted' : '',
-      dragging ? 'issue-card_dragging' : '',
-      isParent ? 'issue-card_parent' : '',
-      className ?? ''
-    ].filter(Boolean).join(' ');
+    const classes = cardClasses({size, selected, highlighted, dragging, isParent, colored: Boolean(color), className});
     const words = searchWords(searchTerm);
+    // The corner icons sit at the right end of the last row: the field values, else the title.
+    const showFields = size === 'normal' && cardFields.length > 0;
     return (
-      <div ref={ref} className={`${classes}${color ? ' issue-card_colored' : ''}`} style={{...colorStyle, ...style}} data-issue-id={issue.id} {...rest}>
+      <div ref={ref} className={classes} style={{...colorStyle, ...style}} data-issue-id={issue.id} {...rest}>
         {isParent && <span className="issue-card__parent-badge">parent</span>}
         <div className="issue-card__title">
           <IssueId idReadable={issue.idReadable} words={words} resolved={resolved}/>
           <span className="issue-card__summary"><Highlighted text={issue.summary} words={words}/></span>
-          {size === 'normal' && issue.tags.map(tag => (
-            <span
-              key={tag.id}
-              className={`issue-card__tag${tag.color ? '' : ' issue-card__tag_plain'}`}
-              style={tag.color ? {backgroundColor: tag.color.background, color: tag.color.foreground} : undefined}
-              title={`Tag: ${tag.name}`}
-            >
-              {tag.name}
-            </span>
-          ))}
+          {size === 'normal' && <CardTags tags={issue.tags}/>}
+          {!showFields && corner}
         </div>
-        {size === 'normal' && cardFields.length > 0 && (
+        {showFields && (
           <div className="issue-card__fields">
             {cardFields.map(name => <FieldChip key={name} name={name} value={issue.fields[name] ?? null}/>)}
+            {corner}
           </div>
         )}
-        {corner}
       </div>
     );
   }
