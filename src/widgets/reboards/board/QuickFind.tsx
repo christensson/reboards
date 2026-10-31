@@ -13,7 +13,7 @@ type Props = {
   /** 1-based position of the match the user cycled to; null before cycling. */
   position: number | null;
   onChange: (term: string) => void;
-  /** Enter / Shift+Enter: go to the next or previous match. */
+  /** Enter / Shift+Enter, or Down / Up: go to the next or previous match. */
   onStep: (direction: 1 | -1) => void;
   /** Ctrl+Enter: select the current match (all matches before cycling); returns true when anything was selected. */
   onSubmit: () => boolean;
@@ -28,8 +28,8 @@ const countText = (matchCount: number, position: number | null): string => {
 };
 
 /**
- * Interactive find opened with "/": a small box a third down the board, clear of the centered match. Enter goes through the
- * matches one by one, selecting and scrolling to each; Ctrl+Enter selects and closes.
+ * Interactive find opened with "/": a small box a third down the board, clear of the centered match. Enter (or Down, and
+ * Shift+Enter or Up back) goes through the matches one by one, selecting and scrolling to each; Ctrl+Enter selects and closes.
  */
 export const QuickFind: React.FC<Props> = ({term, matchCount, position, onChange, onStep, onSubmit, onClose}) => {
   const submit = () => {
@@ -59,6 +59,12 @@ export const QuickFind: React.FC<Props> = ({term, matchCount, position, onChange
             } else if (!none) {
               onStep(event.shiftKey ? -1 : 1);
             }
+          } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            // Instead of moving the caret to the start or end of the text.
+            event.preventDefault();
+            if (!none) {
+              onStep(event.key === 'ArrowDown' ? 1 : -1);
+            }
           } else if (event.key === 'Escape') {
             event.preventDefault();
             onClose();
@@ -66,8 +72,8 @@ export const QuickFind: React.FC<Props> = ({term, matchCount, position, onChange
         }}
       />
       {term.trim() && <span className="quick-find__count">{countText(matchCount, position)}</span>}
-      <Button className="quick-find__button" icon={chevronUpIcon} title="Previous match (Shift+Enter)" disabled={none} onMouseDown={keepFocus} onClick={() => onStep(-1)}/>
-      <Button className="quick-find__button" icon={chevronDownIcon} title="Next match (Enter)" disabled={none} onMouseDown={keepFocus} onClick={() => onStep(1)}/>
+      <Button className="quick-find__button" icon={chevronUpIcon} title="Previous match (Shift+Enter or ↑)" disabled={none} onMouseDown={keepFocus} onClick={() => onStep(-1)}/>
+      <Button className="quick-find__button" icon={chevronDownIcon} title="Next match (Enter or ↓)" disabled={none} onMouseDown={keepFocus} onClick={() => onStep(1)}/>
       <Button
         className="quick-find__button"
         icon={checkmarkIcon}

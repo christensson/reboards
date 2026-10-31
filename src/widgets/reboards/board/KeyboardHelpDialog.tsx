@@ -18,7 +18,7 @@ const SHORTCUTS: {keys: string[]; text: string}[] = [
   {keys: ['S'], text: 'Go to the next swimlane and its first card'},
   {keys: ['Shift', '+ S'], text: 'Go to the previous swimlane'},
   {keys: ['R'], text: 'Show or hide relation connectors'},
-  {keys: ['/'], text: 'Find issues by ID or summary; Enter goes to the next match, Ctrl+Enter selects'},
+  {keys: ['/'], text: 'Find issues by ID or summary; Enter or ↓ goes to the next match, ↑ to the previous, Ctrl+Enter selects'},
   {keys: ['Esc'], text: 'Clear the selection'},
   {keys: ['?'], text: 'Show these shortcuts'}
 ];
