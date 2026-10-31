@@ -1,4 +1,4 @@
-import {type BoardConfig, type RowConfig, type RowMode, UNCATEGORIZED_ROW_KEY, columnLabel, effectiveRowMode, isDynamicField, isTwoLevel} from '@/common/model/board-config';
+import {type BoardConfig, type FieldRef, type RowConfig, type RowMode, UNCATEGORIZED_ROW_KEY, columnLabel, effectiveRowMode, isDynamicField, isTwoLevel} from '@/common/model/board-config';
 import type {YtColor} from '@/common/youtrack/types';
 import {dynamicValues, noValueLabel, shownKeys} from './dynamicValues';
 import type {FieldUniverse} from './fieldUniverse';
@@ -116,6 +116,8 @@ export type LayoutRow = {
   /** Picker rows: the swimlane level whose value is asked for on drop. */
   pickLevel?: 'outer' | 'inner';
   label: string;
+  /** Hover text of the swimlane label: "<field>: <value>". */
+  hint?: string;
   /** "Outer / Inner" on two-level boards, else the label. */
   fullLabel: string;
   isUncategorized: boolean;
@@ -147,6 +149,8 @@ export type LayoutRow = {
 export type LayoutOuterRow = {
   key: string;
   label: string;
+  /** Hover text of the swimlane label: "<field>: <value>". */
+  hint?: string;
   isUncategorized: boolean;
   color?: YtColor;
   avatarUrl?: string;
@@ -429,6 +433,9 @@ type RowsResult = {
   outerRows: LayoutOuterRow[];
 };
 
+/** "<field>: <value>", the hover text of a swimlane label; nothing without a field. */
+const fieldHint = (field: FieldRef | null | undefined, label: string): {hint?: string} => (field ? {hint: `${field.name}: ${label}`} : {});
+
 const valueOrNull = (key: string): string | null => (key === UNCATEGORIZED_ROW_KEY ? null : key);
 
 /** "Assign <field>…" row: a drop target that asks for the swimlane value. */
@@ -454,6 +461,7 @@ const singleLevelRows = (config: BoardConfig, universe: FieldUniverse, placedIss
       key: meta.key,
       kind: 'normal',
       label: meta.label,
+      ...fieldHint(config.row.field, meta.label),
       fullLabel: meta.label,
       isUncategorized: meta.key === UNCATEGORIZED_ROW_KEY,
       ...(meta.color ? {color: meta.color} : {}),
@@ -482,6 +490,7 @@ const twoLevelRows = (config: BoardConfig, universe: FieldUniverse, placedIssues
         key,
         kind: 'normal',
         label: inner.label,
+        ...fieldHint(config.innerRow?.field, inner.label),
         fullLabel: `${outer.label} / ${inner.label}`,
         isUncategorized: inner.key === UNCATEGORIZED_ROW_KEY,
         ...(inner.color ? {color: inner.color} : {}),
@@ -497,6 +506,7 @@ const twoLevelRows = (config: BoardConfig, universe: FieldUniverse, placedIssues
     outerRows.push({
       key: outer.key,
       label: outer.label,
+      ...fieldHint(config.row.field, outer.label),
       isUncategorized: outer.key === UNCATEGORIZED_ROW_KEY,
       ...(outer.color ? {color: outer.color} : {}),
       ...(outer.avatarUrl ? {avatarUrl: outer.avatarUrl} : {}),

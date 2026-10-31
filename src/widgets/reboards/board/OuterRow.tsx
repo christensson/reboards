@@ -33,9 +33,9 @@ const OuterRowComponent: React.FC<Props> = ({outer, rowsByKey, columns, collapse
     );
   }
   const label = outer.color ? (
-    <ValuePill label={outer.label} color={outer.color} className="outer-row__label"/>
+    <ValuePill label={outer.label} color={outer.color} title={outer.hint} className="outer-row__label"/>
   ) : (
-    <span className={`outer-row__label${outer.isUncategorized ? ' outer-row__label_uncategorized' : ''}`} title={outer.label}>{outer.label}</span>
+    <span className={`outer-row__label${outer.isUncategorized ? ' outer-row__label_uncategorized' : ''}`} title={outer.hint ?? outer.label}>{outer.label}</span>
   );
   const toggle = (
     <Button

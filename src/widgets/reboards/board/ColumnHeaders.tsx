@@ -34,6 +34,8 @@ const ColumnHeadersComponent: React.FC<Props> = ({
   onPickColumns
 }) => {
   const field = universe.byName.get(columnFieldName);
+  /** Hover text of a column label: "<field>: <value>". */
+  const hint = (label: string): string => (columnFieldName ? `${columnFieldName}: ${label}` : label);
   return (
     <div className="board-header" style={{gridTemplateColumns: headerTemplate(columns, collapsedColumns, twoLevel)}}>
       {twoLevel && (
@@ -57,6 +59,8 @@ const ColumnHeadersComponent: React.FC<Props> = ({
         }
         const isCollapsed = collapsedColumns.has(column.id);
         const valueLabels = column.values.map(value => field?.values.find(v => v.key === value)?.label ?? value);
+        // A named or collapsed column lists its values: "State: In Progress, Review".
+        const valuesHint = hint(valueLabels.length > 0 ? valueLabels.join(', ') : column.label);
         const action = `${isCollapsed ? 'Expand' : 'Collapse'} column ${column.label}`;
         return (
           <button
@@ -67,13 +71,13 @@ const ColumnHeadersComponent: React.FC<Props> = ({
             onClick={() => onToggleColumn(column.id)}
           >
             <div className="board-header__values">
-              {isCollapsed && <span className="board-header__collapsed-label" title={column.label}>{column.label}</span>}
+              {isCollapsed && <span className="board-header__collapsed-label" title={valuesHint}>{column.label}</span>}
               {/* The "No <field>" column of a dynamic field has no value to show as a pill. */}
-              {!isCollapsed && column.values.length === 0 && <span className="board-header__no-value">{column.label}</span>}
-              {!isCollapsed && column.named && <span className="board-header__name">{column.label}</span>}
+              {!isCollapsed && column.values.length === 0 && <span className="board-header__no-value" title={valuesHint}>{column.label}</span>}
+              {!isCollapsed && column.named && <span className="board-header__name" title={valuesHint}>{column.label}</span>}
               {!isCollapsed && !column.named && column.values.map(value => {
                 const meta = field?.values.find(v => v.key === value);
-                return <ValuePill key={value} label={meta?.label ?? value} color={meta?.color}/>;
+                return <ValuePill key={value} label={meta?.label ?? value} color={meta?.color} title={hint(meta?.label ?? value)}/>;
               })}
             </div>
             <span className="board-header__count" title="Issues in this column">{column.count}</span>

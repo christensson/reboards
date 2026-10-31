@@ -34,9 +34,9 @@ const RowHeader: React.FC<{row: LayoutRow; collapsed: boolean; onToggleRow: (row
         onClick={() => onToggleRow(row.key)}
       />
       {row.color ? (
-        <ValuePill label={row.label} color={row.color} className="board-row__label"/>
+        <ValuePill label={row.label} color={row.color} title={row.hint} className="board-row__label"/>
       ) : (
-        <span className={`board-row__label${row.isUncategorized ? ' board-row__label_uncategorized' : ''}`} title={row.label}>{row.label}</span>
+        <span className={`board-row__label${row.isUncategorized ? ' board-row__label_uncategorized' : ''}`} title={row.hint ?? row.label}>{row.label}</span>
       )}
     </div>
     <span className="board-row__count" title="Issues in this swimlane">{row.issueCount}</span>
