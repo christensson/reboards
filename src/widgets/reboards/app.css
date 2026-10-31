@@ -1788,3 +1788,53 @@ body {
   grid-column: auto;
   max-width: none;
 }
+
+.subtask-nav-banner {
+  position: fixed;
+  bottom: calc(var(--ring-unit) * 3);
+  left: 50%;
+  z-index: 30;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ring-unit);
+  max-width: calc(100vw - var(--ring-unit) * 4);
+  padding: var(--ring-unit) var(--ring-unit) var(--ring-unit) calc(var(--ring-unit) * 2);
+  transform: translateX(-50%);
+  border: 1px solid var(--ring-popup-border-color, var(--ring-borders-color));
+  border-radius: var(--ring-border-radius);
+  background-color: var(--ring-popup-background-color, var(--ring-content-background-color));
+  box-shadow: var(--ring-popup-shadow);
+  color: var(--ring-text-color);
+  font-size: var(--ring-font-size-smaller);
+}
+
+.subtask-nav-banner__text {
+  text-align: center;
+}
+
+.subtask-nav-banner__status {
+  margin-top: calc(var(--ring-unit) / 2);
+  color: var(--ring-secondary-color);
+}
+
+.subtask-nav-banner__close {
+  flex-shrink: 0;
+}
+
+/*
+ * A card scrolled into view stops clear of what is stuck over the board: the column header above,
+ * the first-level swimlane titles on the left, and the subtask navigation banner below.
+ */
+[data-card-id] {
+  scroll-margin-top: calc(var(--board-header-height, 0px) + var(--ring-unit));
+  scroll-margin-bottom: calc(var(--subtask-nav-banner-space, 0px) + var(--ring-unit));
+}
+
+/* The "parent" badge sticks out above the card's top border. */
+[data-card-id].issue-card_parent {
+  scroll-margin-top: calc(var(--board-header-height, 0px) + var(--ring-unit) * 2);
+}
+
+.board-screen_two-level [data-card-id] {
+  scroll-margin-left: var(--outer-w);
+}

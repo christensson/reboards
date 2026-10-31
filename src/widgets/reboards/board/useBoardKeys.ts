@@ -21,6 +21,10 @@ type Options = {
   onParent: (issueId: string) => void;
   /** Shift+P: back to the subtask "P" came from, when the parent is still the selected issue; else to the first subtask. */
   onBackToChild: (issueId: string) => void;
+  /** Subtask navigation mode: the arrows move within the subtask hierarchy, Esc leaves it. */
+  subtaskMode: boolean;
+  onSubtaskArrow: (direction: Direction) => void;
+  onExitSubtaskMode: () => void;
   onToggleConnectors: () => void;
   onHelp: () => void;
   onCommitMove: (move: KeyMove) => void;
@@ -63,7 +67,8 @@ const nextCard = (registry: CardRegistry, anchor: string | null, direction: Dire
  * - Ctrl+arrows move a shadow of the selected card to the next column or row; Enter applies
  *   the move, Escape cancels it;
  * - Enter opens the selected issue, P selects its parent and Shift+P goes back to the subtask
- *   (or down to the first subtask),
+ *   (or down to the first subtask); either starts subtask navigation mode, where the arrows move
+ *   up to the parent, down to a subtask and sideways between subtasks until Escape,
  *   R shows or hides relations, ? lists the keys;
  * - Escape clears the selection.
  */
@@ -127,12 +132,33 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
         select(next);
       }
     };
+    const onDirection = (event: KeyboardEvent, direction: Direction): void => {
+      const {subtaskMode, onSubtaskArrow, onExitSubtaskMode} = latest.current;
+      if (subtaskMode && !event.ctrlKey && !event.metaKey) {
+        onSubtaskArrow(direction);
+        return;
+      }
+      if (subtaskMode) {
+        // A keyboard move ends subtask navigation.
+        onExitSubtaskMode();
+      }
+      onArrow(event, direction);
+    };
+    const onEscape = (): void => {
+      const {subtaskMode, onExitSubtaskMode, setSelectedIds} = latest.current;
+      if (subtaskMode) {
+        // Leaving the mode keeps the selection; the next Escape clears it.
+        onExitSubtaskMode();
+      } else {
+        setSelectedIds(new Set());
+      }
+    };
     const onKey = (event: KeyboardEvent): boolean => {
-      const {onOpen, onParent, onBackToChild, onToggleConnectors, onHelp, setSelectedIds} = latest.current;
+      const {onOpen, onParent, onBackToChild, onToggleConnectors, onHelp} = latest.current;
       const anchor = anchorRef.current;
       const direction = directionOf(event.key);
       if (direction) {
-        onArrow(event, direction);
+        onDirection(event, direction);
         return true;
       }
       // With Ctrl or Cmd the key belongs to the browser (Ctrl+R reloads, Ctrl+P prints).
@@ -140,7 +166,7 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
         return false;
       }
       if (event.key === 'Escape') {
-        setSelectedIds(new Set());
+        onEscape();
       } else if (event.key === 'Enter' && anchor) {
         onOpen(anchor);
       } else if (event.key === 'p' && anchor) {

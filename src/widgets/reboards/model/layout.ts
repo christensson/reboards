@@ -1076,8 +1076,8 @@ const cardListOf = (layout: BoardLayout, issueId: string): string[] | undefined 
   return layout.rowsByKey[placement.rowKey]?.looseByColumn[placement.columnId];
 };
 
-/** The issue among `ids` shown first on the board: by swimlane, then column, then place in its cell; null when none is shown. */
-export const firstOnBoard = (layout: BoardLayout, ids: string[]): string | null => {
+/** The issues among `ids` that are on the board, in board order: by swimlane, then column, then place in its cell. */
+export const orderOnBoard = (layout: BoardLayout, ids: string[]): string[] => {
   const rowIndex = new Map(layout.rows.map((row, index) => [row.key, index]));
   const columnIndex = new Map(layout.columns.map(column => [column.id, column.index]));
   const position = (id: string): number[] => {
@@ -1086,8 +1086,11 @@ export const firstOnBoard = (layout: BoardLayout, ids: string[]): string | null 
   };
   const shown = ids.filter(id => layout.placement[id]).map(id => ({id, at: position(id)}));
   shown.sort((a, b) => a.at[0] - b.at[0] || a.at[1] - b.at[1] || a.at[2] - b.at[2]);
-  return shown[0]?.id ?? null;
+  return shown.map(item => item.id);
 };
+
+/** The issue among `ids` shown first on the board; null when none is shown. */
+export const firstOnBoard = (layout: BoardLayout, ids: string[]): string | null => orderOnBoard(layout, ids)[0] ?? null;
 
 /**
  * Keeps a moved card about as high up as it was: in `preview` (a layout with the card already

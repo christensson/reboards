@@ -18,6 +18,7 @@ import {type AgileSourceState, useAgileSource} from '../data/useAgileSource';
 import {sprintForDate} from '../model/sprints';
 import {boardPages, pageParam, resolvePage} from '../model/pages';
 import type {BoardIssue} from '../model/issue';
+import {navParent} from '../model/subtaskNav';
 import {type BoardLayout, type CardPlacement, type LayoutGroup, type Placement, cardLocation, computeLayout, firstOnBoard, keepCardPosition, revealColumnIds, walkGroups} from '../model/layout';
 import {type FieldChange, type MoveTarget, type ValueChoice, applyChanges, keysAfter, planMove, planRowChanges} from '../model/mutations';
 import {groupDragHint, issueDragHint, linkDragHint} from '../model/dragHint';
@@ -43,6 +44,8 @@ import {QuickFind} from './QuickFind';
 import {orderMatches, useQuickFind} from './useQuickFind';
 import {useBoardKeys} from './useBoardKeys';
 import {KeyboardHelpDialog} from './KeyboardHelpDialog';
+import {SubtaskNavBanner} from './SubtaskNavBanner';
+import {useSubtaskNav} from './useSubtaskNav';
 
 type Props = {
   board: BoardConfig;
@@ -827,31 +830,35 @@ export const BoardScreen: React.FC<Props> = ({
     }, SCROLL_DELAY);
   }, [expandFor, registry]);
 
-  /** "P": select the parent on the board, or offer to open it when it is not on the board. */
-  const goToParent = useCallback((issueId: string) => {
+  /**
+   * "P": select the parent on the board (`preferred` when it is one of the parents), or offer to
+   * open it when it is not on the board. Returns the parent selected, if any.
+   */
+  const goToParent = useCallback((issueId: string, preferred: string | null = null): string | null => {
     const issue = issuesById.get(issueId);
     if (!issue || issue.parentIds.length === 0) {
       alertService.message(`${issue?.idReadable ?? 'The issue'} has no parent`);
-      return;
+      return null;
     }
-    const onBoard = issue.parentIds.find(id => layout.placement[id]);
+    const onBoard = navParent(issue, layout, preferred);
     if (onBoard) {
       parentTrail.current.push({child: issueId, parent: onBoard});
       goToCard(onBoard);
-      return;
+      return onBoard;
     }
     const parentId = issue.parentIds[0];
     const idReadable = data.parents[parentId]?.idReadable ?? issuesById.get(parentId)?.idReadable ?? 'the parent';
     confirm({text: `The parent of ${issue.idReadable}, ${idReadable}, is not on this board.`, confirmLabel: `Open ${idReadable}…`, rejectLabel: 'Cancel'})
       .then(() => onOpen(parentId))
       .catch(() => undefined);
-  }, [issuesById, layout.placement, goToCard, data.parents, onOpen]);
+    return null;
+  }, [issuesById, layout, goToCard, data.parents, onOpen]);
 
   /**
    * Shift+P: back down to the subtask "P" came from, while its parent is still the one selected;
    * without such a trail, down to the first subtask on the board.
    */
-  const backToChild = useCallback((issueId: string) => {
+  const backToChild = useCallback((issueId: string): string | null => {
     const last = parentTrail.current[parentTrail.current.length - 1];
     let child: string | null;
     if (last && last.parent === issueId) {
@@ -870,7 +877,10 @@ export const BoardScreen: React.FC<Props> = ({
     if (child) {
       goToCard(child);
     }
+    return child;
   }, [layout, issuesById, goToCard]);
+
+  const subtaskNav = useSubtaskNav({layout, issuesById, selectedIds, goToParent, goToChild: backToChild, goToCard});
 
   const {keyMove} = useBoardKeys({
     enabled: !hasOverlay(quickFindTerm, pendingMove, link.dialog.from, showShortcuts),
@@ -884,8 +894,11 @@ export const BoardScreen: React.FC<Props> = ({
       return Boolean(issue && canUpdateIssue(issue));
     },
     onOpen,
-    onParent: goToParent,
-    onBackToChild: backToChild,
+    onParent: subtaskNav.upToParent,
+    onBackToChild: subtaskNav.downToChild,
+    subtaskMode: subtaskNav.active,
+    onSubtaskArrow: subtaskNav.step,
+    onExitSubtaskMode: subtaskNav.exit,
     onToggleConnectors: toggleConnectors,
     onHelp: () => setShowShortcuts(true),
     onCommitMove: move => {
@@ -1201,6 +1214,7 @@ export const BoardScreen: React.FC<Props> = ({
       />
       <RelationPickerDialog {...link.dialog}/>
       <KeyboardHelpDialog show={showShortcuts} onClose={() => setShowShortcuts(false)}/>
+      <SubtaskNavBanner status={subtaskNav.status} onClose={subtaskNav.exit}/>
       {quickFindTerm !== null && (
         <QuickFind
           term={quickFindTerm}

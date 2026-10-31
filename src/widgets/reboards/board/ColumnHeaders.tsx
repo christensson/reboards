@@ -1,4 +1,4 @@
-import React, {memo} from 'react';
+import React, {memo, useLayoutEffect, useRef} from 'react';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
 import swapIcon from '@jetbrains/icons/changes';
 import {ValuePill} from '@/common/components/ValuePill';
@@ -21,6 +21,28 @@ type Props = {
   onPickColumns: (columnIds: string[] | null) => void;
 };
 
+/**
+ * Publishes the sticky header's height as `--board-header-height` on the board content, so a card
+ * scrolled into view stops below the header instead of under it (see its scroll-margin-top).
+ */
+const useHeaderHeight = (ref: React.RefObject<HTMLDivElement | null>): void => {
+  useLayoutEffect(() => {
+    const element = ref.current;
+    const content = element?.parentElement;
+    if (!element || !content) {
+      return undefined;
+    }
+    const update = () => content.style.setProperty('--board-header-height', `${element.offsetHeight}px`);
+    update();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    observer?.observe(element);
+    return () => {
+      observer?.disconnect();
+      content.style.removeProperty('--board-header-height');
+    };
+  }, [ref]);
+};
+
 const ColumnHeadersComponent: React.FC<Props> = ({
   columns,
   columnFieldName,
@@ -34,10 +56,12 @@ const ColumnHeadersComponent: React.FC<Props> = ({
   onPickColumns
 }) => {
   const field = universe.byName.get(columnFieldName);
+  const ref = useRef<HTMLDivElement>(null);
+  useHeaderHeight(ref);
   /** Hover text of a column label: "<field>: <value>". */
   const hint = (label: string): string => (columnFieldName ? `${columnFieldName}: ${label}` : label);
   return (
-    <div className="board-header" style={{gridTemplateColumns: headerTemplate(columns, collapsedColumns, twoLevel)}}>
+    <div ref={ref} className="board-header" style={{gridTemplateColumns: headerTemplate(columns, collapsedColumns, twoLevel)}}>
       {twoLevel && (
         <div className="board-header__corner">
           <Button
