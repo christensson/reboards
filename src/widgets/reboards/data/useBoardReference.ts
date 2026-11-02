@@ -28,7 +28,9 @@ export const useBoardReference = (projects: ProjectRef[]): BoardReference => {
   const key = cacheKey(projects);
   const [universe, setUniverse] = useState<FieldUniverse>(() => universeCache.get(key) ?? emptyUniverse());
   const [linkTypes, setLinkTypes] = useState<YtIssueLinkType[]>(() => linkTypesCache ?? []);
-  const [loading, setLoading] = useState(false);
+  // Loading until the fields are known: a first render with an empty universe must not look loaded, or the
+  // board takes the remembered page for an unknown one and falls back to the default page.
+  const [loading, setLoading] = useState(() => !(universeCache.has(key) && linkTypesCache));
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
 
@@ -40,6 +42,7 @@ export const useBoardReference = (projects: ProjectRef[]): BoardReference => {
       if (cachedUniverse && linkTypesCache) {
         setUniverse(cachedUniverse);
         setLinkTypes(linkTypesCache);
+        setLoading(false);
         return;
       }
       setLoading(true);
