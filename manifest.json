@@ -3,8 +3,8 @@
   "name": "reboards",
   "title": "ReBoards",
   "description": "Revamped agile boards: work with relations, group subtasks under their parent, use multiple swimlane levels and plan in time.",
-  "version": "1.2.0",
-  "changeNotes": "Version 1.2.0:<br/>- Add subtask navigation mode: P or Shift+P starts it, and the arrow keys move to the parent, subtasks and sibling subtasks.<br/>- Add swimlane navigation mode: S or Shift+S jumps to the next or previous swimlane, and up/down keep going.<br/>- Add highlight navigation mode: choosing a highlight selects the first match, and up/down step through the rest.<br/>- Various layout fixes.",
+  "version": "1.2.1",
+  "changeNotes": "Version 1.2.1:<br/>- Minor fixes.",
   "minYouTrackVersion": "2026.2.0",
   "aiToolPrefix": "reboards",
   "vendor": {
