@@ -22,5 +22,6 @@ export const onAppLocationChange = (listener: LocationListener): (() => void) =>
 
 export const currentUserLogin = (): string => YTApp.me?.login ?? '';
 
+// TODO(JT-95092): prefer the base URL the host exposes once its build and API are published.
 export const youtrackBaseUrl = (): string =>
   resolveBaseUrl(window.location.href, document.referrer, window.location.origin);

@@ -4,7 +4,7 @@
   "title": "ReBoards",
   "description": "Revamped agile boards: work with relations, group subtasks under their parent, use multiple swimlane levels and plan in time.",
   "version": "1.2.1",
-  "changeNotes": "Version 1.2.1:<br/>- Minor fixes.",
+  "changeNotes": "Version 1.2.1:<br/>- Simplify resolution of YouTrac instance base URL.",
   "minYouTrackVersion": "2026.2.0",
   "aiToolPrefix": "reboards",
   "vendor": {

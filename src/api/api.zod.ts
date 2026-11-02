@@ -87,10 +87,6 @@ export const currentUserInfoSchema = z.object({
   isAdmin: z.boolean(),
 });
 
-export const contextResSchema = z.object({
-  baseUrl: z.string().nullable(),
-});
-
 export const pageQuerySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -196,11 +192,6 @@ export const schema = {
           Req: boardSaveReqSchema,
           Res: boardSaveResSchema
         }
-      }
-    },
-    context: {
-      GET: {
-        Res: contextResSchema
       }
     },
     projects: {
