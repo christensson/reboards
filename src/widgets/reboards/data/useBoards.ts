@@ -40,10 +40,29 @@ const stateFrom = (res: BoardsListRes): BoardsState => ({
   error: null
 });
 
+/**
+ * YouTrack rejects some of several simultaneous writes that each set a still empty storage property
+ * ("not unique"). That only happens on the first write after an upgrade or to a new user's boards, and
+ * the same request then goes through, so it is retried once.
+ */
+const isFirstWriteRace = (error: unknown): boolean => errorData(error)?.error === 'invalid_properties';
+
+const retryFirstWriteRace = async <T>(send: () => Promise<T>): Promise<T> => {
+  try {
+    return await send();
+  } catch (error) {
+    if (!isFirstWriteRace(error)) {
+      throw error;
+    }
+    await delay(CHECK_DELAY_MS);
+    return send();
+  }
+};
+
 /** Saves once and turns the version conflict and missing board responses into results. */
 const attemptSave = async (board: BoardConfig, baseVersion: number | undefined): Promise<SaveResult> => {
   try {
-    const res = await api.global.boards.save.POST({board, baseVersion});
+    const res = await retryFirstWriteRace(() => api.global.boards.save.POST({board, baseVersion}));
     return {kind: 'saved', board: res.board};
   } catch (error) {
     const data = errorData(error);
@@ -74,10 +93,12 @@ export const useBoards = () => {
   }, [reload]);
 
   /**
-   * All boards share one stored document and YouTrack does not detect two
-   * writes landing together: the later one silently wins. So every write reads
-   * the list back once the other write had time to commit. Null when the list
-   * cannot be read: the write itself succeeded, so it is then taken as kept.
+   * YouTrack does not detect two writes to the same storage property landing
+   * together: the later one silently wins. Boards are spread over many
+   * properties and shared ones kept twice (see README "Simultaneous writes"),
+   * but two boards can still share one, so every write reads the list back once
+   * the other write had time to commit. Null when the list cannot be read: the
+   * write itself succeeded, so it is then taken as kept.
    */
   const readBack = useCallback(async (): Promise<BoardConfig[] | null> => {
     await delay(CHECK_DELAY_MS);
@@ -111,7 +132,7 @@ export const useBoards = () => {
       // A simultaneous save of this board won: merge with it like any other conflict.
       return {kind: 'conflict', current: found};
     }
-    // Another board's save wrote back the old document: redo ours on top of what is stored now.
+    // Another board's save wrote back an older copy (or none): redo ours on top of what is stored now.
     const retry = await attemptSave({...board, id: first.board.id}, found?.version);
     if (retry.kind !== 'saved') {
       return retry;
@@ -124,7 +145,7 @@ export const useBoards = () => {
 
   /** Hands a board over to another user; resolves to false when the current user can no longer see it. */
   const transfer = useCallback(async (id: string, login: string): Promise<boolean> => {
-    const send = () => api.global.boards.owner.POST({id, login});
+    const send = () => retryFirstWriteRace(() => api.global.boards.owner.POST({id, login}));
     let res = await send();
     if (!res.visible) {
       await readBack();
@@ -142,9 +163,10 @@ export const useBoards = () => {
   /** Deletes and checks the board stays gone; a simultaneous save may have written it back. */
   const remove = useCallback(async (id: string): Promise<void> => {
     const stillThere = async () => Boolean((await readBack())?.some(b => b.id === id));
-    await api.global.boards.delete.POST({id});
+    const send = () => retryFirstWriteRace(() => api.global.boards.delete.POST({id}));
+    await send();
     if (await stillThere()) {
-      await api.global.boards.delete.POST({id});
+      await send();
       if (await stillThere()) {
         throw new Error('A simultaneous save restored the board. Delete it again');
       }

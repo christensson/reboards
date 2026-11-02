@@ -36,3 +36,8 @@ export const projectPermissionFor = (user: User, permission: string): ProjectAcc
 export const projectAccessFor = (user: User): ProjectAccess => projectPermissionFor(user, PROJECT_READ_PERMISSION);
 
 export const projectAdminFor = (user: User): ProjectAccess => projectPermissionFor(user, PROJECT_ADMIN_PERMISSION);
+
+/** Permission a user needs in every project of their board to share it, unless they administer them all. */
+export const PROJECT_UPDATE_PERMISSION = 'UPDATE_ISSUE';
+
+export const projectUpdateFor = (user: User): ProjectAccess => projectPermissionFor(user, PROJECT_UPDATE_PERMISSION);

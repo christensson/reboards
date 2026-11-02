@@ -1,7 +1,7 @@
 import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
 import type {BoardConfig} from '@/common/model/board-config';
 import {projectAccessFor, projectAdminFor} from '@/backend/boards/access';
-import {loadBoards, viewerOf} from '@/backend/boards/owners';
+import {loadView} from '@/backend/boards/owners';
 import {ADMIN_PERMISSION, canDelete, canEdit, visibleBoards} from '@/backend/boards/store';
 
 /**
@@ -25,10 +25,11 @@ export type BoardsListRes = {
 };
 
 function handle(ctx: CtxGet<BoardsListRes, never, 'global'>): void {
-  const viewer = viewerOf(ctx.currentUser);
+  const view = loadView(ctx.globalStorage, ctx.currentUser);
+  const viewer = view.viewer;
   const isAdmin = ctx.currentUser.hasPermission(ADMIN_PERMISSION);
   const isProjectAdmin = projectAdminFor(ctx.currentUser);
-  const boards = visibleBoards(loadBoards(ctx.globalStorage), viewer, projectAccessFor(ctx.currentUser));
+  const boards = visibleBoards(view.boards, viewer, projectAccessFor(ctx.currentUser));
   ctx.response.json({
     boards,
     editableIds: boards.filter(board => canEdit(board, viewer, isAdmin, isProjectAdmin)).map(board => board.id),

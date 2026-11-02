@@ -36,8 +36,8 @@ issues, far more insight.
 - Enable them by adding `?customToolPackages=reboards` to the MCP address, for example `https://<your-youtrack>/mcp?customToolPackages=reboards`. The tools see only what the connected user can see.
 
 **Built for teams**
-- Personal or shared boards, with owner and admin rights and transferable ownership.
-- Related boards for one-click switching. Conflicting edits are merged instead of overwritten.
+- Personal or shared boards: share your own boards when you can update issues in all of their projects. Project and system admins can edit, unshare and delete shared boards. Ownership is transferable.
+- Related boards for one-click switching. Conflicting edits are merged instead of overwritten, and simultaneous saves of different boards don't overwrite each other.
 - Shareable links that open the exact view.
 
 Requires YouTrack 2026.2 or later. Changes are made with each user's own YouTrack permissions.

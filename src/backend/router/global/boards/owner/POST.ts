@@ -1,9 +1,10 @@
 import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
 import type {BoardConfig} from '@/common/model/board-config';
 import {projectAccessFor, projectAdminFor} from '@/backend/boards/access';
-import {HTTP_BAD_REQUEST, HTTP_FORBIDDEN, HTTP_NOT_FOUND, respondError} from '@/backend/boards/http';
-import {findActiveUser, loadBoards, viewerOf} from '@/backend/boards/owners';
-import {ADMIN_PERMISSION, GUEST_LOGIN, canDelete, canEdit, canTransfer, isVisibleTo, writeBoards} from '@/backend/boards/store';
+import {HTTP_BAD_REQUEST, HTTP_FORBIDDEN, HTTP_NOT_FOUND, HTTP_SERVER_ERROR, respondError} from '@/backend/boards/http';
+import {findActiveUser, loadView, writeFailure, writeView} from '@/backend/boards/owners';
+import {ADMIN_PERMISSION, GUEST_LOGIN, canDelete, canEdit, canTransfer, isOwner, isVisibleTo} from '@/backend/boards/store';
+import {saveChanges} from '@/backend/boards/storage';
 
 /**
  * @zod-to-schema
@@ -26,7 +27,8 @@ export type BoardOwnerRes = {
 };
 
 function handle(ctx: CtxPost<BoardOwnerReq, BoardOwnerRes, never, 'global'>): void {
-  const viewer = viewerOf(ctx.currentUser);
+  const view = loadView(ctx.globalStorage, ctx.currentUser);
+  const viewer = view.viewer;
   if (viewer.login === GUEST_LOGIN) {
     respondError(ctx.response, HTTP_FORBIDDEN, 'Log in to change board owners');
     return;
@@ -34,14 +36,12 @@ function handle(ctx: CtxPost<BoardOwnerReq, BoardOwnerRes, never, 'global'>): vo
   const isAdmin = ctx.currentUser.hasPermission(ADMIN_PERMISSION);
   const isProjectAdmin = projectAdminFor(ctx.currentUser);
   const {id, login} = ctx.request.json();
-  const doc = loadBoards(ctx.globalStorage);
-  const index = doc.boards.findIndex(b => b.id === id);
+  const board = view.boards.find(b => b.id === id);
   // A board the user cannot see is reported as missing, so its existence is not revealed.
-  if (index === -1 || !isVisibleTo(doc.boards[index], viewer, projectAccessFor(ctx.currentUser))) {
+  if (!board || !isVisibleTo(board, viewer, projectAccessFor(ctx.currentUser))) {
     respondError(ctx.response, HTTP_NOT_FOUND, 'Board not found');
     return;
   }
-  const board = doc.boards[index];
   if (!canTransfer(board, viewer, isAdmin, isProjectAdmin)) {
     respondError(ctx.response, HTTP_FORBIDDEN, 'Only the board owner, a system administrator or an admin of all its projects can change the owner');
     return;
@@ -57,9 +57,13 @@ function handle(ctx: CtxPost<BoardOwnerReq, BoardOwnerRes, never, 'global'>): vo
     return;
   }
 
-  const stored = {...board, owner: target.login, ownerId: target.ringId, updatedAt: Date.now(), version: board.version + 1};
-  doc.boards[index] = stored;
-  writeBoards(ctx.globalStorage, doc);
+  const stored = {...board, owner: target.login, ownerId: target.ringId, updatedAt: view.now, version: board.version + 1};
+  // A private board handed over waits in its slots until the new owner's next write takes it in.
+  const outcome = writeView(view, saveChanges(stored, view.resolved.get(board.id), isOwner(stored, viewer)));
+  if (!outcome.ok) {
+    respondError(ctx.response, outcome.reason === 'full' ? HTTP_BAD_REQUEST : HTTP_SERVER_ERROR, writeFailure(outcome));
+    return;
+  }
   ctx.response.json({
     board: stored,
     visible: isVisibleTo(stored, viewer, projectAccessFor(ctx.currentUser)),

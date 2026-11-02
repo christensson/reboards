@@ -6,19 +6,19 @@ import {type FieldValues, placeIssue} from '@/common/model/placement';
 import {effectiveQuery} from '@/common/youtrack/query';
 import {sprintForDate} from '@/widgets/reboards/model/sprints';
 import {projectAccessFor, projectAdminFor} from './access';
-import {loadBoards, viewerOf} from './owners';
-import {ADMIN_PERMISSION, type GlobalStorageLike, canEdit, visibleBoards} from './store';
+import {loadView, viewerOf} from './owners';
+import {ADMIN_PERMISSION, canEdit, visibleBoards} from './store';
 
 /** What an MCP tool's `execute` receives. */
 export type ToolContext<A> = {
   arguments: A;
   currentUser: User;
-  globalStorage: GlobalStorageLike;
+  globalStorage: {extensionProperties: unknown};
 };
 
 /** The boards the calling user can see, as on the ReBoards board list. */
 export const boardsFor = (ctx: ToolContext<unknown>): BoardConfig[] =>
-  visibleBoards(loadBoards(ctx.globalStorage), viewerOf(ctx.currentUser), projectAccessFor(ctx.currentUser));
+  visibleBoards(loadView(ctx.globalStorage, ctx.currentUser).boards, viewerOf(ctx.currentUser), projectAccessFor(ctx.currentUser));
 
 export const canEditBoard = (ctx: ToolContext<unknown>, board: BoardConfig): boolean =>
   canEdit(board, viewerOf(ctx.currentUser), ctx.currentUser.hasPermission(ADMIN_PERMISSION), projectAdminFor(ctx.currentUser));

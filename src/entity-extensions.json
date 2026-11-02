@@ -5,7 +5,144 @@
       "properties": {
         "boards": {
           "type": "string",
-          "description": "JSON document holding all ReBoards board configurations"
+          "description": "Legacy JSON document with every board (before 1.3.0); kept as a backup once migrated"
+        },
+        "boards00": {
+          "type": "string",
+          "description": "ReBoards board slot 00: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards01": {
+          "type": "string",
+          "description": "ReBoards board slot 01: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards02": {
+          "type": "string",
+          "description": "ReBoards board slot 02: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards03": {
+          "type": "string",
+          "description": "ReBoards board slot 03: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards04": {
+          "type": "string",
+          "description": "ReBoards board slot 04: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards05": {
+          "type": "string",
+          "description": "ReBoards board slot 05: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards06": {
+          "type": "string",
+          "description": "ReBoards board slot 06: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards07": {
+          "type": "string",
+          "description": "ReBoards board slot 07: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards08": {
+          "type": "string",
+          "description": "ReBoards board slot 08: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards09": {
+          "type": "string",
+          "description": "ReBoards board slot 09: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards10": {
+          "type": "string",
+          "description": "ReBoards board slot 10: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards11": {
+          "type": "string",
+          "description": "ReBoards board slot 11: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards12": {
+          "type": "string",
+          "description": "ReBoards board slot 12: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards13": {
+          "type": "string",
+          "description": "ReBoards board slot 13: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards14": {
+          "type": "string",
+          "description": "ReBoards board slot 14: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards15": {
+          "type": "string",
+          "description": "ReBoards board slot 15: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards16": {
+          "type": "string",
+          "description": "ReBoards board slot 16: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards17": {
+          "type": "string",
+          "description": "ReBoards board slot 17: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards18": {
+          "type": "string",
+          "description": "ReBoards board slot 18: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards19": {
+          "type": "string",
+          "description": "ReBoards board slot 19: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards20": {
+          "type": "string",
+          "description": "ReBoards board slot 20: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards21": {
+          "type": "string",
+          "description": "ReBoards board slot 21: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards22": {
+          "type": "string",
+          "description": "ReBoards board slot 22: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards23": {
+          "type": "string",
+          "description": "ReBoards board slot 23: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards24": {
+          "type": "string",
+          "description": "ReBoards board slot 24: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards25": {
+          "type": "string",
+          "description": "ReBoards board slot 25: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards26": {
+          "type": "string",
+          "description": "ReBoards board slot 26: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards27": {
+          "type": "string",
+          "description": "ReBoards board slot 27: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards28": {
+          "type": "string",
+          "description": "ReBoards board slot 28: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards29": {
+          "type": "string",
+          "description": "ReBoards board slot 29: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards30": {
+          "type": "string",
+          "description": "ReBoards board slot 30: shared boards whose id hashes here (each one in two slots)"
+        },
+        "boards31": {
+          "type": "string",
+          "description": "ReBoards board slot 31: shared boards whose id hashes here (each one in two slots)"
+        }
+      }
+    },
+    {
+      "entityType": "User",
+      "properties": {
+        "boards": {
+          "type": "string",
+          "description": "The user's private ReBoards boards"
         }
       }
     }

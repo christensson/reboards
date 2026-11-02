@@ -44,7 +44,9 @@ declare global {
    * User extension properties type from entity-extensions.json
    * Automatically accessible via user.extensionProperties when using ExtendedUser
    */
-  type UserExtensionProperties = Record<string, never>;
+  type UserExtensionProperties = {
+      boards?: string;
+    };
   
   /**
    * AppGlobalStorage extension properties type from entity-extensions.json
@@ -52,6 +54,38 @@ declare global {
    */
   type AppGlobalStorageExtensionProperties = {
       boards?: string;
+      boards00?: string;
+      boards01?: string;
+      boards02?: string;
+      boards03?: string;
+      boards04?: string;
+      boards05?: string;
+      boards06?: string;
+      boards07?: string;
+      boards08?: string;
+      boards09?: string;
+      boards10?: string;
+      boards11?: string;
+      boards12?: string;
+      boards13?: string;
+      boards14?: string;
+      boards15?: string;
+      boards16?: string;
+      boards17?: string;
+      boards18?: string;
+      boards19?: string;
+      boards20?: string;
+      boards21?: string;
+      boards22?: string;
+      boards23?: string;
+      boards24?: string;
+      boards25?: string;
+      boards26?: string;
+      boards27?: string;
+      boards28?: string;
+      boards29?: string;
+      boards30?: string;
+      boards31?: string;
     };
 }
 

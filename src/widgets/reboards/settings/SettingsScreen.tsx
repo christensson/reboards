@@ -90,30 +90,58 @@ const SettingsFooter: React.FC<FooterProps> = ({creating, duplicating, readOnly,
 
 type ShareFieldProps = {
   shared: boolean;
-  /** Only system admins and project admins see the switch. */
+  /** The owner may share; whoever may edit a shared board may unshare it. */
   showToggle: boolean;
-  /** The user administers every board project (or is a system admin). */
+  /** The user owns the board and may share it: they can update issues in all of its projects, or administer them. */
   canShare: boolean;
+  /** Someone other than the owner is editing: unsharing hands the board back to its owner. */
+  ownedByOther: boolean;
   /** Why the board cannot be shared, such as a link to a personal agile board. */
   blockedReason?: string;
   readOnly: boolean;
   onChange: (shared: boolean) => void;
 };
 
-/** Sharing needs admin rights in every board project, unless the user is a system admin. */
-const canShareProjects = (projects: BoardConfig['projects'], isAdmin: boolean, adminProjects: Set<string>): boolean =>
-  isAdmin || (projects.length > 0 && projects.every(p => adminProjects.has(p.shortName)));
+/** Owners share when they can update issues in every board project, or administer them all, or are system admins. */
+const canShareProjects = (projects: BoardConfig['projects'], isAdmin: boolean, adminProjects: Set<string>, updateProjects: Set<string>): boolean =>
+  isAdmin || (projects.length > 0 && (projects.every(p => adminProjects.has(p.shortName)) || projects.every(p => updateProjects.has(p.shortName))));
 
-const shareHelp = (shared: boolean, canShare: boolean, blockedReason: string | undefined): string => {
+/**
+ * Only the owner shares (a new board or a copy is the current user's); whoever may edit a shared board
+ * may also unshare it.
+ */
+const shareRights = (
+  draft: BoardConfig,
+  board: BoardConfig,
+  creating: boolean,
+  canEdit: boolean,
+  isAdmin: boolean,
+  adminProjects: Set<string>,
+  updateProjects: Set<string>
+): {owns: boolean; showToggle: boolean; canShare: boolean} => {
+  const owns = creating || !draft.owner || draft.owner === currentUserLogin();
+  return {
+    owns,
+    showToggle: owns || (board.shared && canEdit),
+    canShare: owns && canShareProjects(draft.projects, isAdmin, adminProjects, updateProjects)
+  };
+};
+
+const SHARE_RIGHTS_HELP = 'To share this board you need to be able to update issues in all of its projects.';
+
+const shareHelp = (shared: boolean, canShare: boolean, ownedByOther: boolean, blockedReason: string | undefined): string => {
   if (blockedReason && !shared) {
     return blockedReason;
   }
+  if (shared && ownedByOther) {
+    return 'Shared boards are visible to everyone who can read all of their projects. Unsharing hands the board back to its owner, and you can no longer see it.';
+  }
   return canShare || shared
     ? 'Shared boards are visible to everyone who can read all of their projects. Personal boards are visible only to you.'
-    : 'To share this board you need admin rights in all of its projects.';
+    : SHARE_RIGHTS_HELP;
 };
 
-const ShareField: React.FC<ShareFieldProps> = ({shared, showToggle, canShare, blockedReason, readOnly, onChange}) => {
+const ShareField: React.FC<ShareFieldProps> = ({shared, showToggle, canShare, ownedByOther, blockedReason, readOnly, onChange}) => {
   if (!showToggle) {
     return shared ? <span className="settings-field__help">Shared with everyone who can read all of its projects.</span> : null;
   }
@@ -122,7 +150,7 @@ const ShareField: React.FC<ShareFieldProps> = ({shared, showToggle, canShare, bl
       <Toggle checked={shared} disabled={readOnly || (!shared && (!canShare || Boolean(blockedReason)))} onChange={event => onChange(event.target.checked)}>
         Shared with all users
       </Toggle>
-      <span className="settings-field__help">{shareHelp(shared, canShare, blockedReason)}</span>
+      <span className="settings-field__help">{shareHelp(shared, canShare, ownedByOther, blockedReason)}</span>
     </div>
   );
 };
@@ -345,6 +373,7 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
   const [projects, setProjects] = useState<YtProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [adminProjects, setAdminProjects] = useState<Set<string>>(() => new Set());
+  const [updateProjects, setUpdateProjects] = useState<Set<string>>(() => new Set());
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [duplicating, setDuplicating] = useState(false);
@@ -353,8 +382,7 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
   const reference = useBoardReference(draft.projects);
   const readOnly = !canEdit && !duplicating;
   const sprintFieldNames = sprintExclusions(draft);
-  const showShareToggle = isAdmin || adminProjects.size > 0;
-  const canShareDraft = canShareProjects(draft.projects, isAdmin, adminProjects);
+  const share = shareRights(draft, board, creating, canEdit, isAdmin, adminProjects, updateProjects);
   const [defaultsApplied, setDefaultsApplied] = useState(!isNew);
 
   useEffect(() => {
@@ -364,6 +392,7 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
         setProjects([...list].sort((a, b) => a.name.localeCompare(b.name)));
         const res = await api.global.projects.permissions.POST({shortNames: list.map(p => p.shortName)});
         setAdminProjects(new Set(res.adminShortNames));
+        setUpdateProjects(new Set(res.updateShortNames));
       })
       .catch(error => alertService.error(`Could not load projects: ${errorMessage(error)}`))
       .finally(() => setProjectsLoading(false));
@@ -516,8 +545,9 @@ export const SettingsScreen: React.FC<Props> = ({board, boards, isNew, canEdit, 
         {!creating && <OwnerField owner={board.owner} canTransfer={canDelete} onTransfer={login => onTransfer(board.id, login)}/>}
         <ShareField
           shared={draft.shared}
-          showToggle={showShareToggle}
-          canShare={canShareDraft}
+          showToggle={share.showToggle}
+          canShare={share.canShare}
+          ownedByOther={!share.owns}
           blockedReason={personalLink ? `It shows the issues of ${linkedAgile?.name ?? 'a'} personal agile board, which others cannot see.` : undefined}
           readOnly={readOnly}
           onChange={shared => patch({shared})}
