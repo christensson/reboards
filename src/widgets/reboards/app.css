@@ -2639,3 +2639,35 @@ body {
     opacity: 0.6;
   }
 }
+
+.gantt-confirm__choices {
+  display: flex;
+  align-items: center;
+  gap: var(--ring-unit);
+  margin-bottom: var(--ring-unit);
+}
+
+.gantt-confirm__choices-label,
+.gantt-confirm__empty {
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+}
+
+.gantt-confirm__empty {
+  margin-bottom: var(--ring-unit);
+}
+
+/* An issue without time: a plan is drawn across its row, the day under the pointer marked. */
+.gantt-row_plannable {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.gantt-plan-marker {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 2px;
+  background-color: color-mix(in srgb, var(--ring-main-color) 25%, transparent);
+  pointer-events: none;
+}

@@ -1,5 +1,6 @@
 import React, {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import Button from '@jetbrains/ring-ui-built/components/button/button';
+import ButtonGroup from '@jetbrains/ring-ui-built/components/button-group/button-group';
 import type {EditLine} from '../../model/ganttEdit';
 import type {DragPoint} from './useBarDrag';
 
@@ -10,6 +11,10 @@ type Props = {
   at: DragPoint;
   onApply: () => void;
   onCancel: () => void;
+  /** New plans: the levels the plan can set, the one picked, and picking another. */
+  choices?: {key: string; label: string}[];
+  choice?: string;
+  onChoose?: (key: string) => void;
 };
 
 const OFFSET = 12;
@@ -19,7 +24,7 @@ const EDGE = 8;
  * Confirms a change made by dragging, next to where the bar was dropped: what changes, from and
  * to. Enter applies, Escape or a click elsewhere cancels.
  */
-export const GanttConfirm: React.FC<Props> = ({title, lines, at, onApply, onCancel}) => {
+export const GanttConfirm: React.FC<Props> = ({title, lines, at, onApply, onCancel, choices, choice, onChoose}) => {
   const ref = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState<React.CSSProperties>({left: at.x + OFFSET, top: at.y + OFFSET, visibility: 'hidden'});
 
@@ -60,6 +65,17 @@ export const GanttConfirm: React.FC<Props> = ({title, lines, at, onApply, onCanc
   return (
     <div ref={ref} className="gantt-confirm" style={position} role="dialog" aria-label={title}>
       <div className="gantt-confirm__title">{title}</div>
+      {choices && onChoose && (
+        <div className="gantt-confirm__choices">
+          <span className="gantt-confirm__choices-label">Set</span>
+          <ButtonGroup>
+            {choices.map(item => (
+              <Button key={item.key} active={item.key === choice} onClick={() => onChoose(item.key)}>{item.label}</Button>
+            ))}
+          </ButtonGroup>
+        </div>
+      )}
+      {lines.length === 0 && <div className="gantt-confirm__empty">Nothing changes at this level.</div>}
       <dl className="gantt-confirm__lines">
         {lines.map(line => (
           <div key={line.label} className="gantt-confirm__line">
@@ -73,7 +89,7 @@ export const GanttConfirm: React.FC<Props> = ({title, lines, at, onApply, onCanc
         ))}
       </dl>
       <div className="gantt-confirm__actions">
-        <Button primary onClick={onApply}>Apply</Button>
+        <Button primary disabled={lines.length === 0} onClick={onApply}>Apply</Button>
         <Button onClick={onCancel}>Cancel</Button>
       </div>
     </div>

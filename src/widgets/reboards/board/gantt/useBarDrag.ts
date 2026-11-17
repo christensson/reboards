@@ -31,6 +31,8 @@ type Options = {
   /** The drag ended with a drop; the preview holds where. */
   onDrop: (at: DragPoint) => void;
   onCancel: () => void;
+  /** A press released without dragging. */
+  onClick?: (target: DragTarget, before: Span, at: DragPoint) => void;
 };
 
 type Active = {target: DragTarget; before: Span; startX: number; startScroll: number; x: number; y: number; dragging: boolean};
@@ -40,10 +42,10 @@ type Active = {target: DragTarget; before: Span; startX: number; startScroll: nu
  * after a few pixels. The preview follows in whole days, also while the chart scrolls by itself
  * near its edges. Escape cancels.
  */
-export const useBarDrag = ({container, listWidth, pxPerDay, onPreview, onDrop, onCancel}: Options) => {
+export const useBarDrag = ({container, listWidth, pxPerDay, onPreview, onDrop, onCancel, onClick}: Options) => {
   const active = useRef<Active | null>(null);
-  const latest = useRef({container, listWidth, pxPerDay, onPreview, onDrop, onCancel});
-  latest.current = {container, listWidth, pxPerDay, onPreview, onDrop, onCancel};
+  const latest = useRef({container, listWidth, pxPerDay, onPreview, onDrop, onCancel, onClick});
+  latest.current = {container, listWidth, pxPerDay, onPreview, onDrop, onCancel, onClick};
   const frame = useRef(0);
 
   const preview = useCallback(() => {
@@ -98,6 +100,8 @@ export const useBarDrag = ({container, listWidth, pxPerDay, onPreview, onDrop, o
       stop();
       if (drag?.dragging) {
         latest.current.onDrop({x: drag.x, y: drag.y});
+      } else if (drag) {
+        latest.current.onClick?.(drag.target, drag.before, {x: drag.x, y: drag.y});
       }
     };
     const onKey = (event: KeyboardEvent) => {

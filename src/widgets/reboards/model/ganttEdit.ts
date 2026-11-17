@@ -3,13 +3,17 @@ import {type FieldValue, type IssueFieldUpdate, buildFieldUpdate, buildMultiFiel
 import type {FieldUniverse} from './fieldUniverse';
 import type {Span} from './gantt';
 import type {BoardIssue} from './issue';
-import {HOURS_PER_DAY, MINUTES_PER_WORKDAY, MS_PER_DAY, formatWorkHours, localDay, utcDay, workDaysBetween} from './workTime';
+import {HOURS_PER_DAY, MINUTES_PER_WORKDAY, MS_PER_DAY, addWorkDays, formatWorkHours, localDay, utcDay, workDaysBetween} from './workTime';
 
-/** Which part of a bar is dragged: an edge, or the whole bar. */
-export type DragHandle = 'start' | 'end' | 'move';
+/** Which part of a bar is dragged: an edge, or the whole bar; or a new span drawn on an empty row. */
+export type DragHandle = 'start' | 'end' | 'move' | 'draw';
 
-/** What is dragged: a planning level's bar (by index) or the due date diamond of an issue. */
-export type DragTarget = {issueId: string; level: number | 'due'; handle: DragHandle};
+/**
+ * What is dragged: a planning level's bar (by index) or the due date diamond of an issue.
+ * `create` is a plan the issue does not have yet: drawn on its row, or dragged from the faint bar
+ * of its parent's span; it sets every field of the level chosen when confirming.
+ */
+export type DragTarget = {issueId: string; level: number | 'due'; handle: DragHandle; create?: boolean};
 
 /** A field change of an edit: a date, a period in minutes, or version names. */
 export type FieldEdit =
@@ -26,6 +30,8 @@ export type Edit = {edits: FieldEdit[]; lines: EditLine[]};
 const NOON_MS = MS_PER_DAY / 2;
 const ALL_HANDLES: DragHandle[] = ['start', 'end', 'move'];
 const MINUTES_PER_HOUR = MINUTES_PER_WORKDAY / HOURS_PER_DAY;
+/** Slack when rounding an estimate up to whole days, so 16.0000001 hours stay two days. */
+const ROUNDING = 1e-6;
 
 const kindOf = (field: FieldRef, universe: FieldUniverse): FieldKind | 'other' => universe.byName.get(field.name)?.kind ?? field.kind;
 
@@ -64,6 +70,18 @@ export const draggedSpan = (span: Span, handle: DragHandle, deltaDays: number): 
   return {start: span.start + delta, end: span.end + delta};
 };
 
+/** A span drawn from the pressed day `anchor`, either way. */
+export const drawnSpan = (anchor: number, deltaDays: number): Span => {
+  const other = anchor + deltaDays * MS_PER_DAY;
+  return {start: Math.min(anchor, other), end: Math.max(anchor, other)};
+};
+
+/** A plan from a clicked day: as many working days as the estimate (one without), from the first working day. */
+export const estimateSpan = (day: number, hours: number | undefined): Span => {
+  const days = hours === undefined ? 1 : Math.max(1, Math.ceil(hours / HOURS_PER_DAY - ROUNDING));
+  return {start: addWorkDays(day, 1, 1), end: addWorkDays(day, days, 1)};
+};
+
 /** A sprint of a version field: its name and days, both ends included. */
 export type Sprint = {key: string; start: number; end: number};
 
@@ -81,6 +99,10 @@ export const sprintsOf = (fieldName: string, universe: FieldUniverse, keep: stri
 const nearest = (sprints: Sprint[], day: number, end: (sprint: Sprint) => number): number =>
   sprints.reduce((best, sprint, index) => (Math.abs(end(sprint) - day) < Math.abs(end(sprints[best]) - day) ? index : best), 0);
 
+/** The sprint a day falls in, else the one starting nearest to it. */
+export const sprintAt = (sprints: Sprint[], day: number): Sprint | undefined =>
+  sprints.find(sprint => sprint.start <= day && day <= sprint.end) ?? (sprints.length > 0 ? sprints[nearest(sprints, day, s => s.start)] : undefined);
+
 const covering = (sprints: Sprint[], start: number, end: number): Sprint[] => sprints.filter(sprint => sprint.start >= start && sprint.end <= end);
 
 const spanOf = (chosen: Sprint[]): Span => ({start: Math.min(...chosen.map(s => s.start)), end: Math.max(...chosen.map(s => s.end))});
@@ -93,6 +115,11 @@ const spanOf = (chosen: Sprint[]): Span => ({start: Math.min(...chosen.map(s => 
 export const snapToSprints = (dragged: Span, before: Span, handle: DragHandle, sprints: Sprint[], multi: boolean): {span: Span; keys: string[]} | null => {
   if (sprints.length === 0) {
     return null;
+  }
+  if (handle === 'draw') {
+    const touched = multi ? sprints.filter(sprint => sprint.end >= dragged.start && sprint.start <= dragged.end) : [];
+    const chosen = touched.length > 0 ? touched : [sprintAt(sprints, dragged.start) as Sprint];
+    return {span: spanOf(chosen), keys: chosen.map(s => s.key)};
   }
   if (!multi) {
     const one = sprints[handle === 'end' ? nearest(sprints, dragged.end, s => s.end) : nearest(sprints, dragged.start, s => s.start)];
@@ -192,8 +219,8 @@ export const planEdit = (issue: BoardIssue, level: PlanLevel, handle: DragHandle
     return date;
   }
   const period = periodEdit(issue, level.periodField, after, universe);
-  // The edge the period makes leaves the date where it is.
-  return handle === level.dateRole ? merge(date, period) : period;
+  // The edge the period makes leaves the date where it is; a new plan sets both.
+  return handle === level.dateRole || handle === 'draw' ? merge(date, period) : period;
 };
 
 /** The change of the due date to `day`. */

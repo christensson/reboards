@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 import type {PlanLevel} from '@/common/model/board-config';
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
-import {draggedSpan, dueEdit, editedIssue, fieldUpdates, levelHandles, planEdit, snapToSprints, sprintsOf} from './ganttEdit';
+import {draggedSpan, drawnSpan, dueEdit, editedIssue, estimateSpan, fieldUpdates, levelHandles, planEdit, snapToSprints, sprintAt, sprintsOf} from './ganttEdit';
 import type {BoardIssue} from './issue';
 
 const day = (iso: string): number => Date.parse(`${iso}T00:00:00Z`);
@@ -129,5 +129,39 @@ describe('saving edits', () => {
       {name: 'Sprint', $type: 'T', value: {name: 'S2'}},
       {name: 'Estimation', $type: 'T', value: {presentation: '960m'}}
     ]);
+  });
+});
+
+describe('creating plans', () => {
+  const sprints = sprintsOf('Sprints', universe);
+
+  it('draws a span either way from the pressed day', () => {
+    expect(drawnSpan(day('2026-11-10'), 3)).toEqual({start: day('2026-11-10'), end: day('2026-11-13')});
+    expect(drawnSpan(day('2026-11-10'), -2)).toEqual({start: day('2026-11-08'), end: day('2026-11-10')});
+  });
+
+  it('plans a click from the estimate in working days', () => {
+    expect(estimateSpan(day('2026-11-12'), 24)).toEqual({start: day('2026-11-12'), end: day('2026-11-16')});
+    expect(estimateSpan(day('2026-11-12'), undefined)).toEqual({start: day('2026-11-12'), end: day('2026-11-12')});
+    expect(estimateSpan(day('2026-11-14'), 4)).toEqual({start: day('2026-11-16'), end: day('2026-11-16')});
+  });
+
+  it('finds the sprint of a day and snaps drawn spans to the sprints they touch', () => {
+    expect(sprintAt(sprints, day('2026-11-20'))?.key).toBe('S2');
+    expect(sprintAt(sprints, day('2026-11-14'))?.key).toBe('S2');
+    expect(snapToSprints({start: day('2026-11-10'), end: day('2026-11-18')}, {start: 0, end: 0}, 'draw', sprints, true)?.keys).toEqual(['S1', 'S2']);
+    expect(snapToSprints({start: day('2026-11-10'), end: day('2026-11-18')}, {start: 0, end: 0}, 'draw', sprints, false)?.keys).toEqual(['S1']);
+  });
+
+  it('sets every field of the level for a new plan', () => {
+    const blank = issue({});
+    const span = {start: day('2026-11-02'), end: day('2026-11-06')};
+    expect(planEdit(blank, dates, 'draw', span, universe, format).edits.map(e => e.field.name)).toEqual(['Start', 'End']);
+    expect(planEdit(blank, period, 'draw', span, universe, format).edits).toEqual([
+      {field: {name: 'Start', kind: 'date'}, type: 'date', value: noon('2026-11-02')},
+      {field: {name: 'Estimation', kind: 'period'}, type: 'period', minutes: 5 * 480}
+    ]);
+    expect(planEdit(blank, versions, 'draw', span, universe, format, ['S1']).edits).toHaveLength(1);
+    expect(dueEdit(blank, {name: 'Due', kind: 'datetime'}, span.end, universe, format).lines).toEqual([{label: 'Due', from: 'none', to: '11-06'}]);
   });
 });

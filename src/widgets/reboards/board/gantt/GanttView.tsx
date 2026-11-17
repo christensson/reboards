@@ -7,16 +7,16 @@ import type {BoardConfig} from '@/common/model/board-config';
 import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
 import {issueUrl} from '@/common/youtrack/urls';
 import type {FieldUniverse} from '../../model/fieldUniverse';
-import {type GanttIssueRow, type GanttRow, buildGanttRows, ganttEdges, ganttRange} from '../../model/gantt';
-import {ganttScale, padDays} from '../../model/ganttScale';
+import {type GanttIssueRow, type GanttRow, buildGanttRows, ganttEdges, ganttRange, undatedToggleKey} from '../../model/gantt';
+import {type GanttScale, dayX, ganttScale, padDays} from '../../model/ganttScale';
 import type {BoardIssue} from '../../model/issue';
 import type {FieldEdit} from '../../model/ganttEdit';
 import {todayPosition} from '../../model/timeline';
-import {formatWorkHours} from '../../model/workTime';
+import {MS_PER_DAY, formatWorkHours} from '../../model/workTime';
 import type {CardRegistry} from '../BoardContext';
 import type {NavMode} from '../useBoardKeys';
 import {GanttArrows} from './GanttArrows';
-import {GanttBars} from './GanttBars';
+import {GanttBars, type RowEdit} from './GanttBars';
 import {GanttDetails, GanttLegend} from './GanttDetails';
 import {GanttGrid, GanttScaleHeader} from './GanttGrid';
 import {ROW_HEIGHT, anchorBox} from './geometry';
@@ -128,8 +128,18 @@ const GanttLabelComponent: React.FC<LabelProps> = ({row, className, height, base
   if (row.type === 'undated') {
     return (
       <div className={`${className}${focusClass}`} style={style} role="row" aria-level={row.depth + 1} aria-expanded={row.expanded} data-row-key={row.key}>
-        <Toggle expanded={row.expanded} label={undatedText(row)} onClick={() => onToggleUndated(row.key)}/>
-        <button type="button" className="gantt-label__undated" onClick={() => onToggleUndated(row.key)}>{undatedText(row)}</button>
+        <Toggle expanded={row.expanded} label={undatedText(row)} onClick={() => onToggleUndated(undatedToggleKey(row))}/>
+        <button
+          type="button"
+          className="gantt-label__undated"
+          onClick={event => {
+            // The row would toggle it once more.
+            event.stopPropagation();
+            onToggleUndated(undatedToggleKey(row));
+          }}
+        >
+          {undatedText(row)}
+        </button>
       </div>
     );
   }
@@ -162,7 +172,50 @@ const GanttLabelComponent: React.FC<LabelProps> = ({row, className, height, base
 
 const GanttLabel = memo(GanttLabelComponent);
 
-type Hover = {key: string; x: number; y: number};
+/** The row under the pointer: where in the viewport (for the details) and on the chart (for the day marker). */
+type Hover = {key: string; x: number; y: number; chartX: number};
+
+/** The day under an x on the chart. */
+const dayAt = (scale: GanttScale, x: number): number => scale.start + Math.floor(x / scale.pxPerDay) * MS_PER_DAY;
+
+type ChartRowProps = {
+  row: GanttRow;
+  className: string;
+  style: React.CSSProperties;
+  scale: GanttScale;
+  size: CardSize;
+  edit: RowEdit | undefined;
+  /** The pointer's x on the chart while it is over this row. */
+  hoverX: number | null;
+  onClick: (event: React.MouseEvent) => void;
+  onOpen: () => void;
+  onHover: (event: React.MouseEvent, chartX: number) => void;
+  /** A press on the empty row of an issue without time: drawing a plan starts on that day. */
+  onDraw: (event: React.PointerEvent, day: number) => void;
+};
+
+/** A row of the chart: the issue's bars, or for an issue without time an empty row to draw a plan on. */
+const ChartRow: React.FC<ChartRowProps> = ({row, className, style, scale, size, edit, hoverX, onClick, onOpen, onHover, onDraw}) => {
+  const plannable = Boolean(edit?.plannable);
+  const xOf = (event: React.MouseEvent) => event.clientX - event.currentTarget.getBoundingClientRect().left;
+  return (
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- the treegrid takes the keys
+    <div
+      className={`${className}${plannable ? ' gantt-row_plannable' : ''}`}
+      style={style}
+      title={plannable ? 'Drag across the row to plan; click to plan from the estimate' : undefined}
+      onClick={onClick}
+      onDoubleClick={onOpen}
+      onMouseMove={event => onHover(event, xOf(event))}
+      onPointerDown={plannable ? event => onDraw(event, dayAt(scale, xOf(event))) : undefined}
+    >
+      {plannable && hoverX !== null && !edit?.pending && (
+        <span className="gantt-plan-marker" style={{left: dayX(scale, dayAt(scale, hoverX)), width: Math.max(2, scale.pxPerDay)}}/>
+      )}
+      {row.type === 'issue' && (row.timed || edit?.pending) && <GanttBars row={row} scale={scale} size={size} edit={edit}/>}
+    </div>
+  );
+};
 
 /** Where the drag label sits from the pointer. */
 const DRAG_LABEL_OFFSET = 14;
@@ -235,6 +288,7 @@ export const GanttView: React.FC<Props> = props => {
   }, []);
 
   const edit = useGanttEdit({gantt: board.gantt, rows, universe, canEdit, onSave: onSaveEdits, container: scrollElement, listWidth, pxPerDay});
+  const rowEditOf = (row: GanttRow): RowEdit | undefined => (row.type === 'issue' ? edit.rowEdit(row) : undefined);
   const {zoomBy} = useGanttZoom({element: scrollElement, scale, listWidth, today, span, pxPerDay, onPxPerDay, todaySignal, fitSignal});
 
   const hovered = hover ? rows.find((row): row is GanttIssueRow => row.type === 'issue' && row.key === hover.key) : undefined;
@@ -256,7 +310,7 @@ export const GanttView: React.FC<Props> = props => {
 
   const toggleRow = useCallback((row: GanttRow) => {
     if (row.type === 'undated') {
-      onToggleUndated(row.key);
+      onToggleUndated(undatedToggleKey(row));
     } else {
       onToggleCollapsed(row.issue.id);
     }
@@ -285,7 +339,7 @@ export const GanttView: React.FC<Props> = props => {
     if (row.type === 'issue') {
       onSelect(row.issue.id, event.ctrlKey || event.metaKey || event.shiftKey);
     } else {
-      onToggleUndated(row.key);
+      onToggleUndated(undatedToggleKey(row));
     }
   };
 
@@ -369,17 +423,20 @@ export const GanttView: React.FC<Props> = props => {
             <div className="gantt__chart" style={{width: scale.width, height}} onMouseLeave={() => setHover(null)}>
               <GanttGrid scale={scale} height={height} today={today}/>
               {rows.map((row, index) => (
-                // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- the treegrid takes the keys
-                <div
+                <ChartRow
                   key={row.key}
-                  className={`${rowClass('gantt-row', row, selectedIds, matchIds, cursor)}${startsGroup(row, index) ? ' gantt-group-start' : ''}${row.type === 'issue' && edit.rowEdit(row)?.saving ? ' gantt-row_saving' : ''}`}
+                  row={row}
+                  className={`${rowClass('gantt-row', row, selectedIds, matchIds, cursor)}${startsGroup(row, index) ? ' gantt-group-start' : ''}${rowEditOf(row)?.saving ? ' gantt-row_saving' : ''}`}
                   style={{top: index * rowHeight, height: rowHeight, ...barStyle(row, board.cardColorField?.name ?? null)}}
+                  scale={scale}
+                  size={size}
+                  edit={rowEditOf(row)}
+                  hoverX={hover?.key === row.key ? hover.chartX : null}
                   onClick={event => onRowClick(row, event)}
-                  onDoubleClick={() => row.type === 'issue' && onOpen(row.issue.id)}
-                  onMouseMove={event => row.type === 'issue' && setHover({key: row.key, x: event.clientX, y: event.clientY})}
-                >
-                  {row.type === 'issue' && row.timed && <GanttBars row={row} scale={scale} size={size} edit={edit.rowEdit(row)}/>}
-                </div>
+                  onOpen={() => row.type === 'issue' && onOpen(row.issue.id)}
+                  onHover={(event, chartX) => row.type === 'issue' && setHover({key: row.key, x: event.clientX, y: event.clientY, chartX})}
+                  onDraw={(event, day) => row.type === 'issue' && edit.startDraw(event, row.issue.id, day)}
+                />
               ))}
               <GanttArrows rows={rows} scale={scale} size={size} edges={edges} selectedIds={selectedIds}/>
             </div>

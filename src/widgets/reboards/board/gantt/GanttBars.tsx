@@ -15,6 +15,12 @@ export type RowEdit = {
   /** Level names, for the handles' tooltips. */
   names: string[];
   due: boolean;
+  /** The faint bar of the parent's span can be dragged into a plan of the issue's own. */
+  borrowed: boolean;
+  /** The issue has no time: a plan can be drawn on its row. */
+  plannable: boolean;
+  /** The level a new plan starts at, until another is picked when confirming. */
+  createLevel: number | 'due';
   /** Where the bar being dragged (or waiting for confirmation) would go. */
   pending: {level: number | 'due'; span: Span} | null;
   saving: boolean;
@@ -109,6 +115,24 @@ const PlanBars: React.FC<Props> = ({row, scale, size, edit}) => {
   );
 };
 
+/** The faint bar of an estimate-only subtask in its parent's span; dragging it gives the subtask a plan of its own. */
+const Borrowed: React.FC<{row: GanttIssueRow; span: Span; style: React.CSSProperties; edit?: RowEdit}> = ({row, span, style, edit}) => {
+  if (!edit?.borrowed) {
+    return <div className="gantt-bar gantt-bar_borrowed" style={style}/>;
+  }
+  const grab = (handle: DragHandle) => (event: React.PointerEvent) => {
+    event.stopPropagation();
+    edit.onGrab(event, {issueId: row.issue.id, level: edit.createLevel, handle, create: true}, span);
+  };
+  const dragged = edit.pending ? ' gantt-bar_dragged' : '';
+  return (
+    <div className={`gantt-bar gantt-bar_borrowed gantt-bar_editable${dragged}`} style={style} title="Drag to give this issue a plan of its own" onPointerDown={grab('move')}>
+      <span className="gantt-handle gantt-handle_start" title="Drag to plan the start" onPointerDown={grab('start')}/>
+      <span className="gantt-handle gantt-handle_end" title="Drag to plan the end" onPointerDown={grab('end')}/>
+    </div>
+  );
+};
+
 /** Where the dragged bar or diamond would go: a dashed outline at the level's height. */
 const Ghost: React.FC<Props> = ({row, scale, size, edit}) => {
   const pending = edit?.pending;
@@ -189,7 +213,7 @@ const GanttBarsComponent: React.FC<Props> = ({row, scale, size, edit}) => {
   return (
     <>
       {derived && <div className="gantt-bar gantt-bar_derived" style={{left: derived.left, width: derived.width, ...vertical(BAR_HEIGHT[size], size)}}/>}
-      {borrowed && <div className="gantt-bar gantt-bar_borrowed" style={{left: borrowed.left, width: borrowed.width, ...vertical(BAR_HEIGHT[size], size)}}/>}
+      {borrowed && row.borrowed && <Borrowed row={row} span={row.borrowed} style={{left: borrowed.left, width: borrowed.width, ...vertical(BAR_HEIGHT[size], size)}} edit={edit}/>}
       <PlanBars row={row} scale={scale} size={size} edit={edit}/>
       {planEnd !== undefined && <Overrun row={row} scale={scale} size={size} end={planEnd}/>}
       {due !== undefined && <Due row={row} scale={scale} size={size} edit={edit} due={due}/>}

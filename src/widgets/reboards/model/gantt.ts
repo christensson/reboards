@@ -159,6 +159,9 @@ export type GanttRow = GanttIssueRow | GanttUndatedRow;
 /** Key of the group of top-level issues without time, in the "show issues without time" prefs. */
 export const UNDATED_ROOTS_KEY = '__undated__';
 
+/** The key that shows or hides the issues of a "without time" row: its parent's id, or the top-level group's key. */
+export const undatedToggleKey = (row: GanttUndatedRow): string => row.parentId ?? UNDATED_ROOTS_KEY;
+
 export type GanttInput = {
   issues: BoardIssue[];
   gantt: GanttConfig;

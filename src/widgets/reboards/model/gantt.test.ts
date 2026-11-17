@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 import {type GanttConfig, type PlanLevel, emptyGantt} from '@/common/model/board-config';
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
-import {type GanttIssueRow, type GanttRow, UNDATED_ROOTS_KEY, buildGanttRows, ganttEdges, ganttRange, issueSchedule, levelSpan, revealFor, workload} from './gantt';
+import {type GanttIssueRow, type GanttRow, UNDATED_ROOTS_KEY, buildGanttRows, ganttEdges, ganttRange, issueSchedule, levelSpan, revealFor, undatedToggleKey, workload} from './gantt';
 import type {BoardIssue, IssueLink} from './issue';
 import {fitPxPerDay, ganttScale, tierFor} from './ganttScale';
 
@@ -113,6 +113,13 @@ describe('buildGanttRows', () => {
     expect(parent?.childCount).toBe(3);
     expect(list.find(row => row.key === '4')?.borrowed).toEqual(parent?.derived);
     expect(list.find(row => row.key === '4')?.workload.persons).toBeCloseTo(8 / (9 * 8));
+  });
+
+  it('expands a group of issues without time by its toggle key', () => {
+    const list = rows([epic, story, early, estimateOnly, undated, loose]);
+    const groups = list.filter((row): row is Extract<GanttRow, {type: 'undated'}> => row.type === 'undated');
+    expect(groups.map(undatedToggleKey)).toEqual(['1', UNDATED_ROOTS_KEY]);
+    expect(keys(rows([epic, story, early, estimateOnly, undated, loose], gantt(), {showUndated: groups.map(undatedToggleKey)}))).toContain('5');
   });
 
   it('collapses parents and expands issues without time', () => {
