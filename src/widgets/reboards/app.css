@@ -2671,3 +2671,44 @@ body {
   background-color: color-mix(in srgb, var(--ring-main-color) 25%, transparent);
   pointer-events: none;
 }
+
+/* "+" after a bar: plan the issue at a level it is missing. */
+.gantt-add {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--ring-borders-color);
+  border-radius: 50%;
+  background-color: var(--ring-content-background-color);
+  color: var(--ring-secondary-color);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.gantt-add__icon {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+}
+
+.gantt-row:hover .gantt-add,
+.gantt-add:focus-visible {
+  opacity: 1;
+}
+
+.gantt-add:hover {
+  border-color: var(--ring-main-color);
+  color: var(--ring-main-color);
+}
+
+.gantt_dragging .gantt-add {
+  opacity: 0;
+}

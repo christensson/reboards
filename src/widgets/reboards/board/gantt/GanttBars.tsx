@@ -21,6 +21,9 @@ export type RowEdit = {
   plannable: boolean;
   /** The level a new plan starts at, until another is picked when confirming. */
   createLevel: number | 'due';
+  /** The issue can still be planned at another level: a "+" follows its marks. */
+  addable: boolean;
+  onAdd: (event: React.MouseEvent) => void;
   /** Where the bar being dragged (or waiting for confirmation) would go. */
   pending: {level: number | 'due'; span: Span} | null;
   saving: boolean;
@@ -36,6 +39,9 @@ type Props = {
 
 /** Gap between the last mark of a row and its persons chip. */
 const CHIP_GAP = 6;
+/** Room taken by the "+" that adds a plan, when the row has one. */
+const ADD_WIDTH = 22;
+const ADD_SIZE = 16;
 const PERSONS_DECIMALS = 1;
 
 const vertical = (height: number, size: CardSize): React.CSSProperties => ({top: (ROW_HEIGHT[size] - height) / 2, height});
@@ -147,6 +153,26 @@ const Ghost: React.FC<Props> = ({row, scale, size, edit}) => {
   return <div className="gantt-ghost" style={{left: box.left, width: box.width, ...vertical(height, size)}}/>;
 };
 
+/** "+" after a row's marks: plans the issue at a level it is missing, from its current plan. */
+const AddPlan: React.FC<{left: number; size: CardSize; onAdd: (event: React.MouseEvent) => void}> = ({left, size, onAdd}) => (
+  <button
+    type="button"
+    className="gantt-add"
+    style={{left: left + CHIP_GAP, top: (ROW_HEIGHT[size] - ADD_SIZE) / 2}}
+    title="Add a plan"
+    aria-label="Add a plan"
+    onPointerDown={event => event.stopPropagation()}
+    onClick={event => {
+      event.stopPropagation();
+      onAdd(event);
+    }}
+  >
+    <svg className="gantt-add__icon" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true">
+      <path d="M4 0.5 V7.5 M0.5 4 H7.5"/>
+    </svg>
+  </button>
+);
+
 /** The due diamond; it can be dragged to another day. */
 const Due: React.FC<Props & {due: number}> = ({row, scale, size, edit, due}) => {
   const editable = Boolean(edit?.due);
@@ -218,7 +244,8 @@ const GanttBarsComponent: React.FC<Props> = ({row, scale, size, edit}) => {
       {planEnd !== undefined && <Overrun row={row} scale={scale} size={size} end={planEnd}/>}
       {due !== undefined && <Due row={row} scale={scale} size={size} edit={edit} due={due}/>}
       <Ghost row={row} scale={scale} size={size} edit={edit}/>
-      {Number.isFinite(marksEnd) && <Persons row={row} left={dayEndX(scale, marksEnd)} size={size}/>}
+      {Number.isFinite(marksEnd) && edit?.addable && <AddPlan left={dayEndX(scale, marksEnd)} size={size} onAdd={edit.onAdd}/>}
+      {Number.isFinite(marksEnd) && <Persons row={row} left={dayEndX(scale, marksEnd) + (edit?.addable ? ADD_WIDTH : 0)} size={size}/>}
     </>
   );
 };

@@ -58,6 +58,15 @@ export const levelHandles = (level: PlanLevel, universe: FieldUniverse): DragHan
   return level.periodField && kindOf(level.periodField, universe) === 'period' ? ALL_HANDLES : [];
 };
 
+/**
+ * The levels an issue can still be planned at: editable levels it has no span at, in level order,
+ * then the due date when it can be set and is not.
+ */
+export const missingLevels = (editable: boolean[], spans: (Span | null)[], dueEditable: boolean, hasDue: boolean): (number | 'due')[] => [
+  ...editable.flatMap((can, index) => (can && !spans[index] ? [index] : [])),
+  ...(dueEditable && !hasDue ? ['due' as const] : [])
+];
+
 /** The span after dragging a handle by whole days; an edge stops at the other end, so a span is at least one day. */
 export const draggedSpan = (span: Span, handle: DragHandle, deltaDays: number): Span => {
   const delta = deltaDays * MS_PER_DAY;

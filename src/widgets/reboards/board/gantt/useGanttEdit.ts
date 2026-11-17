@@ -1,7 +1,7 @@
 import {useCallback, useMemo, useState} from 'react';
 import {type GanttConfig, isDateKind} from '@/common/model/board-config';
 import type {FieldUniverse} from '../../model/fieldUniverse';
-import type {GanttIssueRow, GanttRow, Span} from '../../model/gantt';
+import {type GanttIssueRow, type GanttRow, type Span, detailedSpan} from '../../model/gantt';
 import {
   type DragTarget,
   type Edit,
@@ -11,6 +11,7 @@ import {
   dueEdit,
   estimateSpan,
   levelHandles,
+  missingLevels,
   planEdit,
   snapToSprints,
   sprintsOf
@@ -49,6 +50,8 @@ type Pending = {
   keys: string[];
   at: DragPoint;
   confirm: {title: string; edit: Edit} | null;
+  /** New plans: the levels the Set switch offers. */
+  choices?: PlanChoice[];
 };
 
 const NO_EDITS: Edit = {edits: [], lines: []};
@@ -200,6 +203,29 @@ export const useGanttEdit = ({gantt, rows, universe, canEdit, onSave, container,
     }
   }, [grab, createLevel]);
 
+  const choiceOf = useCallback((level: Level): PlanChoice => ({key: keyOfLevel(level), label: level === 'due' ? 'Due date' : names[level] ?? ''}), [names]);
+
+  /** The levels a timed row can still be planned at, most detailed last (due date at the very end). */
+  const missingOf = useCallback((row: GanttIssueRow): Level[] => {
+    const hasPlan = row.schedule.spans.some(Boolean) || row.schedule.due !== undefined;
+    return row.timed && !row.borrowed && hasPlan
+      ? missingLevels(handlesByLevel.map(handles => handles.length > 0), row.schedule.spans, editableDue, row.schedule.due !== undefined)
+      : [];
+  }, [handlesByLevel, editableDue]);
+
+  /** "+" on a bar: a missing level, preset to the issue's most detailed plan (or due day), to confirm. */
+  const startAdd = useCallback((row: GanttIssueRow, at: DragPoint) => {
+    const missing = missingOf(row);
+    const source = detailedSpan(row.schedule) ?? (row.schedule.due === undefined ? undefined : {start: row.schedule.due, end: row.schedule.due});
+    if (missing.length === 0 || !source) {
+      return;
+    }
+    const levels = missing.filter(level => level !== 'due');
+    const level = levels.length > 0 ? levels[levels.length - 1] : 'due';
+    const target: DragTarget = {issueId: row.issue.id, level, handle: 'draw', create: true};
+    setPending(withConfirm({target, issue: row.issue, raw: source, ...fit(level, row.issue, source), at, confirm: null, choices: missing.map(choiceOf)}, at));
+  }, [missingOf, fit, withConfirm, choiceOf]);
+
   /** What can be dragged on each row the user may change. */
   const rowEdits = useMemo(() => {
     const edits = new Map<string, RowEdit>();
@@ -215,13 +241,15 @@ export const useGanttEdit = ({gantt, rows, universe, canEdit, onSave, container,
         borrowed: Boolean(row.borrowed) && createLevel !== null,
         plannable: !row.timed && createLevel !== null,
         createLevel: createLevel ?? 'due',
+        addable: missingOf(row).length > 0,
+        onAdd: event => startAdd(row, {x: event.clientX, y: event.clientY}),
         pending: pending?.target.issueId === id ? {level: pending.target.level, span: pending.span} : null,
         saving: saving.has(id),
         onGrab: grab
       });
     });
     return edits;
-  }, [rows, canEdit, handlesByLevel, names, editableDue, createLevel, pending, saving, grab]);
+  }, [rows, canEdit, handlesByLevel, names, editableDue, createLevel, pending, saving, grab, missingOf, startAdd]);
 
   const rowEdit = useCallback((row: GanttIssueRow): RowEdit | undefined => rowEdits.get(row.issue.id), [rowEdits]);
 
@@ -251,7 +279,9 @@ export const useGanttEdit = ({gantt, rows, universe, canEdit, onSave, container,
       at: pending.at,
       onApply: apply,
       onCancel: cancel,
-      ...(pending.target.create && choices.length > 1 ? {choices, choice: keyOfLevel(pending.target.level), onChoose: choose} : {})
+      ...(pending.target.create && (pending.choices ?? choices).length > 1
+        ? {choices: pending.choices ?? choices, choice: keyOfLevel(pending.target.level), onChoose: choose}
+        : {})
     }
     : null;
 

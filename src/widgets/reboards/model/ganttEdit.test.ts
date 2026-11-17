@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 import type {PlanLevel} from '@/common/model/board-config';
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
-import {draggedSpan, drawnSpan, dueEdit, editedIssue, estimateSpan, fieldUpdates, levelHandles, planEdit, snapToSprints, sprintAt, sprintsOf} from './ganttEdit';
+import {draggedSpan, drawnSpan, dueEdit, editedIssue, estimateSpan, fieldUpdates, levelHandles, missingLevels, planEdit, snapToSprints, sprintAt, sprintsOf} from './ganttEdit';
 import type {BoardIssue} from './issue';
 
 const day = (iso: string): number => Date.parse(`${iso}T00:00:00Z`);
@@ -163,5 +163,15 @@ describe('creating plans', () => {
     ]);
     expect(planEdit(blank, versions, 'draw', span, universe, format, ['S1']).edits).toHaveLength(1);
     expect(dueEdit(blank, {name: 'Due', kind: 'datetime'}, span.end, universe, format).lines).toEqual([{label: 'Due', from: 'none', to: '11-06'}]);
+  });
+});
+
+describe('missingLevels', () => {
+  const span = {start: day('2026-11-02'), end: day('2026-11-13')};
+  it('lists the editable levels without a span, then the due date', () => {
+    expect(missingLevels([true, true], [null, span], true, false)).toEqual([0, 'due']);
+    expect(missingLevels([true, true], [span, span], true, true)).toEqual([]);
+    expect(missingLevels([false, true], [null, span], true, true)).toEqual([]);
+    expect(missingLevels([true, true], [null, span], false, false)).toEqual([0]);
   });
 });

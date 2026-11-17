@@ -12,8 +12,8 @@ It requires YouTrack 2026.2 or later.
 - **Time**: rows by date, version or build, with overdue and late work highlighted.
 - **Gantt**: plans at several levels (such as roadmap dates, then sprints), due dates and the persons needed
   to finish the estimate in time, on a zoomable timeline with subtask trees and relation arrows; drag bars,
-  their edges or due dates to reschedule, or draw on an unscheduled issue's row to plan it, with a
-  confirmation before saving.
+  their edges or due dates to reschedule, draw on an unscheduled issue's row to plan it, or add a
+  missing planning level with the + after a bar, with a confirmation before saving.
 - Keyboard navigation and moves, linked agile boards and sprints, personal or shared boards, and read-only
   MCP tools for AI assistants.
 
