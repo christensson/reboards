@@ -2464,3 +2464,178 @@ body {
   gap: var(--ring-unit);
   width: 100%;
 }
+
+/* Rescheduling: bars that can be dragged get grips on their edges when the row is hovered. */
+.gantt-bar_editable {
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.gantt_dragging,
+.gantt_dragging .gantt-bar_editable {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.gantt-handle {
+  position: absolute;
+  z-index: 1;
+  top: -2px;
+  bottom: -2px;
+  width: 10px;
+  opacity: 0;
+  cursor: ew-resize;
+  transition: opacity 120ms ease;
+}
+
+.gantt-handle_start {
+  left: -6px;
+}
+
+.gantt-handle_end {
+  right: -6px;
+}
+
+/* The grip: a slim pill in the page color, outlined in the bar's color. */
+.gantt-handle::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: max(10px, 80%);
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background-color: var(--ring-content-background-color);
+  box-shadow: 0 0 0 1px var(--bar-color), 0 1px 2px var(--ring-popup-shadow-color, rgba(0, 0, 0, 0.2));
+  content: "";
+}
+
+.gantt-row:hover .gantt-handle,
+.gantt-handle:focus-visible {
+  opacity: 1;
+}
+
+.gantt_dragging .gantt-handle {
+  opacity: 0;
+}
+
+.gantt-bar_dragged {
+  opacity: 0.35;
+}
+
+/* Where the dragged bar would go. */
+.gantt-ghost {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  border: 2px dashed var(--ring-main-color);
+  border-radius: 3px;
+  background-color: color-mix(in srgb, var(--ring-main-color) 12%, transparent);
+  pointer-events: none;
+}
+
+.gantt-due_editable {
+  pointer-events: auto;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.gantt-row:hover .gantt-due_editable {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring-main-color) 45%, transparent);
+}
+
+.gantt-due_dragged {
+  opacity: 0.35;
+}
+
+.gantt-due.gantt-due_ghost {
+  z-index: 2;
+  border: 2px dashed var(--ring-main-color);
+  background-color: transparent;
+  pointer-events: none;
+}
+
+.gantt-drag-label {
+  position: fixed;
+  z-index: 30;
+  padding: 2px var(--ring-unit);
+  border-radius: var(--ring-border-radius);
+  background-color: var(--ring-popup-background-color, var(--ring-content-background-color));
+  box-shadow: var(--ring-popup-shadow, 0 2px 8px rgba(0, 0, 0, 0.2));
+  font-size: var(--ring-font-size-smaller);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.gantt-confirm {
+  position: fixed;
+  z-index: 40;
+  box-sizing: border-box;
+  min-width: 240px;
+  max-width: 380px;
+  padding: calc(var(--ring-unit) * 1.5) calc(var(--ring-unit) * 2);
+  border: 1px solid var(--ring-popup-border-color, var(--ring-line-color));
+  border-radius: var(--ring-border-radius);
+  background-color: var(--ring-popup-background-color, var(--ring-content-background-color));
+  box-shadow: var(--ring-popup-shadow, 0 2px 8px rgba(0, 0, 0, 0.2));
+}
+
+.gantt-confirm__title {
+  margin-bottom: var(--ring-unit);
+  font-weight: var(--ring-font-weight-bold, 600);
+}
+
+.gantt-confirm__lines {
+  margin: 0 0 calc(var(--ring-unit) * 1.5);
+  font-size: var(--ring-font-size-smaller);
+}
+
+.gantt-confirm__line {
+  display: flex;
+  gap: var(--ring-unit);
+  line-height: 20px;
+}
+
+.gantt-confirm__line dt {
+  flex: 0 0 auto;
+  min-width: 96px;
+  color: var(--ring-secondary-color);
+}
+
+.gantt-confirm__line dd {
+  margin: 0;
+}
+
+.gantt-confirm__from {
+  color: var(--ring-secondary-color);
+}
+
+.gantt-confirm__actions {
+  display: flex;
+  gap: var(--ring-unit);
+}
+
+/* Saving a change: the row's bars breathe until the issue is back. */
+.gantt-row_saving .gantt-bar,
+.gantt-row_saving .gantt-due {
+  animation: gantt-saving 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes gantt-saving {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gantt-row_saving .gantt-bar,
+  .gantt-row_saving .gantt-due {
+    animation: none;
+    opacity: 0.6;
+  }
+}

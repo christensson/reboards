@@ -37,6 +37,7 @@ import {FieldValuePickerDialog} from './FieldValuePickerDialog';
 import {OUTER_WIDTH} from './tracks';
 import {Toolbar} from './Toolbar';
 import {GanttView} from './gantt/GanttView';
+import {type FieldEdit, editedIssue, fieldUpdates} from '../model/ganttEdit';
 import {useGantt} from './gantt/useGantt';
 import {ValuePickerDialog} from './ValuePickerDialog';
 import {RelationPickerDialog} from './RelationPickerDialog';
@@ -735,6 +736,21 @@ export const BoardScreen: React.FC<Props> = ({
     [data, reference.universe]
   );
 
+  /** Saves fields changed by dragging in the Gantt chart: shown at once, put back if saving fails. */
+  const saveGanttEdits = useCallback(
+    async (issue: BoardIssue, edits: FieldEdit[]) => {
+      data.replaceIssue(editedIssue(issue, edits));
+      try {
+        await youtrack.updateIssueFields(issue.id, fieldUpdates(issue, edits, reference.universe));
+        await data.refetchIssue(issue.id);
+      } catch (failure) {
+        data.replaceIssue(issue);
+        alertService.error(`Could not change ${issue.idReadable}: ${errorMessage(failure)}`);
+      }
+    },
+    [data, reference.universe]
+  );
+
   const sensors = useSensors(useSensor(PointerSensor, {activationConstraint: {distance: DRAG_ACTIVATION_DISTANCE}}));
 
   const permissions = useProjectPermissions(board.projects);
@@ -1274,6 +1290,8 @@ export const BoardScreen: React.FC<Props> = ({
             onToggleConnectors={toggleConnectors}
             onHelp={openShortcuts}
             navMode={navMode}
+            canEdit={canUpdateIssue}
+            onSaveEdits={saveGanttEdits}
             onClearSelection={clearSelection}
             onOpen={onOpen}
             registry={registry}

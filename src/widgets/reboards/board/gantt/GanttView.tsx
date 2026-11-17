@@ -10,6 +10,7 @@ import type {FieldUniverse} from '../../model/fieldUniverse';
 import {type GanttIssueRow, type GanttRow, buildGanttRows, ganttEdges, ganttRange} from '../../model/gantt';
 import {ganttScale, padDays} from '../../model/ganttScale';
 import type {BoardIssue} from '../../model/issue';
+import type {FieldEdit} from '../../model/ganttEdit';
 import {todayPosition} from '../../model/timeline';
 import {formatWorkHours} from '../../model/workTime';
 import type {CardRegistry} from '../BoardContext';
@@ -19,6 +20,8 @@ import {GanttBars} from './GanttBars';
 import {GanttDetails, GanttLegend} from './GanttDetails';
 import {GanttGrid, GanttScaleHeader} from './GanttGrid';
 import {ROW_HEIGHT, anchorBox} from './geometry';
+import {GanttConfirm} from './GanttConfirm';
+import {useGanttEdit} from './useGanttEdit';
 import {useGanttKeys} from './useGanttKeys';
 import {useGanttZoom} from './useGanttZoom';
 
@@ -47,6 +50,10 @@ type Props = {
   onHelp: () => void;
   /** Highlight navigation mode, when on. */
   navMode: NavMode | null;
+  /** Whether the user may change the issue's fields: its bars get drag handles. */
+  canEdit: (issue: BoardIssue) => boolean;
+  /** Saves fields changed by dragging, once confirmed. */
+  onSaveEdits: (issue: BoardIssue, edits: FieldEdit[]) => Promise<void>;
   onClearSelection: () => void;
   onOpen: (issueId: string) => void;
   /** Rows register here so find can order and scroll to them. */
@@ -157,6 +164,9 @@ const GanttLabel = memo(GanttLabelComponent);
 
 type Hover = {key: string; x: number; y: number};
 
+/** Where the drag label sits from the pointer. */
+const DRAG_LABEL_OFFSET = 14;
+
 /** Room left around a row scrolled into view. */
 const SCROLL_MARGIN = 8;
 /** Room left of a bar scrolled into view. */
@@ -194,7 +204,7 @@ const revealRow = (container: HTMLElement, label: HTMLElement, bar: {left: numbe
 export const GanttView: React.FC<Props> = props => {
   const {board, issues, universe, baseUrl, pxPerDay, onPxPerDay, size, connectorsMode, collapsed, showUndated, onToggleCollapsed, onToggleUndated} = props;
   const {selectedIds, matchIds, onSelect, onClearSelection, onOpen, registry, todaySignal, fitSignal} = props;
-  const {setSelectedIds, keysEnabled, onToggleConnectors, onHelp, navMode} = props;
+  const {setSelectedIds, keysEnabled, onToggleConnectors, onHelp, navMode, canEdit, onSaveEdits} = props;
   const [now] = useState(() => Date.now());
   const today = todayPosition(now);
   const rows = useMemo(
@@ -224,6 +234,7 @@ export const GanttView: React.FC<Props> = props => {
     setScrollElement(element);
   }, []);
 
+  const edit = useGanttEdit({gantt: board.gantt, rows, universe, canEdit, onSave: onSaveEdits, container: scrollElement, listWidth, pxPerDay});
   const {zoomBy} = useGanttZoom({element: scrollElement, scale, listWidth, today, span, pxPerDay, onPxPerDay, todaySignal, fitSignal});
 
   const hovered = hover ? rows.find((row): row is GanttIssueRow => row.type === 'issue' && row.key === hover.key) : undefined;
@@ -252,7 +263,8 @@ export const GanttView: React.FC<Props> = props => {
   }, [onToggleUndated, onToggleCollapsed]);
 
   useGanttKeys({
-    enabled: keysEnabled,
+    // The confirmation takes Enter and Escape.
+    enabled: keysEnabled && !edit.confirm,
     rows,
     selectedIds,
     setSelectedIds,
@@ -307,7 +319,7 @@ export const GanttView: React.FC<Props> = props => {
   return (
      
     <div
-      className={`gantt gantt_${size}`}
+      className={`gantt gantt_${size}${edit.dragging ? ' gantt_dragging' : ''}`}
       style={style}
       role="treegrid"
       aria-label={`${board.name} Gantt chart`}
@@ -360,13 +372,13 @@ export const GanttView: React.FC<Props> = props => {
                 // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- the treegrid takes the keys
                 <div
                   key={row.key}
-                  className={`${rowClass('gantt-row', row, selectedIds, matchIds, cursor)}${startsGroup(row, index) ? ' gantt-group-start' : ''}`}
+                  className={`${rowClass('gantt-row', row, selectedIds, matchIds, cursor)}${startsGroup(row, index) ? ' gantt-group-start' : ''}${row.type === 'issue' && edit.rowEdit(row)?.saving ? ' gantt-row_saving' : ''}`}
                   style={{top: index * rowHeight, height: rowHeight, ...barStyle(row, board.cardColorField?.name ?? null)}}
                   onClick={event => onRowClick(row, event)}
                   onDoubleClick={() => row.type === 'issue' && onOpen(row.issue.id)}
                   onMouseMove={event => row.type === 'issue' && setHover({key: row.key, x: event.clientX, y: event.clientY})}
                 >
-                  {row.type === 'issue' && row.timed && <GanttBars row={row} scale={scale} size={size}/>}
+                  {row.type === 'issue' && row.timed && <GanttBars row={row} scale={scale} size={size} edit={edit.rowEdit(row)}/>}
                 </div>
               ))}
               <GanttArrows rows={rows} scale={scale} size={size} edges={edges} selectedIds={selectedIds}/>
@@ -374,7 +386,9 @@ export const GanttView: React.FC<Props> = props => {
           </div>
         </div>
       </div>
-      {hovered && hover && <GanttDetails row={hovered} gantt={board.gantt} x={hover.x} y={hover.y}/>}
+      {hovered && hover && !edit.dragging && <GanttDetails row={hovered} gantt={board.gantt} x={hover.x} y={hover.y}/>}
+      {edit.dragLabel && <span className="gantt-drag-label" style={{left: edit.dragLabel.at.x + DRAG_LABEL_OFFSET, top: edit.dragLabel.at.y + DRAG_LABEL_OFFSET}}>{edit.dragLabel.text}</span>}
+      {edit.confirm && <GanttConfirm {...edit.confirm}/>}
     </div>
   );
 };

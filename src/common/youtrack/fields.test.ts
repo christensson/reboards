@@ -49,6 +49,7 @@ describe('buildFieldUpdate', () => {
     expect(buildFieldUpdate('Assignee', 'user', undefined, 'jdoe')).toEqual({name: 'Assignee', $type: 'SingleUserIssueCustomField', value: {login: 'jdoe'}});
     expect(buildFieldUpdate('Story points', 'integer', undefined, '3')).toEqual({name: 'Story points', $type: 'SimpleIssueCustomField', value: 3});
     expect(buildFieldUpdate('Hours', 'float', undefined, '2.5')).toEqual({name: 'Hours', $type: 'SimpleIssueCustomField', value: 2.5});
+    expect(buildFieldUpdate('Estimation', 'period', undefined, '960')).toEqual({name: 'Estimation', $type: 'PeriodIssueCustomField', value: {presentation: '960m'}});
     expect(buildFieldUpdate('Priority', 'enum', undefined, null)).toEqual({name: 'Priority', $type: 'SingleEnumIssueCustomField', value: null});
   });
 });

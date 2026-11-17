@@ -111,7 +111,7 @@ const DEFAULT_ISSUE_FIELD_TYPES: Record<FieldKind, string> = {
   period: 'PeriodIssueCustomField'
 };
 
-type ValueRef = {name: string} | {login: string};
+type ValueRef = {name: string} | {login: string} | {presentation: string};
 
 export type IssueFieldUpdate = {
   name: string;
@@ -149,6 +149,10 @@ export const buildFieldUpdate = (
   // Numbers and dates (epoch milliseconds) are sent as numbers.
   if (kind === 'integer' || kind === 'float' || kind === 'date' || kind === 'datetime') {
     return {name, $type, value: Number(valueKey)};
+  }
+  // Periods are given in minutes and sent as a presentation YouTrack parses, such as "960m".
+  if (kind === 'period') {
+    return {name, $type, value: {presentation: `${Math.round(Number(valueKey))}m`}};
   }
   return {name, $type, value: valueRef(kind, valueKey)};
 };
