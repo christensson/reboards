@@ -17,7 +17,8 @@ import starEmptyIcon from '@jetbrains/icons/star-empty';
 import starFilledIcon from '@jetbrains/icons/star-filled';
 import updateIcon from '@jetbrains/icons/update';
 import {type BoardConfig, type RelatedBoard, type RowMode, relatedBoardsOf} from '@/common/model/board-config';
-import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
+import {type CardSize, type ConnectorsMode, GANTT_ZOOMS, type GanttZoom} from '@/common/storage/prefs';
+import {tierFor} from '../model/ganttScale';
 import {orderBoards} from '../model/boardOrder';
 import {TIMING_FLAGS, type TimingFlag, timingFilterKey, timingFlagOfFilter} from '../model/timeline';
 import type {FieldUniverse} from '../model/fieldUniverse';
@@ -211,13 +212,23 @@ type Props = {
   onToggleStarPage: (key: string) => void;
   /** Sprints to choose from (a linked agile board's, or the sprint field's values); null without sprints. */
   sprintValues: UniverseValue[] | null;
-  /** Row layouts the board has set up; with both, the toolbar switches between them. */
-  rowModes: ('swimlanes' | 'time')[];
+  /** Row layouts the board has set up; with several, the toolbar switches between them. */
+  rowModes: Exclude<RowMode, 'none'>[];
   rowMode: RowMode;
-  onRowMode: (mode: 'swimlanes' | 'time') => void;
+  onRowMode: (mode: Exclude<RowMode, 'none'>) => void;
+  /** Gantt layout: its zoom presets, "Fit" and "Today"; null in other layouts. */
+  gantt: {pxPerDay: number; onPreset: (zoom: GanttZoom) => void; onFit: () => void; onToday: () => void} | null;
   /** Time layout: timing problems the highlight menu offers. */
   timingFlags: TimingFlag[];
 };
+
+const ROW_MODE_BUTTONS: {mode: Exclude<RowMode, 'none'>; label: string; title: string}[] = [
+  {mode: 'swimlanes', label: 'Swimlanes', title: 'Rows by swimlane fields'},
+  {mode: 'time', label: 'Time', title: 'Rows by time'},
+  {mode: 'gantt', label: 'Gantt', title: 'Plans, due dates and workload on a timeline'}
+];
+
+const ZOOM_LABELS: Record<GanttZoom, string> = {day: 'Days', week: 'Weeks', month: 'Months', quarter: 'Quarters'};
 
 const StarToggle: React.FC<{starred: boolean; onToggle: () => void; noun?: string}> = ({starred, onToggle, noun = 'board'}) => (
   <span
@@ -380,6 +391,7 @@ export const Toolbar: React.FC<Props> = ({
   rowModes,
   rowMode,
   onRowMode,
+  gantt,
   timingFlags
 }) => {
   const boardItems = useMemo(() => buildBoardItems(boards, starredBoards, onToggleStar), [boards, starredBoards, onToggleStar]);
@@ -413,9 +425,28 @@ export const Toolbar: React.FC<Props> = ({
       {rowModes.length > 1 && (
         <div className="toolbar__group">
           <ButtonGroup>
-            <Button active={rowMode === 'swimlanes'} title="Rows by swimlane fields" onClick={() => onRowMode('swimlanes')}>Swimlanes</Button>
-            <Button active={rowMode === 'time'} title="Rows by time" onClick={() => onRowMode('time')}>Time</Button>
+            {ROW_MODE_BUTTONS.filter(button => rowModes.includes(button.mode)).map(button => (
+              <Button key={button.mode} active={rowMode === button.mode} title={button.title} onClick={() => onRowMode(button.mode)}>{button.label}</Button>
+            ))}
           </ButtonGroup>
+        </div>
+      )}
+      {gantt && (
+        <div className="toolbar__group">
+          <ButtonGroup>
+            {GANTT_ZOOMS.map(zoom => (
+              <Button
+                key={zoom}
+                active={tierFor(gantt.pxPerDay) === zoom}
+                title={`Time scale in ${ZOOM_LABELS[zoom].toLowerCase()}. Zoom freely with Ctrl+scroll (or pinch) over the chart, or + and −.`}
+                onClick={() => gantt.onPreset(zoom)}
+              >
+                {ZOOM_LABELS[zoom]}
+              </Button>
+            ))}
+          </ButtonGroup>
+          <Button title="Zoom to show every issue" onClick={gantt.onFit}>Fit</Button>
+          <Button title="Scroll to today" onClick={gantt.onToday}>Today</Button>
         </div>
       )}
       {pages && (

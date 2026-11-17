@@ -32,6 +32,8 @@ export const describeFieldType = (typeId: string): FieldTypeInfo => {
       return {kind: 'user', multi};
     case 'integer':
       return {kind: 'integer', multi: false};
+    case 'float':
+      return {kind: 'float', multi: false};
     case 'date':
       return {kind: 'date', multi: false};
     case 'period':
@@ -103,6 +105,7 @@ const DEFAULT_ISSUE_FIELD_TYPES: Record<FieldKind, string> = {
   build: 'SingleBuildIssueCustomField',
   user: 'SingleUserIssueCustomField',
   integer: 'SimpleIssueCustomField',
+  float: 'SimpleIssueCustomField',
   date: 'DateIssueCustomField',
   datetime: 'DateIssueCustomField',
   period: 'PeriodIssueCustomField'
@@ -144,7 +147,7 @@ export const buildFieldUpdate = (
     return {name, $type, value: null};
   }
   // Numbers and dates (epoch milliseconds) are sent as numbers.
-  if (kind === 'integer' || kind === 'date' || kind === 'datetime') {
+  if (kind === 'integer' || kind === 'float' || kind === 'date' || kind === 'datetime') {
     return {name, $type, value: Number(valueKey)};
   }
   return {name, $type, value: valueRef(kind, valueKey)};

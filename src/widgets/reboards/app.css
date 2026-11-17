@@ -1788,6 +1788,27 @@ body {
   text-align: center;
 }
 
+/* Alternative combinations sit apart; keys pressed together are joined by "+". */
+.shortcuts__combo {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  margin-right: var(--ring-unit);
+}
+
+.shortcuts__combo .shortcuts__key {
+  margin-right: 0;
+}
+
+.shortcuts__plus,
+.shortcuts__word {
+  color: var(--ring-secondary-color);
+}
+
+.shortcuts__plus {
+  padding: 0 2px;
+}
+
 /* A card moved with Ctrl+arrows, previewed in its new place: a cell slot like any card. */
 .key-move_in-place {
   grid-column: auto;
@@ -1848,4 +1869,598 @@ body {
 
 .board-screen_two-level [data-card-id] {
   scroll-margin-left: var(--outer-w);
+}
+
+/*
+ * Gantt layout. Only Ring UI tokens and tints of them, so the light and dark themes both work.
+ * --bar-color is the card color field's value color, else the main color.
+ */
+.gantt {
+  --bar-color: var(--ring-main-color);
+  --gantt-header-h: 48px;
+  --gantt-line: var(--ring-line-color);
+  --gantt-tree: color-mix(in srgb, var(--ring-secondary-color) 60%, transparent);
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  outline: none;
+}
+
+.gantt:focus-visible .gantt-label_focused {
+  box-shadow: inset 0 0 0 2px var(--ring-border-hover-color, var(--ring-main-color));
+}
+
+.gantt__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Rows scrolled to by find and highlights stop below the sticky time scale. */
+.gantt [data-row-key] {
+  scroll-margin-top: calc(var(--gantt-header-h) + 8px);
+  scroll-margin-bottom: 8px;
+}
+
+.gantt__content {
+  position: relative;
+  min-width: 100%;
+  padding-bottom: calc(var(--ring-unit) * 4);
+}
+
+.gantt__header {
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  display: flex;
+  height: var(--gantt-header-h);
+  border-bottom: 1px solid var(--gantt-line);
+  background-color: var(--ring-content-background-color);
+}
+
+.gantt__corner {
+  position: sticky;
+  z-index: 5;
+  left: 0;
+  display: flex;
+  flex: 0 0 var(--gantt-list-w);
+  width: var(--gantt-list-w);
+  min-width: 0;
+  align-items: flex-end;
+  gap: var(--ring-unit);
+  box-sizing: border-box;
+  padding: 0 var(--ring-unit) var(--ring-unit) calc(var(--ring-unit) * 2);
+  border-right: 1px solid var(--gantt-line);
+  background-color: var(--ring-content-background-color);
+}
+
+.gantt__corner-title {
+  flex: 1;
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+}
+
+.gantt__resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.gantt__resize:hover {
+  background-color: color-mix(in srgb, var(--ring-main-color) 40%, transparent);
+}
+
+.gantt__body {
+  display: flex;
+}
+
+.gantt__list {
+  position: sticky;
+  z-index: 3;
+  left: 0;
+  /* Exactly as wide as the header's corner, however deep the rows go, so the scale stays on the grid. */
+  flex: 0 0 var(--gantt-list-w);
+  overflow: hidden;
+  width: var(--gantt-list-w);
+  min-width: 0;
+  box-sizing: border-box;
+  border-right: 1px solid var(--gantt-line);
+  background-color: var(--ring-content-background-color);
+}
+
+.gantt__chart {
+  position: relative;
+  flex: none;
+}
+
+/* Scale */
+.gantt-scale {
+  position: relative;
+  flex: none;
+}
+
+.gantt-scale__tier {
+  position: relative;
+  height: 50%;
+}
+
+.gantt-scale__tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-left: 1px solid var(--gantt-line);
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+  line-height: 24px;
+  white-space: nowrap;
+}
+
+.gantt-scale__tier_top .gantt-scale__tick {
+  color: var(--ring-text-color);
+}
+
+.gantt-scale__tick_weekend {
+  background-color: color-mix(in srgb, var(--ring-secondary-color) 8%, transparent);
+}
+
+.gantt-scale__label {
+  position: sticky;
+  left: calc(var(--gantt-list-w) + 4px);
+  padding: 0 4px;
+}
+
+.gantt-scale__today {
+  position: absolute;
+  z-index: 1;
+  bottom: 2px;
+  transform: translateX(-50%);
+  padding: 0 4px;
+  border-radius: var(--ring-border-radius);
+  background-color: var(--ring-main-color);
+  color: var(--ring-white-text-color, #fff);
+  font-size: var(--ring-font-size-smaller);
+  line-height: 16px;
+  pointer-events: none;
+}
+
+/* Background */
+.gantt-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.gantt-grid__weekend {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background-color: color-mix(in srgb, var(--ring-secondary-color) 8%, transparent);
+}
+
+.gantt-grid__line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid color-mix(in srgb, var(--gantt-line) 50%, transparent);
+}
+
+.gantt-grid__line_major {
+  border-left-color: var(--gantt-line);
+}
+
+.gantt-grid__today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 2px solid var(--ring-main-color);
+}
+
+/* Rows: the label on the left and the chart row share hover, selection and match states. */
+.gantt-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  padding-right: var(--ring-unit);
+  border-bottom: 1px solid color-mix(in srgb, var(--gantt-line) 50%, transparent);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.gantt-label > :first-child {
+  margin-left: 4px;
+}
+
+.gantt-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  border-bottom: 1px solid color-mix(in srgb, var(--gantt-line) 50%, transparent);
+}
+
+/* A line between top-level issues: a little heavier than the row lines, still quiet. */
+.gantt-label {
+  position: relative;
+}
+
+.gantt-group-start::before {
+  position: absolute;
+  z-index: 1;
+  top: -1px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background-color: var(--gantt-line);
+  content: "";
+  pointer-events: none;
+}
+
+.gantt-label:hover,
+.gantt-row:hover {
+  background-color: color-mix(in srgb, var(--ring-hover-background-color) 60%, transparent);
+}
+
+.gantt-label_selected,
+.gantt-row_selected,
+.gantt-label_selected:hover,
+.gantt-row_selected:hover {
+  background-color: var(--ring-selected-background-color, color-mix(in srgb, var(--ring-main-color) 15%, transparent));
+}
+
+.gantt-label_match {
+  box-shadow: inset 3px 0 0 var(--ring-main-color);
+}
+
+.gantt-row_match {
+  background-color: color-mix(in srgb, var(--ring-main-color) 10%, transparent);
+}
+
+.gantt-label__toggle {
+  flex: none;
+  height: 20px;
+  padding: 0 2px;
+}
+
+.gantt-label__spacer {
+  flex: none;
+  width: 20px;
+}
+
+.gantt-label__id {
+  flex: none;
+  color: var(--ring-link-color);
+  font-size: var(--ring-font-size-smaller);
+  text-decoration: none;
+}
+
+.gantt-label__id:hover {
+  text-decoration: underline;
+}
+
+.gantt-label_resolved .gantt-label__id {
+  text-decoration: line-through;
+}
+
+.gantt-label__summary {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.gantt-label_untimed .gantt-label__summary,
+.gantt-label_resolved .gantt-label__summary {
+  color: var(--ring-secondary-color);
+}
+
+.gantt-label__estimate {
+  flex: none;
+  padding: 0 4px;
+  border-radius: var(--ring-border-radius);
+  background-color: color-mix(in srgb, var(--ring-secondary-color) 12%, transparent);
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+}
+
+.gantt-label__undated {
+  overflow: hidden;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ring-secondary-color);
+  font: inherit;
+  font-size: var(--ring-font-size-smaller);
+  font-style: italic;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.gantt-label__undated:hover {
+  color: var(--ring-link-hover-color, var(--ring-link-color));
+}
+
+/* Bars */
+.gantt-bar {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+/* A coarser plan behind the detailed bar: a faint band with its ends marked. */
+.gantt-bar_band {
+  border-right: 2px solid color-mix(in srgb, var(--bar-color) 55%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--bar-color) 55%, transparent);
+  background-color: color-mix(in srgb, var(--bar-color) 16%, transparent);
+}
+
+.gantt-bar_detailed {
+  background-color: var(--bar-color);
+  box-shadow: 0 1px 2px var(--ring-popup-shadow-color, rgba(0, 0, 0, 0.12));
+}
+
+/* Planned at a coarser level only: a rough plan, outlined rather than solid. */
+.gantt-bar_rough {
+  border: 2px solid var(--bar-color);
+  background-color: color-mix(in srgb, var(--bar-color) 30%, transparent);
+}
+
+/* Spanned by the subtasks: a shadow of the parent's missing plan. */
+.gantt-bar_derived {
+  border: 1px dashed color-mix(in srgb, var(--ring-secondary-color) 80%, transparent);
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ring-secondary-color) 22%, transparent) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+/* Estimate only, drawn in the parent's plan. */
+.gantt-bar_borrowed {
+  border: 1px dotted var(--bar-color);
+  background-color: color-mix(in srgb, var(--bar-color) 12%, transparent);
+}
+
+.gantt-bar_outside {
+  outline: 2px solid var(--ring-warning-color, #f2b200);
+  outline-offset: 1px;
+}
+
+.gantt-overrun {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 0 3px 3px 0;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ring-error-color) 70%, transparent) 0 3px,
+    color-mix(in srgb, var(--ring-error-color) 25%, transparent) 3px 6px
+  );
+  pointer-events: none;
+}
+
+.gantt-row_resolved .gantt-bar,
+.gantt-row_resolved .gantt-due {
+  opacity: 0.45;
+}
+
+/* Due date: a diamond at the end of the due day. */
+.gantt-due {
+  position: absolute;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border: 1px solid var(--ring-content-background-color);
+  background-color: var(--ring-text-color);
+  pointer-events: none;
+}
+
+.gantt-due_overdue {
+  background-color: var(--ring-error-color);
+}
+
+.gantt_small .gantt-due {
+  width: 8px;
+  height: 8px;
+}
+
+.gantt-persons {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.gantt-persons_many {
+  color: var(--ring-text-color);
+  font-weight: var(--ring-font-weight-bold, 600);
+}
+
+.gantt-persons_warning {
+  color: var(--ring-warning-color, var(--ring-error-color));
+}
+
+/* Lines */
+.gantt-arrows {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.gantt-tree-line {
+  fill: none;
+  stroke: var(--gantt-tree);
+  stroke-width: 1;
+}
+
+/* Where a tree line meets a subtask's bar; the outline keeps it visible on solid bars. */
+.gantt-tree-dot {
+  fill: var(--ring-secondary-color);
+  stroke: var(--ring-content-background-color);
+  stroke-width: 1;
+}
+
+/* Hover details and legend */
+.gantt-details {
+  position: fixed;
+  z-index: 20;
+  box-sizing: border-box;
+  width: 320px;
+  padding: var(--ring-unit) calc(var(--ring-unit) * 1.5);
+  border: 1px solid var(--ring-popup-border-color, var(--ring-line-color));
+  border-radius: var(--ring-border-radius);
+  background-color: var(--ring-popup-background-color, var(--ring-content-background-color));
+  box-shadow: var(--ring-popup-shadow, 0 2px 8px rgba(0, 0, 0, 0.2));
+  font-size: var(--ring-font-size-smaller);
+  pointer-events: none;
+}
+
+.gantt-details__title {
+  margin-bottom: var(--ring-unit);
+  font-size: var(--ring-font-size);
+  font-weight: var(--ring-font-weight-bold, 600);
+}
+
+.gantt-details__id {
+  margin-right: var(--ring-unit);
+  color: var(--ring-secondary-color);
+  font-weight: normal;
+}
+
+.gantt-details__list {
+  margin: 0;
+}
+
+.gantt-details__line {
+  display: flex;
+  gap: var(--ring-unit);
+  line-height: 20px;
+}
+
+.gantt-details__line dt {
+  flex: 0 0 96px;
+  overflow: hidden;
+  color: var(--ring-secondary-color);
+  text-overflow: ellipsis;
+}
+
+.gantt-details__line dd {
+  flex: 1;
+  margin: 0;
+}
+
+.gantt-details__line_muted dd {
+  color: var(--ring-secondary-color);
+}
+
+.gantt-details__line_warning dd {
+  color: var(--ring-warning-color, var(--ring-error-color));
+}
+
+.gantt-details__line_error dd {
+  color: var(--ring-error-color);
+}
+
+.gantt-legend {
+  position: sticky;
+  z-index: 5;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ring-unit) calc(var(--ring-unit) * 3);
+  box-sizing: border-box;
+  max-width: 100vw;
+  padding: var(--ring-unit) calc(var(--ring-unit) * 2);
+  border-bottom: 1px solid var(--gantt-line);
+  background-color: var(--ring-sidebar-background-color, var(--ring-content-background-color));
+  font-size: var(--ring-font-size-smaller);
+}
+
+.gantt-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ring-unit);
+}
+
+.gantt-legend__item_text {
+  color: var(--ring-secondary-color);
+}
+
+.gantt-legend__swatch {
+  position: relative;
+  display: inline-block;
+  box-sizing: border-box;
+  width: 28px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.gantt-legend__swatch_band {
+  height: 16px;
+  border-right: 2px solid color-mix(in srgb, var(--ring-main-color) 55%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--ring-main-color) 55%, transparent);
+  background-color: color-mix(in srgb, var(--ring-main-color) 16%, transparent);
+}
+
+.gantt-legend__swatch_detailed {
+  background-color: var(--ring-main-color);
+}
+
+.gantt-legend__swatch_rough {
+  border: 2px solid var(--ring-main-color);
+  background-color: color-mix(in srgb, var(--ring-main-color) 30%, transparent);
+}
+
+.gantt-legend__swatch_derived {
+  border: 1px dashed var(--ring-secondary-color);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--ring-secondary-color) 22%, transparent) 0 4px, transparent 4px 8px);
+}
+
+.gantt-legend__swatch_borrowed {
+  border: 1px dotted var(--ring-main-color);
+  background-color: color-mix(in srgb, var(--ring-main-color) 12%, transparent);
+}
+
+.gantt-legend__swatch_due {
+  width: 10px;
+  margin: 0 9px;
+  transform: rotate(45deg);
+  border-radius: 0;
+  background-color: var(--ring-text-color);
+}
+
+.gantt-legend__swatch_overrun {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ring-error-color) 70%, transparent) 0 3px,
+    color-mix(in srgb, var(--ring-error-color) 25%, transparent) 3px 6px
+  );
+}
+
+.gantt__legend-button {
+  flex: none;
+}
+
+.gantt-editor__level {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ring-unit);
+  width: 100%;
 }

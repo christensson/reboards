@@ -1,5 +1,5 @@
 import {type ToolContext, fieldInfo, findBoard, lanesFromValues, layoutsOf, pagesOf, sprintsOf} from '@/backend/boards/tools';
-import {type BoardConfig, type RowConfig, columnLabel, ownSprintField} from '@/common/model/board-config';
+import {type BoardConfig, type RowConfig, columnLabel, isGanttConfigured, ownSprintField} from '@/common/model/board-config';
 
 const columnsOf = (board: BoardConfig) => {
   const field = board.columnField;
@@ -62,11 +62,32 @@ const howToMove = (board: BoardConfig): string[] => {
   return steps;
 };
 
+/** The Gantt layout: planning levels from high-level to detailed, due date and estimate. */
+const ganttOf = (board: BoardConfig) => {
+  const {levels, dueField, estimationField, estimationUnit, estimationMeaning} = board.gantt;
+  if (!board.timeline.field || !isGanttConfigured(board.gantt)) {
+    return null;
+  }
+  return {
+    planningLevels: levels.map(level => ({
+      name: level.name,
+      source: level.source,
+      fields: [level.field?.name, level.endField?.name, level.periodField?.name].filter(Boolean),
+      ...(level.source === 'date-period' ? {dateIs: level.dateRole} : {})
+    })),
+    dueField: dueField?.name ?? null,
+    estimationField: estimationField?.name ?? null,
+    ...(estimationField && estimationField.kind !== 'period' ? {estimationUnit} : {}),
+    estimateIs: estimationField ? estimationMeaning : null,
+    note: 'Planning levels go from high-level to detailed. Periods count 8 hour days and 5 day weeks.'
+  };
+};
+
 exports.aiTool = {
   name: 'get_board',
   description:
     'Describes a ReBoards board so issues can be moved on it: the column field and its columns (with the field values each ' +
-    'column holds), the swimlane fields, the time layout, the sprints with the current sprint, the pages of its page selector, and which field to set with ' +
+    'column holds), the swimlane fields, the time layout, the Gantt layout (planning levels, due date and estimate fields), the sprints with the current sprint, the pages of its page selector, and which field to set with ' +
     'update_issue to move an issue to another column, swimlane or sprint. Takes a board id or name from reboards_list_boards.',
   inputSchema: {
     type: 'object',
@@ -94,6 +115,7 @@ exports.aiTool = {
           sort: board.timeline.sort
         }
         : null,
+      gantt: ganttOf(board),
       sprints: sprintPart(board),
       pages: pagesOf(board),
       howToMove: howToMove(board)

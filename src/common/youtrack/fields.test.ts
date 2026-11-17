@@ -12,6 +12,7 @@ describe('describeFieldType', () => {
     expect(describeFieldType('version[*]')).toEqual({kind: 'version', multi: true});
     expect(describeFieldType('user[1]')).toEqual({kind: 'user', multi: false});
     expect(describeFieldType('integer')).toEqual({kind: 'integer', multi: false});
+    expect(describeFieldType('float')).toEqual({kind: 'float', multi: false});
     expect(describeFieldType('ownedField[1]')).toEqual({kind: 'enum', multi: false});
     expect(describeFieldType('build[1]')).toEqual({kind: 'build', multi: false});
   });
@@ -47,6 +48,7 @@ describe('buildFieldUpdate', () => {
     expect(buildFieldUpdate('State', 'state', 'StateIssueCustomField', 'Done')).toEqual({name: 'State', $type: 'StateIssueCustomField', value: {name: 'Done'}});
     expect(buildFieldUpdate('Assignee', 'user', undefined, 'jdoe')).toEqual({name: 'Assignee', $type: 'SingleUserIssueCustomField', value: {login: 'jdoe'}});
     expect(buildFieldUpdate('Story points', 'integer', undefined, '3')).toEqual({name: 'Story points', $type: 'SimpleIssueCustomField', value: 3});
+    expect(buildFieldUpdate('Hours', 'float', undefined, '2.5')).toEqual({name: 'Hours', $type: 'SimpleIssueCustomField', value: 2.5});
     expect(buildFieldUpdate('Priority', 'enum', undefined, null)).toEqual({name: 'Priority', $type: 'SingleEnumIssueCustomField', value: null});
   });
 });

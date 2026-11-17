@@ -10,6 +10,8 @@ It requires YouTrack 2026.2 or later.
 - **Hierarchy**: subtasks grouped in collapsible boxes under their parent, with progress.
 - **Swimlanes**: one or two levels, such as Team → Assignee.
 - **Time**: rows by date, version or build, with overdue and late work highlighted.
+- **Gantt**: plans at several levels (such as roadmap dates, then sprints), due dates and the persons needed
+  to finish the estimate in time, on a zoomable timeline with subtask trees and relation arrows.
 - Keyboard navigation and moves, linked agile boards and sprints, personal or shared boards, and read-only
   MCP tools for AI assistants.
 
@@ -38,7 +40,8 @@ A stored board (`BoardConfig`) holds:
 - identity and access: id, name, owner login and stable owner id (Hub id), shared flag, projects;
 - issue selection: query, linked agile board, sprint field and options;
 - layout: column field, columns, combined and ignored values, one or two swimlane levels with their sort
-  order (including the custom drag-sorted order), time layout and default row mode;
+  order (including the custom drag-sorted order), time layout, Gantt layout (planning levels, due date and
+  estimation fields) and default row mode;
 - card fields, card color field, connector link types and related boards;
 - `createdAt`, `updatedAt` and a `version` that the server raises on every write;
 - `movedAt` only on the copy a move leaves at its source (see below). A tombstone (`id`, `version`, `at`)
@@ -67,7 +70,8 @@ under the key `reboards.prefs.v1`. It goes in the host's `host.storage` app stor
 and in `window.localStorage` otherwise (`src/common/storage/prefs.ts`). It holds the last board, the chosen
 sprint per board, view settings per board (card size, connector mode, "+" links, grouping by parent),
 starred boards, collapsed rows, columns, swimlanes and subtask groups, swapped swimlane levels, the columns
-picked for dynamic column fields, and the chosen swimlanes or time layout. Nothing here is shared, and it does
+picked for dynamic column fields, the chosen swimlanes, time or Gantt layout, and per board the Gantt time
+  scale, collapsed Gantt parents and listed issues without time. Nothing here is shared, and it does
 not follow the user to another browser.
 
 **Issues.** Dragging a card, moving it with the keyboard or creating a link changes the issue itself through

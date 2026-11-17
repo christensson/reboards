@@ -84,6 +84,12 @@ describe('keepOmittedSettings', () => {
     expect(keepOmittedSettings(incoming, raw, existing)).toEqual({...incoming, pages: existing.pages});
   });
 
+  it('keeps the stored Gantt layout when a widget from before it saves', () => {
+    const withGantt = {...existing, gantt: {...existing.gantt, dueField: {name: 'Due Date', kind: 'date' as const}}};
+    const {pages: _pages, gantt: _gantt, ...raw} = incoming;
+    expect(keepOmittedSettings(incoming, raw, withGantt)).toEqual({...incoming, pages: existing.pages, gantt: withGantt.gantt});
+  });
+
   it('takes the sent pages, even when they are none', () => {
     expect(keepOmittedSettings(incoming, incoming, existing)).toBe(incoming);
   });

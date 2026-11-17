@@ -14,6 +14,7 @@ issues, far more insight.
 - **Time rows**: switch between **Swimlanes** and **Time** on the same board. Cards are placed by a date, a date plus a period, versions or builds, and a **Today** line shows where now falls.
 - **Reschedule by dragging**: drop a card on another row to set its date, version or build. Subtask groups move together with their parent.
 - **Timing highlights**: card icons and filters for *overdue*, *overdue unassigned*, *late start*, and subtasks planned *early* or *late* compared with their parent.
+- **Gantt chart**: plans as bars on a timeline you can zoom from days to years: with Ctrl+scroll or a pinch, with presets, or with **Fit** to show everything. Plan at several levels, from high-level to detailed, such as roadmap dates and then sprints. Plans can come from start and end dates, a date plus a period, or a version field. Coarser plans show as bands behind the detailed bar. Due dates are diamonds, turning red when work is overdue or planned past the deadline. An estimate becomes the **persons needed** to finish in time (8 hour days, 5 day weeks), counting the remaining or the total work. Subtasks form a collapsible tree under their parent. A parent without its own plan is drawn as the shadow of its subtasks. Relations are drawn as finish-to-start arrows.
 
 **Edit by dragging**
 - Drag a card to change its column or row field. **Ctrl-drag** a card onto another to make it the parent; **Ctrl+Shift-drag** to add any other link.

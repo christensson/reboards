@@ -1,0 +1,80 @@
+import {useCallback, useEffect, useMemo, useState} from 'react';
+import type {BoardConfig, RowMode} from '@/common/model/board-config';
+import {type GanttZoom, type UserPrefs, toggleInBoardList} from '@/common/storage/prefs';
+import type {FieldUniverse} from '../../model/fieldUniverse';
+import {revealFor} from '../../model/gantt';
+import {PX_PER_DAY, clampPxPerDay} from '../../model/ganttScale';
+import type {BoardIssue} from '../../model/issue';
+
+type UpdatePrefs = (patch: Partial<UserPrefs> | ((prev: UserPrefs) => Partial<UserPrefs>)) => void;
+
+const DEFAULT_PX_PER_DAY = PX_PER_DAY.week;
+/** Zooming with the wheel changes the width many times a second; it is stored once it settles. */
+const SAVE_DELAY = 500;
+
+/** The day width shown, kept here while zooming and stored in the prefs once it settles. */
+const usePxPerDay = (boardId: string, prefs: UserPrefs, updatePrefs: UpdatePrefs) => {
+  const stored = prefs.ganttPxPerDay[boardId] ?? DEFAULT_PX_PER_DAY;
+  const [shown, setShown] = useState<{boardId: string; px: number} | null>(null);
+  const pxPerDay = shown?.boardId === boardId ? shown.px : stored;
+  useEffect(() => {
+    if (!shown || shown.px === stored) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => updatePrefs(prev => ({ganttPxPerDay: {...prev.ganttPxPerDay, [shown.boardId]: shown.px}})), SAVE_DELAY);
+    return () => window.clearTimeout(timer);
+  }, [shown, stored, updatePrefs]);
+  const setPxPerDay = useCallback((px: number) => setShown({boardId, px: clampPxPerDay(px)}), [boardId]);
+  return [pxPerDay, setPxPerDay] as const;
+};
+
+/** The Gantt layout's per-user state for a board: zoom, collapsed parents, listed issues without time. */
+export const useGantt = (board: BoardConfig, rowMode: RowMode, prefs: UserPrefs, updatePrefs: UpdatePrefs, issues: BoardIssue[], universe: FieldUniverse) => {
+  const [todaySignal, setTodaySignal] = useState(0);
+  const [fitSignal, setFitSignal] = useState(0);
+  const [pxPerDay, setPxPerDay] = usePxPerDay(board.id, prefs, updatePrefs);
+  const collapsed = useMemo(() => new Set(prefs.ganttCollapsed[board.id] ?? []), [prefs.ganttCollapsed, board.id]);
+  const showUndated = useMemo(() => new Set(prefs.ganttShowUndated[board.id] ?? []), [prefs.ganttShowUndated, board.id]);
+  const active = rowMode === 'gantt';
+  /** Expands the parents and the "without time" group that hide an issue. */
+  const reveal = useCallback((issueId: string) => {
+    const found = revealFor({issues, gantt: board.gantt, universe, now: Date.now()}, issueId);
+    if (!found || (found.expand.length === 0 && !found.showUndated)) {
+      return;
+    }
+    const boardId = board.id;
+    updatePrefs(prev => {
+      const shown = prev.ganttShowUndated[boardId] ?? [];
+      return {
+        ganttCollapsed: {...prev.ganttCollapsed, [boardId]: (prev.ganttCollapsed[boardId] ?? []).filter(id => !found.expand.includes(id))},
+        ganttShowUndated: found.showUndated && !shown.includes(found.showUndated)
+          ? {...prev.ganttShowUndated, [boardId]: [...shown, found.showUndated]}
+          : prev.ganttShowUndated
+      };
+    });
+  }, [issues, board.gantt, board.id, universe, updatePrefs]);
+  const toolbar = useMemo(
+    () => (active ? {
+      pxPerDay,
+      onPreset: (zoom: GanttZoom) => setPxPerDay(PX_PER_DAY[zoom]),
+      onFit: () => setFitSignal(value => value + 1),
+      onToday: () => setTodaySignal(value => value + 1)
+    } : null),
+    [active, pxPerDay, setPxPerDay]
+  );
+  return {
+    active,
+    toolbar,
+    reveal,
+    view: {
+      pxPerDay,
+      onPxPerDay: setPxPerDay,
+      collapsed,
+      showUndated,
+      todaySignal,
+      fitSignal,
+      onToggleCollapsed: (issueId: string) => updatePrefs(prev => ({ganttCollapsed: toggleInBoardList(prev.ganttCollapsed, board.id, issueId)})),
+      onToggleUndated: (key: string) => updatePrefs(prev => ({ganttShowUndated: toggleInBoardList(prev.ganttShowUndated, board.id, key)}))
+    }
+  };
+};

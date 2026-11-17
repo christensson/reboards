@@ -3,12 +3,27 @@ import type {BoardConfig, ProjectRef} from '@/common/model/board-config';
 /** Permission key that grants edit rights on every shared board. */
 export const ADMIN_PERMISSION = 'ADMIN_UPDATE_APP';
 
+/** Settings added after the first release; a save from an older widget leaves them out. */
+const LATER_SETTINGS = ['pages', 'gantt'] as const;
+
 /**
  * Settings a save leaves out keep their stored value. A browser still running an older widget sends
  * boards without the settings added since (such as `pages`), which would otherwise be reset.
  */
-export const keepOmittedSettings = (incoming: BoardConfig, raw: unknown, existing: BoardConfig): BoardConfig =>
-  typeof raw === 'object' && raw !== null && !('pages' in raw) ? {...incoming, pages: existing.pages} : incoming;
+export const keepOmittedSettings = (incoming: BoardConfig, raw: unknown, existing: BoardConfig): BoardConfig => {
+  if (typeof raw !== 'object' || raw === null) {
+    return incoming;
+  }
+  const omitted = LATER_SETTINGS.filter(key => !(key in raw));
+  if (omitted.length === 0) {
+    return incoming;
+  }
+  const kept: BoardConfig = {...incoming};
+  omitted.forEach(key => {
+    Object.assign(kept, {[key]: existing[key]});
+  });
+  return kept;
+};
 
 /** Whether the current user can read issues in a project. */
 export type ProjectAccess = (project: ProjectRef) => boolean;

@@ -19,8 +19,8 @@ export type IssueTime = {
 
 type Dated = {time: number; label: string};
 
-const datedValues = (issue: BoardIssue, timeline: TimelineConfig, universe: FieldUniverse, pick: (meta: UniverseValue) => number | undefined): Dated[] => {
-  const name = timeline.field?.name ?? '';
+/** The dates `pick` finds for each value of a version or build field on the issue. */
+const fieldDatedValues = (issue: BoardIssue, name: string, universe: FieldUniverse, pick: (meta: UniverseValue) => number | undefined): Dated[] => {
   const metaByKey = new Map((universe.byName.get(name)?.values ?? []).map(v => [v.key, v]));
   return (issue.fields[name]?.keys ?? []).flatMap(key => {
     const meta = metaByKey.get(key);
@@ -28,6 +28,9 @@ const datedValues = (issue: BoardIssue, timeline: TimelineConfig, universe: Fiel
     return time === undefined || time === null ? [] : [{time, label: meta?.label ?? key}];
   });
 };
+
+const datedValues = (issue: BoardIssue, timeline: TimelineConfig, universe: FieldUniverse, pick: (meta: UniverseValue) => number | undefined): Dated[] =>
+  fieldDatedValues(issue, timeline.field?.name ?? '', universe, pick);
 
 const earliest = (values: Dated[]): Dated | undefined => values.reduce<Dated | undefined>((best, v) => (!best || v.time < best.time ? v : best), undefined);
 const latest = (values: Dated[]): Dated | undefined => values.reduce<Dated | undefined>((best, v) => (!best || v.time > best.time ? v : best), undefined);
@@ -46,15 +49,18 @@ const dateRange = (issue: BoardIssue, timeline: TimelineConfig): Pick<IssueTime,
   return timeline.dateRole === 'start' ? {start: value, end: value + span} : {start: value - span, end: value};
 };
 
-/** Versions run from the earliest start (else release) date to the latest release (else start) date. */
-const versionRange = (issue: BoardIssue, timeline: TimelineConfig, universe: FieldUniverse): Omit<IssueTime, 'at' | 'atLabel'> => {
-  const first = earliest(datedValues(issue, timeline, universe, v => v.startDate ?? v.releaseDate));
-  const last = latest(datedValues(issue, timeline, universe, v => v.releaseDate ?? v.startDate));
+/** The span of an issue's versions in a field: from the earliest start (else release) date to the latest release (else start) date. */
+export const versionSpan = (issue: BoardIssue, fieldName: string, universe: FieldUniverse): Omit<IssueTime, 'at' | 'atLabel'> => {
+  const first = earliest(fieldDatedValues(issue, fieldName, universe, v => v.startDate ?? v.releaseDate));
+  const last = latest(fieldDatedValues(issue, fieldName, universe, v => v.releaseDate ?? v.startDate));
   return {
     ...(first ? {start: first.time, startLabel: first.label} : {}),
     ...(last ? {end: last.time, endLabel: last.label} : {})
   };
 };
+
+const versionRange = (issue: BoardIssue, timeline: TimelineConfig, universe: FieldUniverse): Omit<IssueTime, 'at' | 'atLabel'> =>
+  versionSpan(issue, timeline.field?.name ?? '', universe);
 
 const buildRange = (issue: BoardIssue, timeline: TimelineConfig, universe: FieldUniverse): Omit<IssueTime, 'at' | 'atLabel'> => {
   const values = datedValues(issue, timeline, universe, v => v.assembleDate);

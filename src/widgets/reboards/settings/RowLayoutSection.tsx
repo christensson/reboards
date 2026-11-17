@@ -1,9 +1,10 @@
 import React, {useRef} from 'react';
 import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/select/select';
 import Toggle from '@jetbrains/ring-ui-built/components/toggle/toggle';
-import {type BoardConfig, type FieldKind, type FieldRef, type RowConfig, TIME_FIELD_KINDS} from '@/common/model/board-config';
+import {type BoardConfig, type FieldKind, type FieldRef, type RowConfig, TIME_FIELD_KINDS, availableRowModes} from '@/common/model/board-config';
 import {type FieldUniverse, ROW_FIELD_KINDS, toFieldRef} from '../model/fieldUniverse';
 import {SwimlanesSection} from './SwimlanesSection';
+import {GanttEditor} from './GanttEditor';
 import {TimelineEditor} from './TimelineEditor';
 
 type Props = {
@@ -17,7 +18,8 @@ type Props = {
 
 const DEFAULT_ITEMS: SelectItem[] = [
   {key: 'swimlanes', label: 'Swimlanes'},
-  {key: 'time', label: 'Time'}
+  {key: 'time', label: 'Time'},
+  {key: 'gantt', label: 'Gantt'}
 ];
 
 /** The first field of the given kinds, to start a layout with. */
@@ -36,6 +38,8 @@ export const RowLayoutSection: React.FC<Props> = ({draft, universe, readOnly, pa
   const lastTimeField = useRef<FieldRef | null>(null);
   const swimlanesOn = Boolean(draft.row.field);
   const timeOn = Boolean(draft.timeline.field);
+  const modes = availableRowModes(draft);
+  const defaultItems = DEFAULT_ITEMS.filter(item => modes.includes(item.key as BoardConfig['defaultRowMode']));
   const rowStart = firstField(universe, ROW_FIELD_KINDS, sprintFieldName);
   const timeStart = firstField(universe, TIME_FIELD_KINDS, sprintFieldName);
 
@@ -80,17 +84,18 @@ export const RowLayoutSection: React.FC<Props> = ({draft, universe, readOnly, pa
           onChange={timeline => patch({timeline})}
         />
       )}
-      {swimlanesOn && timeOn && (
+      {timeOn && <GanttEditor universe={universe} gantt={draft.gantt} disabled={readOnly} onChange={gantt => patch({gantt})}/>}
+      {defaultItems.length > 1 && (
         <div className="settings-field">
           <span className="settings-field__label">Default layout</span>
           <Select
             type={Select.Type.BUTTON}
             disabled={readOnly}
-            data={DEFAULT_ITEMS}
-            selected={DEFAULT_ITEMS.find(item => item.key === draft.defaultRowMode) ?? DEFAULT_ITEMS[0]}
+            data={defaultItems}
+            selected={defaultItems.find(item => item.key === draft.defaultRowMode) ?? defaultItems[0]}
             onChange={(item: SelectItem | null) => item && patch({defaultRowMode: item.key as BoardConfig['defaultRowMode']})}
           />
-          <span className="settings-field__help">Everyone can switch between the two layouts on the toolbar. The choice is kept per user.</span>
+          <span className="settings-field__help">Everyone can switch between the layouts on the toolbar. The choice is kept per user.</span>
         </div>
       )}
       {!swimlanesOn && !timeOn && <span className="settings-field__help">All issues are shown in one row.</span>}

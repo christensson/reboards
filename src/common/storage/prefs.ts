@@ -2,6 +2,11 @@ import type {HostAPI} from '../../../@types/globals';
 
 export type CardSize = 'small' | 'normal';
 
+/** Preset time scales of the Gantt layout, and the tiers of ticks its scale shows. */
+export type GanttZoom = 'day' | 'week' | 'month' | 'quarter';
+
+export const GANTT_ZOOMS: GanttZoom[] = ['day', 'week', 'month', 'quarter'];
+
 /** Which relation connectors are drawn. */
 export type ConnectorsMode = 'none' | 'selected' | 'all';
 
@@ -39,8 +44,14 @@ export type UserPrefs = {
   collapsedGroups: Record<string, string[]>;
   /** Dynamic column fields: ids of the columns the user picked per board id; the board default when missing. */
   visibleColumns: Record<string, string[]>;
-  /** Boards with both swimlanes and time set up: the layout the user picked per board id. */
-  rowModeByBoard: Record<string, 'swimlanes' | 'time'>;
+  /** Boards with several layouts set up: the layout the user picked per board id. */
+  rowModeByBoard: Record<string, 'swimlanes' | 'time' | 'gantt'>;
+  /** Gantt layout: collapsed parent issue ids per board id. */
+  ganttCollapsed: Record<string, string[]>;
+  /** Gantt layout: issue ids (or the undated group key) whose issues without time are listed, per board id. */
+  ganttShowUndated: Record<string, string[]>;
+  /** Gantt layout: the width of a day in pixels per board id. */
+  ganttPxPerDay: Record<string, number>;
   /** Explicitly chosen page per board id; '' means "All" (field pages). */
   lastPageByBoard: Record<string, string>;
   /** Starred page keys per board id. */
@@ -64,6 +75,9 @@ export const defaultPrefs = (): UserPrefs => ({
   collapsedGroups: {},
   visibleColumns: {},
   rowModeByBoard: {},
+  ganttCollapsed: {},
+  ganttShowUndated: {},
+  ganttPxPerDay: {},
   lastPageByBoard: {},
   starredPagesByBoard: {}
 });
@@ -74,6 +88,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /** Keeps the string entries of a stored map; anything else becomes an empty map. */
 const stringMap = (value: unknown): Record<string, string> =>
   isRecord(value) ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {};
+
+/** Keeps the positive numbers of a stored map. */
+const positiveNumberMap = (value: unknown): Record<string, number> =>
+  isRecord(value) ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && entry[1] > 0)) : {};
 
 /** Keeps the string lists of a stored map, without their non-string items. */
 const stringListMap = (value: unknown): Record<string, string[]> =>
@@ -118,7 +136,16 @@ export const loadPrefs = async (host: HostAPI): Promise<UserPrefs> => {
       migrated.connectorsMode = stored.alwaysShowConnectors ? 'all' : 'selected';
     }
     // Prefs written before pages existed lack these maps; the checks also keep corrupt values out.
-    return {...defaultPrefs(), ...migrated, lastPageByBoard: stringMap(stored.lastPageByBoard), starredPagesByBoard: stringListMap(stored.starredPagesByBoard)};
+    return {
+      ...defaultPrefs(),
+      ...migrated,
+      lastPageByBoard: stringMap(stored.lastPageByBoard),
+      starredPagesByBoard: stringListMap(stored.starredPagesByBoard),
+      // Prefs written before the Gantt layout existed lack these.
+      ganttCollapsed: stringListMap(stored.ganttCollapsed),
+      ganttShowUndated: stringListMap(stored.ganttShowUndated),
+      ganttPxPerDay: positiveNumberMap(stored.ganttPxPerDay)
+    };
   } catch {
     return defaultPrefs();
   }
@@ -144,6 +171,12 @@ export const toggleStar = (prefs: UserPrefs, boardId: string): Partial<UserPrefs
     ? prefs.starredBoards.filter(id => id !== boardId)
     : [...prefs.starredBoards, boardId]
 });
+
+/** Adds `key` to, or removes it from, a per-board list such as the collapsed Gantt parents. */
+export const toggleInBoardList = (lists: Record<string, string[]>, boardId: string, key: string): Record<string, string[]> => {
+  const current = lists[boardId] ?? [];
+  return {...lists, [boardId]: current.includes(key) ? current.filter(item => item !== key) : [...current, key]};
+};
 
 /**
  * Stars or unstars a page of a board. Stars of pages the board no longer has (`keys`) are dropped

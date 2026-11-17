@@ -12,7 +12,7 @@
  */
 export type FieldRef = {
   name: string;
-  kind: 'enum' | 'state' | 'version' | 'build' | 'user' | 'integer' | 'date' | 'datetime' | 'period';
+  kind: 'enum' | 'state' | 'version' | 'build' | 'user' | 'integer' | 'float' | 'date' | 'datetime' | 'period';
 };
 
 export type FieldKind = FieldRef['kind'];
@@ -111,6 +111,48 @@ export type TimelineConfig = {
   assigneeField: FieldRef | null;
 };
 
+// A planning level of the Gantt layout: where an issue is planned to start and end. Levels go
+// from high-level (a roadmap) to detailed (sprints), as in rolling-wave planning. The source is a
+// version field (earliest start to latest release), a start and an end date field, or a date and
+// a period: start to start plus period, or end minus period to end.
+/**
+ * @zod-to-schema
+ */
+export type PlanLevel = {
+  /** Stable id; collapse state and keys refer to it. */
+  id: string;
+  name: string;
+  source: 'version' | 'dates' | 'date-period';
+  /** The version field, the start date field, or the date of a date and period. */
+  field: FieldRef | null;
+  /** Start and end dates: the end date field. */
+  endField: FieldRef | null;
+  /** Date and period: the period field. */
+  periodField: FieldRef | null;
+  /** Date and period: whether the date is the start (period runs forward) or the end (runs back). */
+  dateRole: 'start' | 'end';
+};
+
+export type PlanSource = PlanLevel['source'];
+
+// The Gantt layout, offered next to the time layout. Periods and day estimates count 8 hour
+// working days and 5 day working weeks.
+/**
+ * @zod-to-schema
+ */
+export type GanttConfig = {
+  /** Planning levels from high-level to detailed. */
+  levels: PlanLevel[];
+  /** Date or "date and time" field with the deadline. */
+  dueField: FieldRef | null;
+  /** Period, integer or float field with the work estimate. */
+  estimationField: FieldRef | null;
+  /** Integer and float estimates: the unit of the number. */
+  estimationUnit: 'hours' | 'days';
+  /** Whether the estimate is the work left (persons from today) or all the work (persons over the plan). */
+  estimationMeaning: 'remaining' | 'total';
+};
+
 /**
  * @zod-to-schema
  */
@@ -138,8 +180,8 @@ export type PagesConfig = {
 
 export type PagesMode = PagesConfig['mode'];
 
-/** How a board lays out its rows: by swimlane fields, by time, or as one row. */
-export type RowMode = 'none' | 'swimlanes' | 'time';
+/** How a board lays out its rows: by swimlane fields, by time, as a Gantt chart, or as one row. */
+export type RowMode = 'none' | 'swimlanes' | 'time' | 'gantt';
 
 /**
  * @zod-to-schema
@@ -179,8 +221,10 @@ export type BoardConfig = {
   relatedBoards: string[];
   /** Time mode; set up when `timeline.field` is set. */
   timeline: TimelineConfig;
-  /** The layout used when both swimlanes and time are set up, until the user picks the other. */
-  defaultRowMode: 'swimlanes' | 'time';
+  /** Gantt layout; offered with the time layout once a planning level or due date is set up. */
+  gantt: GanttConfig;
+  /** The layout used when several are set up, until the user picks another. */
+  defaultRowMode: 'swimlanes' | 'time' | 'gantt';
   /** Page selector; mode 'none' for boards without pages. */
   pages: PagesConfig;
   createdAt: number;
@@ -213,6 +257,27 @@ export const emptyTimeline = (): TimelineConfig => ({
   sort: 'asc',
   highlights: true,
   assigneeField: {name: 'Assignee', kind: 'user'}
+});
+
+export const emptyGantt = (): GanttConfig => ({
+  levels: [],
+  dueField: null,
+  estimationField: null,
+  estimationUnit: 'hours',
+  estimationMeaning: 'remaining'
+});
+
+/** Default names of new planning levels, from high-level to detailed. */
+export const PLAN_LEVEL_NAMES = ['High-level plan', 'Detailed plan'];
+
+export const newPlanLevel = (index: number): PlanLevel => ({
+  id: generateId(),
+  name: PLAN_LEVEL_NAMES[index] ?? `Plan ${index + 1}`,
+  source: 'dates',
+  field: null,
+  endField: null,
+  periodField: null,
+  dateRole: 'start'
 });
 
 /** Page key of the "All" page of a field page selector; it is never in the URL. */
@@ -248,6 +313,7 @@ export const createEmptyBoard = (owner: string): BoardConfig => ({
   linkTypes: [...DEFAULT_LINK_TYPES],
   relatedBoards: [],
   timeline: emptyTimeline(),
+  gantt: emptyGantt(),
   defaultRowMode: 'swimlanes',
   pages: emptyPages(),
   cardColorField: {name: 'Type', kind: 'enum'},
@@ -262,7 +328,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const stringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 
-const FIELD_KINDS: FieldKind[] = ['enum', 'state', 'version', 'build', 'user', 'integer', 'date', 'datetime', 'period'];
+const FIELD_KINDS: FieldKind[] = ['enum', 'state', 'version', 'build', 'user', 'integer', 'float', 'date', 'datetime', 'period'];
 
 const fieldRef = (value: unknown): FieldRef | null => {
   if (!isRecord(value) || typeof value.name !== 'string') {
@@ -334,6 +400,32 @@ const normalizeTimeline = (value: unknown): TimelineConfig => {
   };
 };
 
+const normalizePlanLevels = (value: unknown): PlanLevel[] =>
+  Array.isArray(value)
+    ? value.filter(isRecord).map((level, index) => ({
+      id: typeof level.id === 'string' && level.id ? level.id : `level-${index}`,
+      name: typeof level.name === 'string' ? level.name : '',
+      source: oneOf(level.source, ['version', 'dates', 'date-period'] as const, 'dates'),
+      field: fieldRef(level.field),
+      endField: fieldRef(level.endField),
+      periodField: fieldRef(level.periodField),
+      dateRole: oneOf(level.dateRole, ['start', 'end'] as const, 'start')
+    }))
+    : [];
+
+/** Boards written before the Gantt layout existed have none. */
+const normalizeGantt = (value: unknown): GanttConfig => {
+  const input = isRecord(value) ? value : {};
+  const base = emptyGantt();
+  return {
+    levels: normalizePlanLevels(input.levels),
+    dueField: fieldRef(input.dueField),
+    estimationField: fieldRef(input.estimationField),
+    estimationUnit: oneOf(input.estimationUnit, ['hours', 'days'] as const, base.estimationUnit),
+    estimationMeaning: oneOf(input.estimationMeaning, ['remaining', 'total'] as const, base.estimationMeaning)
+  };
+};
+
 const normalizeSprints = (value: unknown): SprintConfig => {
   const sprints = isRecord(value) ? value : {};
   return {enabled: sprints.enabled === true, field: fieldRef(sprints.field)};
@@ -393,7 +485,8 @@ export const normalizeBoardConfig = (raw: unknown, fallbackOwner = ''): BoardCon
     cardColorField: 'cardColorField' in input ? fieldRef(input.cardColorField) : base.cardColorField,
     relatedBoards: Array.from(new Set(stringArray(input.relatedBoards))).filter(id => id && id !== str(input.id)),
     timeline: normalizeTimeline(input.timeline),
-    defaultRowMode: oneOf(input.defaultRowMode, ['swimlanes', 'time'] as const, base.defaultRowMode),
+    gantt: normalizeGantt(input.gantt),
+    defaultRowMode: oneOf(input.defaultRowMode, ['swimlanes', 'time', 'gantt'] as const, base.defaultRowMode),
     pages: normalizePages(input.pages),
     createdAt: num(input.createdAt),
     updatedAt: num(input.updatedAt),
@@ -425,7 +518,9 @@ export const BOARD_LIMITS = {
   /** Upper bound of the default column count of a dynamic column field. */
   dynamicColumns: 50,
   /** Query pages, and values shown as field pages. */
-  pages: 100
+  pages: 100,
+  /** Planning levels of the Gantt layout. */
+  planLevels: 4
 } as const;
 
 const tooLong = (value: string, max: number): boolean => value.length > max;
@@ -446,6 +541,7 @@ const allTexts = (config: BoardConfig): string[] => [
   config.agileSource?.id ?? '',
   ...config.pages.values,
   ...config.pages.pages.flatMap(p => [p.id, p.name]),
+  ...config.gantt.levels.flatMap(level => [level.id, level.name, level.field?.name ?? '', level.endField?.name ?? '', level.periodField?.name ?? '']),
   ...[
     config.columnField,
     config.row.field,
@@ -455,7 +551,9 @@ const allTexts = (config: BoardConfig): string[] => [
     config.timeline.periodField,
     config.timeline.assigneeField,
     config.cardColorField,
-    config.pages.field
+    config.pages.field,
+    config.gantt.dueField,
+    config.gantt.estimationField
   ].map(field => field?.name ?? '')
 ];
 
@@ -627,6 +725,73 @@ const validateTimeline = (config: BoardConfig): ValidationIssue[] => {
   return issues;
 };
 
+/** Kinds of a Gantt estimation field; numbers need a unit. */
+export const ESTIMATION_FIELD_KINDS: FieldKind[] = ['period', 'integer', 'float'];
+
+/** Kinds of a Gantt due date field. */
+export const DUE_FIELD_KINDS: FieldKind[] = ['date', 'datetime'];
+
+/** Whether a planning level has every field its source needs. */
+export const isPlanLevelComplete = (level: PlanLevel): boolean => {
+  if (!level.field) {
+    return false;
+  }
+  if (level.source === 'dates') {
+    return Boolean(level.endField);
+  }
+  return level.source === 'date-period' ? Boolean(level.periodField) : true;
+};
+
+/** Whether the Gantt layout has anything to draw: a complete planning level or a due date. */
+export const isGanttConfigured = (gantt: GanttConfig): boolean => gantt.levels.some(isPlanLevelComplete) || Boolean(gantt.dueField);
+
+const levelFieldIssues = (level: PlanLevel, label: string): string[] => {
+  const {source, field, endField, periodField} = level;
+  if (!field) {
+    return [`${label}: select a field`];
+  }
+  if (source === 'version') {
+    return field.kind === 'version' ? [] : [`${label}: the field must be a version field`];
+  }
+  const problems: string[] = isDateKind(field.kind) ? [] : [`${label}: the date must be a date field`];
+  if (source === 'dates') {
+    if (!endField) {
+      problems.push(`${label}: select an end date field`);
+    } else if (!isDateKind(endField.kind)) {
+      problems.push(`${label}: the end date must be a date field`);
+    } else if (endField.name === field.name) {
+      problems.push(`${label}: the start and end date fields must be different`);
+    }
+  } else if (!periodField) {
+    problems.push(`${label}: select a period field`);
+  } else if (periodField.kind !== 'period') {
+    problems.push(`${label}: the period must be a period field`);
+  }
+  return problems;
+};
+
+const validateGantt = (config: BoardConfig): ValidationIssue[] => {
+  const {levels, dueField, estimationField} = config.gantt;
+  const messages: string[] = [];
+  if (levels.length > BOARD_LIMITS.planLevels) {
+    messages.push(`A board can have at most ${BOARD_LIMITS.planLevels} planning levels`);
+  }
+  levels.forEach((level, index) => {
+    const label = level.name.trim() || `Planning level ${index + 1}`;
+    if (!level.name.trim()) {
+      messages.push(`Planning level ${index + 1} needs a name`);
+    }
+    messages.push(...levelFieldIssues(level, label));
+  });
+  if (dueField && !DUE_FIELD_KINDS.includes(dueField.kind)) {
+    messages.push('The due date field must be a date field');
+  }
+  if (estimationField && !ESTIMATION_FIELD_KINDS.includes(estimationField.kind)) {
+    messages.push('The estimation field must be a period, integer or float field');
+  }
+  return messages.map(message => ({field: 'gantt', message}));
+};
+
 /** Validates a config before saving. Returns an empty array when valid. */
 export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
   const issues: ValidationIssue[] = [...validateBoardSize(config)];
@@ -636,13 +801,14 @@ export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
   if (config.projects.length === 0) {
     issues.push({field: 'projects', message: 'Select at least one project'});
   }
-  return [...issues, ...validateColumns(config), ...validateSprints(config), ...validateSwimlanes(config), ...validateTimeline(config), ...validatePages(config)];
+  return [...issues, ...validateColumns(config), ...validateSprints(config), ...validateSwimlanes(config), ...validateTimeline(config), ...validateGantt(config), ...validatePages(config)];
 };
 
 /** The row layouts a board has set up. */
 export const availableRowModes = (config: BoardConfig): Exclude<RowMode, 'none'>[] => [
   ...(config.row.field ? ['swimlanes' as const] : []),
-  ...(config.timeline.field ? ['time' as const] : [])
+  ...(config.timeline.field ? ['time' as const] : []),
+  ...(config.timeline.field && isGanttConfigured(config.gantt) ? ['gantt' as const] : [])
 ];
 
 /** The layout to use: the user's pick when the board has it, else the board's default, else its only one. */

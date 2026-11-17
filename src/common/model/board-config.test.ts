@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {type BoardConfig, BOARD_LIMITS, availableRowModes, effectiveRowMode, emptyTimeline, columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, relatedBoardsOf, swapSwimlanes, validateBoardConfig, validateBoardSize, defaultDynamicOptions, emptyPages} from './board-config';
+import {type BoardConfig, BOARD_LIMITS, availableRowModes, emptyGantt, isGanttConfigured, newPlanLevel, effectiveRowMode, emptyTimeline, columnLabel, createEmptyBoard, isTwoLevel, normalizeBoardConfig, relatedBoardsOf, swapSwimlanes, validateBoardConfig, validateBoardSize, defaultDynamicOptions, emptyPages} from './board-config';
 
 describe('normalizeBoardConfig', () => {
   it('fills defaults for an empty document', () => {
@@ -222,6 +222,55 @@ describe('row modes', () => {
     expect(validateBoardConfig({...board, timeline: {...board.timeline, field: {name: 'Type', kind: 'enum'}}}).map(i => i.field)).toEqual(['timeline']);
     expect(validateBoardConfig({...board, timeline: {...board.timeline, field: {name: 'Fix versions', kind: 'version'}, periodField: {name: 'Estimation', kind: 'period'}}}).map(i => i.field))
       .toEqual(['timeline']);
+  });
+});
+
+describe('gantt layout', () => {
+  const timed = (): BoardConfig => ({
+    ...createEmptyBoard('me'),
+    name: 'B',
+    projects: [{id: '1', shortName: 'SAN'}],
+    columns: [{id: 'c', values: ['Open']}],
+    timeline: {...emptyTimeline(), field: {name: 'Due Date', kind: 'date'}}
+  });
+  const dates = {...newPlanLevel(0), field: {name: 'Start', kind: 'date' as const}, endField: {name: 'End', kind: 'date' as const}};
+
+  it('is missing from boards stored before it existed', () => {
+    expect(normalizeBoardConfig({}).gantt).toEqual(emptyGantt());
+  });
+
+  it('normalizes planning levels and options', () => {
+    const gantt = normalizeBoardConfig({gantt: {
+      levels: [{name: 'Roadmap', source: 'odd', field: {name: 'Start', kind: 'date'}}, 'junk'],
+      estimationField: {name: 'Hours', kind: 'float'},
+      estimationUnit: 'weeks',
+      estimationMeaning: 'total'
+    }}).gantt;
+    expect(gantt.levels).toEqual([{id: 'level-0', name: 'Roadmap', source: 'dates', field: {name: 'Start', kind: 'date'}, endField: null, periodField: null, dateRole: 'start'}]);
+    expect(gantt).toMatchObject({estimationField: {name: 'Hours', kind: 'float'}, estimationUnit: 'hours', estimationMeaning: 'total'});
+  });
+
+  it('is offered with the time layout once a level or a due date is set up', () => {
+    expect(availableRowModes(timed())).toEqual(['swimlanes', 'time']);
+    expect(isGanttConfigured({...emptyGantt(), levels: [{...dates, endField: null}]})).toBe(false);
+    const gantt = {...emptyGantt(), levels: [dates]};
+    expect(availableRowModes({...timed(), gantt})).toEqual(['swimlanes', 'time', 'gantt']);
+    expect(availableRowModes({...timed(), gantt: {...emptyGantt(), dueField: {name: 'Due Date', kind: 'date'}}})).toContain('gantt');
+    expect(availableRowModes({...timed(), timeline: emptyTimeline(), gantt})).toEqual(['swimlanes']);
+    expect(effectiveRowMode({...timed(), gantt, defaultRowMode: 'gantt'}, undefined)).toBe('gantt');
+    expect(normalizeBoardConfig({defaultRowMode: 'gantt'}).defaultRowMode).toBe('gantt');
+  });
+
+  it('validates the fields of each level, the due date and the estimate', () => {
+    const messages = (gantt: BoardConfig['gantt']) => validateBoardConfig({...timed(), gantt}).map(i => i.message);
+    expect(messages({...emptyGantt(), levels: [dates]})).toEqual([]);
+    expect(messages({...emptyGantt(), levels: [{...dates, endField: dates.field}]})).toEqual(['High-level plan: the start and end date fields must be different']);
+    expect(messages({...emptyGantt(), levels: [{...dates, name: ' ', source: 'version'}]})).toEqual(['Planning level 1 needs a name', 'Planning level 1: the field must be a version field']);
+    expect(messages({...emptyGantt(), levels: [{...dates, source: 'date-period'}]})).toEqual(['High-level plan: select a period field']);
+    expect(messages({...emptyGantt(), dueField: {name: 'Type', kind: 'enum'}, estimationField: {name: 'Due', kind: 'date'}}))
+      .toEqual(['The due date field must be a date field', 'The estimation field must be a period, integer or float field']);
+    expect(messages({...emptyGantt(), levels: Array.from({length: BOARD_LIMITS.planLevels + 1}, (_, i) => ({...dates, id: String(i)}))}))
+      .toContain(`A board can have at most ${BOARD_LIMITS.planLevels} planning levels`);
   });
 });
 

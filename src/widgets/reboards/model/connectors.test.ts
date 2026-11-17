@@ -18,7 +18,7 @@ describe('computeEdges', () => {
       issue('3', [link({direction: 'INWARD', issueIds: ['1']})])
     ];
     const edges = computeEdges(issues, new Set(['1', '2']), ['Depend']);
-    expect(edges).toEqual([{id: 't:2:1', from: '2', to: '1', label: 'depends on', kind: 'directed', typeName: 'Depend'}]);
+    expect(edges).toEqual([{id: 't:2:1', from: '2', to: '1', label: 'depends on', inverseLabel: 'is required for', kind: 'directed', typeName: 'Depend'}]);
   });
 
   it('marks aggregation links and draws undirected links once', () => {

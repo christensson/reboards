@@ -3,8 +3,8 @@
   "name": "reboards",
   "title": "ReBoards",
   "description": "Revamped agile boards: work with relations, group subtasks under their parent, use multiple swimlane levels and plan in time.",
-  "version": "1.3.0",
-  "changeNotes": "Version 1.3.0:<br/>- Stop searching all issues on widget start to find the base URL.<br/>- Store each board separately, so simultaneous saves of different boards no longer overwrite each other.<br/>- Share your own boards when you can update issues in all of their projects. Owners, system admins and admins of all of a board's projects can edit, unshare and delete shared boards. An unshared board goes back to its owner.<br/>- Fix the selected page not being remembered on boards with pages from a field.",
+  "version": "1.4.0",
+  "changeNotes": "Version 1.4.0:<br/>- Add a Gantt layout next to the time layout: planning levels from high-level to detailed, due dates, persons needed from the estimate, subtask trees and relation arrows.<br/>- Support float fields.",
   "minYouTrackVersion": "2026.2.0",
   "aiToolPrefix": "reboards",
   "vendor": {

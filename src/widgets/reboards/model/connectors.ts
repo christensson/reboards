@@ -9,6 +9,8 @@ export type Edge = {
   label: string;
   kind: EdgeKind;
   typeName: string;
+  /** Directed links: the relation read the other way ("is required for" for "depends on"). */
+  inverseLabel?: string;
 };
 
 /**
@@ -51,6 +53,7 @@ export const computeEdges = (issues: BoardIssue[], visibleIds: Set<string>, link
             from: issue.id,
             to: otherId,
             label: link.targetToSource,
+            inverseLabel: link.sourceToTarget,
             kind: link.aggregation ? 'aggregation' : 'directed',
             typeName: link.typeName
           });

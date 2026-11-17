@@ -20,6 +20,7 @@ export const fieldRefSchema = z.object({
     z.literal("build"),
     z.literal("user"),
     z.literal("integer"),
+    z.literal("float"),
     z.literal("date"),
     z.literal("datetime"),
     z.literal("period"),
@@ -87,6 +88,20 @@ export const currentUserInfoSchema = z.object({
   isAdmin: z.boolean(),
 });
 
+export const planLevelSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  source: z.union([
+    z.literal("version"),
+    z.literal("dates"),
+    z.literal("date-period"),
+  ]),
+  field: fieldRefSchema.nullable(),
+  endField: fieldRefSchema.nullable(),
+  periodField: fieldRefSchema.nullable(),
+  dateRole: z.union([z.literal("start"), z.literal("end")]),
+});
+
 export const pageQuerySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -115,6 +130,14 @@ export const sprintConfigSchema = z.object({
   field: fieldRefSchema.nullable(),
 });
 
+export const ganttConfigSchema = z.object({
+  levels: z.array(planLevelSchema),
+  dueField: fieldRefSchema.nullable(),
+  estimationField: fieldRefSchema.nullable(),
+  estimationUnit: z.union([z.literal("hours"), z.literal("days")]),
+  estimationMeaning: z.union([z.literal("remaining"), z.literal("total")]),
+});
+
 export const boardConfigSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -136,18 +159,16 @@ export const boardConfigSchema = z.object({
   cardColorField: fieldRefSchema.nullable(),
   relatedBoards: z.array(z.string()),
   timeline: timelineConfigSchema,
-  defaultRowMode: z.union([z.literal("swimlanes"), z.literal("time")]),
+  gantt: ganttConfigSchema,
+  defaultRowMode: z.union([
+    z.literal("swimlanes"),
+    z.literal("time"),
+    z.literal("gantt"),
+  ]),
   pages: pagesConfigSchema,
   createdAt: z.number(),
   updatedAt: z.number(),
   version: z.number(),
-});
-
-export const boardOwnerResSchema = z.object({
-  board: boardConfigSchema,
-  visible: z.boolean(),
-  canEdit: z.boolean(),
-  canDelete: z.boolean(),
 });
 
 export const boardSaveReqSchema = z.object({
@@ -166,6 +187,13 @@ export const boardsListResSchema = z.object({
   editableIds: z.array(z.string()),
   deletableIds: z.array(z.string()),
   me: currentUserInfoSchema,
+});
+
+export const boardOwnerResSchema = z.object({
+  board: boardConfigSchema,
+  visible: z.boolean(),
+  canEdit: z.boolean(),
+  canDelete: z.boolean(),
 });
 
 // Nested schema object for validation system

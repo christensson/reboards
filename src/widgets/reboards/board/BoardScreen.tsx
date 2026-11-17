@@ -36,6 +36,8 @@ import {IssueCardView} from './IssueCard';
 import {FieldValuePickerDialog} from './FieldValuePickerDialog';
 import {OUTER_WIDTH} from './tracks';
 import {Toolbar} from './Toolbar';
+import {GanttView} from './gantt/GanttView';
+import {useGantt} from './gantt/useGantt';
 import {ValuePickerDialog} from './ValuePickerDialog';
 import {RelationPickerDialog} from './RelationPickerDialog';
 import {useLinkDrag} from './useLinkDrag';
@@ -83,9 +85,16 @@ const DRAG_ACTIVATION_DISTANCE = 6;
 
 const NO_NOTES: TimingNote[] = [];
 
-/** The find box or a dialog is open: board keys are theirs. */
-const hasOverlay = (findTerm: string | null, pendingMove: unknown, relationFrom: unknown, shortcuts: boolean): boolean =>
-  findTerm !== null || pendingMove !== null || relationFrom !== null || shortcuts;
+/** Matches to mark: only while find or a quick filter is on, else none. */
+const markedMatches = (findTerm: string | null, quickFilter: string | null, matchIds: Set<string>): Set<string> =>
+  (findTerm !== null || quickFilter ? matchIds : new Set<string>());
+
+/** The find box or a dialog is open, or the Gantt chart handles keys itself: board keys are theirs. */
+const hasOverlay = (findTerm: string | null, pendingMove: unknown, relationFrom: unknown, shortcuts: boolean, ownKeys: boolean): boolean =>
+  findTerm !== null || pendingMove !== null || relationFrom !== null || shortcuts || ownKeys;
+
+/** The Gantt chart in the Gantt layout, else the board. */
+const LayoutSwitch: React.FC<{active: boolean; gantt: React.ReactElement; children: React.ReactElement}> = ({active, gantt, children}) => (active ? gantt : children);
 
 const SUBTASK_BANNER = 'Subtask navigation mode. Use arrow keys to move within the subtask hierarchy. Esc exits mode.';
 const SWIMLANE_BANNER = 'Swimlane navigation mode. Use up/down arrow keys to move between swimlanes. Esc exits mode.';
@@ -498,6 +507,7 @@ export const BoardScreen: React.FC<Props> = ({
   const collapsedGroups = useMemo(() => new Set(prefs.collapsedGroups[board.id] ?? []), [prefs.collapsedGroups, board.id]);
   const collapsedColumns = useMemo(() => new Set(prefs.collapsedColumns[board.id] ?? []), [prefs.collapsedColumns, board.id]);
   const collapsedOuterRows = useMemo(() => new Set(prefs.collapsedOuterRows[board.id] ?? []), [prefs.collapsedOuterRows, board.id]);
+  const gantt = useGantt(board, rowMode, prefs, updatePrefs, data.issues, reference.universe);
   const twoLevel = layout.twoLevel;
   // Toolbar count: issues highlighted by the "No <field>" quick filter alone.
   const highlightIds = useMemo(() => computeMatchIds(data.issues, '', quickFilter, layout.flagsByIssue), [data.issues, quickFilter, layout.flagsByIssue]);
@@ -510,6 +520,10 @@ export const BoardScreen: React.FC<Props> = ({
     () => (quickFindTerm === null ? highlightIds : computeMatchIds(data.issues, quickFindTerm, quickFilter, layout.flagsByIssue)),
     [quickFindTerm, highlightIds, data.issues, quickFilter, layout.flagsByIssue]
   );
+
+  // The Gantt chart marks matches only while find or a quick filter is on.
+  const ganttMatches = useMemo(() => markedMatches(quickFindTerm, quickFilter, matchIds), [quickFindTerm, quickFilter, matchIds]);
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const visibleIds = useMemo(
     () => visibleIssueIds(layout, {rows: collapsedRows, outerRows: collapsedOuterRows, columns: collapsedColumns, groups: collapsedGroups}),
@@ -583,14 +597,20 @@ export const BoardScreen: React.FC<Props> = ({
     [layout.groupAncestors, layout.rowsByKey, updatePrefs, board.id]
   );
 
+  // The Gantt chart hides issues in collapsed parents and "without time" groups instead.
+  const {active: ganttActive, reveal: ganttReveal} = gantt;
   const expandFor = useCallback(
     (issueId: string) => {
+      if (ganttActive) {
+        ganttReveal(issueId);
+        return;
+      }
       const p = layout.placement[issueId];
       if (p) {
         expandPlacement(p);
       }
     },
-    [layout.placement, expandPlacement]
+    [layout.placement, expandPlacement, ganttActive, ganttReveal]
   );
 
   const showCard = useCallback(
@@ -821,6 +841,7 @@ export const BoardScreen: React.FC<Props> = ({
   );
 
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const openShortcuts = useCallback(() => setShowShortcuts(true), []);
   // "R" shows the connectors as they were last shown, or all of them.
   const lastConnectors = useRef<ConnectorsMode>('all');
   const toggleConnectors = useCallback(() => {
@@ -966,7 +987,7 @@ export const BoardScreen: React.FC<Props> = ({
   }, [swimlaneNav]);
 
   const {keyMove} = useBoardKeys({
-    enabled: !hasOverlay(quickFindTerm, pendingMove, link.dialog.from, showShortcuts),
+    enabled: !hasOverlay(quickFindTerm, pendingMove, link.dialog.from, showShortcuts, gantt.active),
     layout,
     registry,
     selectedIds,
@@ -982,7 +1003,7 @@ export const BoardScreen: React.FC<Props> = ({
     navMode,
     onSwimlane: onSwimlaneKey,
     onToggleConnectors: toggleConnectors,
-    onHelp: () => setShowShortcuts(true),
+    onHelp: openShortcuts,
     activeCardOf,
     onCardPicked,
     onCommitMove: move => {
@@ -1222,6 +1243,7 @@ export const BoardScreen: React.FC<Props> = ({
           }
           updatePrefs(prev => ({rowModeByBoard: {...prev.rowModeByBoard, [board.id]: mode}}));
         }}
+        gantt={gantt.toolbar}
         timingFlags={layout.rowMode === 'time' && board.timeline.highlights ? timingFlagsFor(timeMeaning(board.timeline, reference.universe)) : NO_FLAGS}
         onRefresh={() => {
           reference.reload();
@@ -1233,23 +1255,48 @@ export const BoardScreen: React.FC<Props> = ({
       {needsColumns(board, reference.universe) && !error && (
         <div className="board-empty">This board has no columns yet. Open the board settings to configure columns.</div>
       )}
-      <BoardContext.Provider value={contextValue}>
-        <DndContext
-          sensors={sensors}
-          collisionDetection={link.collisionDetection}
-          onDragStart={onDragStart}
-          onDragOver={onDragOver}
-          onDragEnd={onDragEnd}
-          onDragCancel={() => {
+      <LayoutSwitch
+        active={gantt.active}
+        gantt={(
+          <GanttView
+            {...gantt.view}
+            board={board}
+            issues={data.issues}
+            universe={reference.universe}
+            baseUrl={baseUrl}
+            size={view.cardSize}
+            connectorsMode={view.connectorsMode}
+            selectedIds={selectedIds}
+            matchIds={ganttMatches}
+            onSelect={onSelect}
+            setSelectedIds={setSelectedIds}
+            keysEnabled={!hasOverlay(quickFindTerm, pendingMove, link.dialog.from, showShortcuts, false)}
+            onToggleConnectors={toggleConnectors}
+            onHelp={openShortcuts}
+            navMode={navMode}
+            onClearSelection={clearSelection}
+            onOpen={onOpen}
+            registry={registry}
+          />
+        )}
+      >
+        <BoardContext.Provider value={contextValue}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={link.collisionDetection}
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDragEnd={onDragEnd}
+            onDragCancel={() => {
             setActiveDragId(null);
             setDragTarget(null);
             endLinkDrag();
           }}
-        >
-          <div className="board-scroll" ref={scrollRef} onClick={onBoardClick} role="presentation">
-            <div className="board-content" ref={contentRef}>
-              {/* Without a column field there is one column and no header. */}
-              {board.columnField && (
+          >
+            <div className="board-scroll" ref={scrollRef} onClick={onBoardClick} role="presentation">
+              <div className="board-content" ref={contentRef}>
+                {/* Without a column field there is one column and no header. */}
+                {board.columnField && (
                 <ColumnHeaders
                   columns={layout.columns}
                   columnFieldName={board.columnField.name}
@@ -1263,30 +1310,31 @@ export const BoardScreen: React.FC<Props> = ({
                   onPickColumns={pickColumns}
                 />
               )}
-              <BoardRows
-                layout={shownLayout}
-                collapsedRows={collapsedRows}
-                collapsedOuterRows={collapsedOuterRows}
-                collapsedGroups={collapsedGroups}
-                onToggleRow={onToggleRow}
-                onToggleOuter={onToggleOuter}
-                onToggleGroup={onToggleGroup}
-              />
-              <ConnectorsOverlay
-                edges={edges}
-                selectedIds={selectedIds}
-                mode={view.connectorsMode}
-                contentRef={contentRef}
-                registry={registry}
-                layoutVersion={layoutVersion}
-              />
+                <BoardRows
+                  layout={shownLayout}
+                  collapsedRows={collapsedRows}
+                  collapsedOuterRows={collapsedOuterRows}
+                  collapsedGroups={collapsedGroups}
+                  onToggleRow={onToggleRow}
+                  onToggleOuter={onToggleOuter}
+                  onToggleGroup={onToggleGroup}
+                />
+                <ConnectorsOverlay
+                  edges={edges}
+                  selectedIds={selectedIds}
+                  mode={view.connectorsMode}
+                  contentRef={contentRef}
+                  registry={registry}
+                  layoutVersion={layoutVersion}
+                />
+              </div>
             </div>
-          </div>
-          <DragOverlay dropAnimation={null}>
-            <DragPreview active={activeDrag} hint={dragHint} mode={link.mode} cardSize={view.cardSize} board={board}/>
-          </DragOverlay>
-        </DndContext>
-      </BoardContext.Provider>
+            <DragOverlay dropAnimation={null}>
+              <DragPreview active={activeDrag} hint={dragHint} mode={link.mode} cardSize={view.cardSize} board={board}/>
+            </DragOverlay>
+          </DndContext>
+        </BoardContext.Provider>
+      </LayoutSwitch>
       <PendingMoveDialogs
         pending={pendingMove}
         board={board}
@@ -1297,7 +1345,7 @@ export const BoardScreen: React.FC<Props> = ({
         onCancel={() => setPendingMove(null)}
       />
       <RelationPickerDialog {...link.dialog}/>
-      <KeyboardHelpDialog show={showShortcuts} onClose={() => setShowShortcuts(false)}/>
+      <KeyboardHelpDialog show={showShortcuts} gantt={gantt.active} onClose={() => setShowShortcuts(false)}/>
       <NavModeBanner {...banner}/>
       {quickFindTerm !== null && (
         <QuickFind

@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import type {HostAPI} from '../../../@types/globals';
-import {PREFS_KEY, type UserPrefs, boardView, defaultPrefs, loadPrefs, setBoardView, toggleStar, toggleStarredPage} from './prefs';
+import {PREFS_KEY, type UserPrefs, boardView, defaultPrefs, loadPrefs, setBoardView, toggleInBoardList, toggleStar, toggleStarredPage} from './prefs';
 
 const apply = (prefs: UserPrefs, patch: Partial<UserPrefs>): UserPrefs => ({...prefs, ...patch});
 
@@ -67,5 +67,24 @@ describe('page prefs', () => {
     expect(prefs.starredPagesByBoard.a).toEqual(['x', 'y']);
     prefs = apply(prefs, toggleStarredPage(prefs, 'a', 'x', keys));
     expect(prefs.starredPagesByBoard.a).toEqual(['y']);
+  });
+});
+
+describe('gantt prefs', () => {
+  it('toggles items of per-board lists', () => {
+    let lists = toggleInBoardList({}, 'a', 'x');
+    lists = toggleInBoardList(lists, 'a', 'y');
+    expect(lists).toEqual({a: ['x', 'y']});
+    expect(toggleInBoardList(lists, 'a', 'x')).toEqual({a: ['y']});
+  });
+
+  it('loads stored gantt state and drops bad values', async () => {
+    const stored = JSON.stringify({ganttPxPerDay: {a: 4, b: 'wide', c: -1}, ganttCollapsed: {a: ['1', 2]}, rowModeByBoard: {a: 'gantt'}});
+    const host = {storage: {getItem: async () => stored, setItem: async () => undefined}} as unknown as HostAPI;
+    const prefs = await loadPrefs(host);
+    expect(prefs.ganttPxPerDay).toEqual({a: 4});
+    expect(prefs.ganttCollapsed).toEqual({a: ['1']});
+    expect(prefs.ganttShowUndated).toEqual({});
+    expect(prefs.rowModeByBoard).toEqual({a: 'gantt'});
   });
 });
