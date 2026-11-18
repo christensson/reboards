@@ -2378,7 +2378,8 @@ body {
   position: fixed;
   z-index: 20;
   box-sizing: border-box;
-  width: 320px;
+  /* The width is set from the window: 480 px, or less on a small screen. */
+  max-width: calc(100vw - 32px);
   padding: var(--ring-unit) calc(var(--ring-unit) * 1.5);
   border: 1px solid var(--ring-popup-border-color, var(--ring-line-color));
   border-radius: var(--ring-border-radius);

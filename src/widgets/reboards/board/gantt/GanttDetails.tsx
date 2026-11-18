@@ -13,7 +13,8 @@ type Props = {
 };
 
 const OFFSET = 16;
-const WIDTH = 320;
+/** Wide enough for a sprint range on one line; never wider than the window allows. */
+const MAX_WIDTH = 480;
 const PERSONS_DECIMALS = 1;
 
 type Line = {label: string; value: string; tone?: 'warning' | 'error' | 'muted'};
@@ -72,9 +73,10 @@ const noteLines = (row: GanttIssueRow): Line[] => [
 export const GanttDetails: React.FC<Props> = ({row, gantt, x, y}) => {
   const format = useDateFormat();
   const lines = [...planLines(row, gantt, format), ...dueLines(row, format), ...workLines(row, gantt, format), ...noteLines(row)];
-  const left = Math.max(0, Math.min(x + OFFSET, window.innerWidth - WIDTH - OFFSET));
+  const width = Math.min(MAX_WIDTH, window.innerWidth - 2 * OFFSET);
+  const left = Math.max(OFFSET, Math.min(x + OFFSET, window.innerWidth - width - OFFSET));
   const below = y < window.innerHeight / 2;
-  const style: React.CSSProperties = below ? {left, top: y + OFFSET} : {left, bottom: window.innerHeight - y + OFFSET};
+  const style: React.CSSProperties = below ? {left, width, top: y + OFFSET} : {left, width, bottom: window.innerHeight - y + OFFSET};
   return (
     <div className="gantt-details" style={style} role="tooltip">
       <div className="gantt-details__title">
