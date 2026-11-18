@@ -14,7 +14,8 @@ const SAVE_DELAY = 500;
 
 /** The day width shown, kept here while zooming and stored in the prefs once it settles. */
 const usePxPerDay = (boardId: string, prefs: UserPrefs, updatePrefs: UpdatePrefs) => {
-  const stored = prefs.ganttPxPerDay[boardId] ?? DEFAULT_PX_PER_DAY;
+  // Stored values are clamped too: a corrupt one must not draw a chart millions of pixels wide.
+  const stored = clampPxPerDay(prefs.ganttPxPerDay[boardId] ?? DEFAULT_PX_PER_DAY);
   const [shown, setShown] = useState<{boardId: string; px: number} | null>(null);
   const pxPerDay = shown?.boardId === boardId ? shown.px : stored;
   useEffect(() => {

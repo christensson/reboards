@@ -459,10 +459,19 @@ const migrateTimeline = (raw: unknown, timeline: TimelineConfig, gantt: GanttCon
   };
 };
 
-const normalizePlanLevels = (value: unknown): PlanLevel[] =>
-  Array.isArray(value)
+/** A level's id, unique among the levels: one repeated (or missing) gets its position added. */
+const uniqueLevelId = (value: unknown, index: number, seen: Set<string>): string => {
+  const id = typeof value === 'string' && value ? value : `level-${index}`;
+  const unique = seen.has(id) ? `${id}-${index}` : id;
+  seen.add(unique);
+  return unique;
+};
+
+const normalizePlanLevels = (value: unknown): PlanLevel[] => {
+  const seen = new Set<string>();
+  return Array.isArray(value)
     ? value.filter(isRecord).map((level, index) => ({
-      id: typeof level.id === 'string' && level.id ? level.id : `level-${index}`,
+      id: uniqueLevelId(level.id, index, seen),
       name: typeof level.name === 'string' ? level.name : '',
       source: oneOf(level.source, ['version', 'dates', 'date-period', 'date', 'build'] as const, 'dates'),
       field: fieldRef(level.field),
@@ -471,6 +480,7 @@ const normalizePlanLevels = (value: unknown): PlanLevel[] =>
       dateRole: oneOf(level.dateRole, ['start', 'end'] as const, 'start')
     }))
     : [];
+};
 
 /** Boards written before the Gantt layout existed have none. */
 const normalizeGantt = (value: unknown): GanttConfig => {

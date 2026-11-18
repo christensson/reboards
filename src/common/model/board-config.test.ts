@@ -275,6 +275,11 @@ describe('gantt layout', () => {
     expect(normalizeBoardConfig({}).gantt).toEqual(emptyGantt());
   });
 
+  it('makes repeated planning level ids unique', () => {
+    const level = {id: 'a', name: 'A', source: 'date', field: {name: 'Due Date', kind: 'date'}};
+    expect(normalizeBoardConfig({gantt: {levels: [level, level, {...level, id: ''}]}}).gantt.levels.map(l => l.id)).toEqual(['a', 'a-1', 'level-2']);
+  });
+
   it('normalizes planning levels and options', () => {
     const gantt = normalizeBoardConfig({gantt: {
       levels: [{name: 'Roadmap', source: 'odd', field: {name: 'Start', kind: 'date'}}, 'junk'],

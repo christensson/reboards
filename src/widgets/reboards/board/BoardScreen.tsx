@@ -717,6 +717,18 @@ export const BoardScreen: React.FC<Props> = ({
   }, []);
 
 
+  /**
+   * After a saved change, the issue as YouTrack has it now. The change is saved even when this
+   * fails, so the board keeps showing it rather than reverting.
+   */
+  const refetchSaved = useCallback(async (issueId: string) => {
+    try {
+      await data.refetchIssue(issueId);
+    } catch {
+      // The next refresh shows it.
+    }
+  }, [data]);
+
   const applyMove = useCallback(
     async (issue: BoardIssue, changes: FieldChange[]) => {
       if (changes.length === 0) {
@@ -732,13 +744,14 @@ export const BoardScreen: React.FC<Props> = ({
             : buildFieldUpdate(change.field.name, change.field.kind, currentType, change.valueKey);
         });
         await youtrack.updateIssueFields(issue.id, updates);
-        await data.refetchIssue(issue.id);
       } catch (failure) {
         data.replaceIssue(issue);
         alertService.error(`Could not move ${issue.idReadable}: ${errorMessage(failure)}`);
+        return;
       }
+      await refetchSaved(issue.id);
     },
-    [data, reference.universe]
+    [data, reference.universe, refetchSaved]
   );
 
   /** Saves fields changed by dragging in the Gantt chart: shown at once, put back if saving fails. */
@@ -747,13 +760,14 @@ export const BoardScreen: React.FC<Props> = ({
       data.replaceIssue(editedIssue(issue, edits));
       try {
         await youtrack.updateIssueFields(issue.id, fieldUpdates(issue, edits, reference.universe));
-        await data.refetchIssue(issue.id);
       } catch (failure) {
         data.replaceIssue(issue);
         alertService.error(`Could not change ${issue.idReadable}: ${errorMessage(failure)}`);
+        return;
       }
+      await refetchSaved(issue.id);
     },
-    [data, reference.universe]
+    [data, reference.universe, refetchSaved]
   );
 
   const sensors = useSensors(useSensor(PointerSensor, {activationConstraint: {distance: DRAG_ACTIVATION_DISTANCE}}));

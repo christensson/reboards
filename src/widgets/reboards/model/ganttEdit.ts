@@ -162,9 +162,18 @@ const storedDate = (issue: BoardIssue, field: FieldRef): number | undefined => {
   return issue.fields[field.name] && Number.isFinite(value) ? value : undefined;
 };
 
-/** The stored value of a new day: noon UTC for dates; "date and time" keeps its time of day. */
-const dateValue = (old: number | undefined, day: number, kind: FieldKind | 'other'): number =>
-  (kind === 'datetime' && old !== undefined ? old + (day - localDay(old)) : day + NOON_MS);
+/**
+ * The stored value of a new day: noon UTC for dates; "date and time" keeps its local time of day,
+ * also across a daylight saving change.
+ */
+const dateValue = (old: number | undefined, day: number, kind: FieldKind | 'other'): number => {
+  if (kind !== 'datetime' || old === undefined) {
+    return day + NOON_MS;
+  }
+  const target = new Date(day);
+  const time = new Date(old);
+  return new Date(target.getUTCFullYear(), target.getUTCMonth(), target.getUTCDate(), time.getHours(), time.getMinutes(), time.getSeconds(), time.getMilliseconds()).getTime();
+};
 
 const dayOf = (value: number, kind: FieldKind | 'other'): number => (kind === 'datetime' ? localDay(value) : utcDay(value));
 

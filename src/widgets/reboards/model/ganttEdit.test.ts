@@ -107,6 +107,12 @@ describe('planEdit', () => {
     expect(planEdit(before, versions, 'end', after, universe, format, ['S1']).edits).toEqual([]);
   });
 
+  it('keeps the local time of day across a daylight saving change', () => {
+    const before = new Date(2026, 2, 27, 9, 0).getTime();
+    const edit = dueEdit(issue({Due: value(String(before))}), {name: 'Due', kind: 'datetime'}, Date.UTC(2026, 2, 30), universe, format);
+    expect(edit.edits[0]).toMatchObject({value: new Date(2026, 2, 30, 9, 0).getTime()});
+  });
+
   it('keeps the time of day of a date and time field', () => {
     const at = new Date(2026, 10, 20, 15, 30).getTime();
     const edit = dueEdit(issue({Due: value(String(at))}), {name: 'Due', kind: 'datetime'}, Date.UTC(2026, 10, 24), universe, format);

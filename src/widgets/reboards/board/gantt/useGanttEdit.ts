@@ -1,4 +1,4 @@
-import {useCallback, useMemo, useState} from 'react';
+import {useCallback, useMemo, useRef, useState} from 'react';
 import {type GanttConfig, isDateKind} from '@/common/model/board-config';
 import type {FieldUniverse} from '../../model/fieldUniverse';
 import {type GanttIssueRow, type GanttRow, type Span, detailedSpan} from '../../model/gantt';
@@ -55,6 +55,8 @@ type Pending = {
 };
 
 const NO_EDITS: Edit = {edits: [], lines: []};
+/** Two clicks on one row within this many milliseconds are a double-click. */
+const DOUBLE_CLICK_MS = 400;
 const DUE_KEY = 'due';
 
 const levelOfKey = (key: string): Level => (key === DUE_KEY ? 'due' : Number(key));
@@ -69,6 +71,7 @@ const keyOfLevel = (level: Level): string => (level === 'due' ? DUE_KEY : String
 export const useGanttEdit = ({gantt, rows, universe, canEdit, onSave, container, listWidth, pxPerDay}: Options) => {
   const [pending, setPending] = useState<Pending | null>(null);
   const [saving, setSaving] = useState<Set<string>>(() => new Set());
+  const lastClick = useRef<{issueId: string; at: number} | null>(null);
   const format = useDateFormat();
   const issues = useMemo(() => new Map(rows.flatMap(row => (row.type === 'issue' ? [[row.issue.id, row.issue] as const] : []))), [rows]);
   const estimates = useMemo(() => new Map(rows.flatMap(row => (row.type === 'issue' ? [[row.issue.id, row.schedule.estimate] as const] : []))), [rows]);
@@ -156,10 +159,18 @@ export const useGanttEdit = ({gantt, rows, universe, canEdit, onSave, container,
     },
     onDrop: at => setPending(current => (current ? withConfirm(current, at) : null)),
     onCancel: () => setPending(null),
-    // A click on an empty row plans from the estimate, starting on the clicked day.
+    // A click on an empty row plans from the estimate, starting on the clicked day; the second
+    // click of a double-click (which opens the issue) does not plan again.
     onClick: (target, before, at) => {
       const issue = issues.get(target.issueId);
+      const now = Date.now();
+      const previous = lastClick.current;
+      lastClick.current = {issueId: target.issueId, at: now};
       if (!issue || target.handle !== 'draw') {
+        return;
+      }
+      if (previous?.issueId === target.issueId && now - previous.at < DOUBLE_CLICK_MS) {
+        setPending(null);
         return;
       }
       const raw = estimateSpan(before.start, estimates.get(issue.id));
