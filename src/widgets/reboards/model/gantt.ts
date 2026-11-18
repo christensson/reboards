@@ -352,11 +352,26 @@ export const rowSpans = (row: GanttIssueRow): Span[] =>
     .filter((span): span is Span => Boolean(span));
 
 /** Days the chart shows: every drawn span and today, with some room around. */
+/** How far from today the chart reaches at most, either way: plans beyond it are cut at its edge. */
+export const RANGE_YEARS = 10;
+const DAYS_PER_YEAR = 366;
+
 export const ganttRange = (rows: GanttRow[], now: number, padDays: number): {start: number; end: number} => {
   const today = todayPosition(now);
-  const spans = rows.flatMap(row => (row.type === 'issue' && row.timed ? rowSpans(row) : []));
-  const start = Math.min(today, ...spans.map(span => span.start));
-  const end = Math.max(today, ...spans.map(span => span.end));
+  let start = today;
+  let end = today;
+  rows.forEach(row => {
+    if (row.type === 'issue' && row.timed) {
+      rowSpans(row).forEach(span => {
+        start = Math.min(start, span.start);
+        end = Math.max(end, span.end);
+      });
+    }
+  });
+  // A mistyped year (0026, 2206) would stretch the chart over centuries: keep to years around today.
+  const reach = RANGE_YEARS * DAYS_PER_YEAR * MS_PER_DAY;
+  start = Math.max(start, today - reach);
+  end = Math.min(end, today + reach);
   return {start: start - padDays * MS_PER_DAY, end: end + padDays * MS_PER_DAY};
 };
 

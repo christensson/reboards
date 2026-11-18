@@ -149,6 +149,12 @@ describe('buildGanttRows', () => {
 });
 
 describe('chart helpers', () => {
+  it('keeps to ten years around today, whatever a mistyped date says', () => {
+    const list = rows([issue('1', {Due: date('2206-11-20')}), issue('2', {Due: date('0026-11-20')})]);
+    const range = ganttRange(list, NOW, 0);
+    expect(range.end - range.start).toBeLessThanOrEqual(2 * 10 * 366 * 86_400_000);
+  });
+
   it('covers every span and today', () => {
     const list = rows([issue('1', {Start: date('2026-12-01'), End: date('2026-12-20')})]);
     expect(ganttRange(list, NOW, 0)).toEqual({start: day('2026-11-17'), end: day('2026-12-20')});

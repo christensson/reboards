@@ -12,13 +12,17 @@ const MIN_BAR_WIDTH = 3;
 export type Box = {left: number; width: number};
 
 /** Where a span of days (both ends included) lies on the scale. */
+/** Marks beyond the chart's reach are cut just outside its edges, so the chart keeps its size. */
+const EDGE_CUT = 8;
+const clampX = (scale: GanttScale, x: number): number => Math.min(scale.width + EDGE_CUT, Math.max(-EDGE_CUT, x));
+
 export const spanBox = (scale: GanttScale, span: Span): Box => {
-  const left = dayX(scale, span.start);
-  return {left, width: Math.max(MIN_BAR_WIDTH, dayX(scale, span.end + MS_PER_DAY) - left)};
+  const left = clampX(scale, dayX(scale, span.start));
+  return {left, width: Math.max(MIN_BAR_WIDTH, clampX(scale, dayX(scale, span.end + MS_PER_DAY)) - left)};
 };
 
 /** The x of the end of a day: a deadline falls at the end of its day. */
-export const dayEndX = (scale: GanttScale, day: number): number => dayX(scale, day + MS_PER_DAY);
+export const dayEndX = (scale: GanttScale, day: number): number => clampX(scale, dayX(scale, day + MS_PER_DAY));
 
 /**
  * Heights of the planning levels, by how many there are (high-level first): the outer frame nearly

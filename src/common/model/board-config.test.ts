@@ -248,6 +248,8 @@ describe('1.3.0 time setups', () => {
     expect(sprints.gantt.levels[0]).toMatchObject({source: 'version'});
     expect(sprints.timeline).toMatchObject({position: 'start', bucket: 'sprint'});
     expect(load({field: {name: 'Build', kind: 'build'}}).gantt.levels[0]).toMatchObject({source: 'build'});
+    // Builds were placed by what the date meant, as 1.3.0's settings showed it, not by `position`.
+    expect(load({field: {name: 'Build', kind: 'build'}, dateRole: 'start', position: 'end'}).timeline.position).toBe('start');
   });
 
   it('use a planning level with the same field instead of adding one, and leave new boards alone', () => {

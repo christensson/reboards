@@ -450,8 +450,8 @@ const migrateTimeline = (raw: unknown, timeline: TimelineConfig, gantt: GanttCon
   const same = gantt.levels.find(other => other.source === level.source && other.field?.name === field.name && other.periodField?.name === level.periodField?.name);
   const levels = same || gantt.levels.length >= MAX_PLAN_LEVELS ? gantt.levels : [level, ...gantt.levels];
   const placing = same ?? level;
-  // Before, a range placed cards by `position` and a single date by what it meant.
-  const range = level.source === 'version' || level.source === 'build' || level.source === 'date-period';
+  // 1.3.0 placed versions and dates with a period by `position`, single dates and builds by `dateRole`.
+  const range = level.source === 'version' || level.source === 'date-period';
   const position = range ? timeline.position : level.dateRole;
   return {
     timeline: {...timeline, enabled: true, rowsBy: rowsByLevel(placing.id), position, bucket: level.source === 'version' ? 'sprint' : 'day'},
