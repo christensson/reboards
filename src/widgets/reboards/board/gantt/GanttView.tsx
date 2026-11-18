@@ -12,7 +12,7 @@ import type {BoardConfig, GanttConfig} from '@/common/model/board-config';
 import type {CardSize, ConnectorsMode, GanttZoom} from '@/common/storage/prefs';
 import {issueUrl} from '@/common/youtrack/urls';
 import type {FieldUniverse} from '../../model/fieldUniverse';
-import {type GanttIssueRow, type GanttRow, buildGanttRows, ganttEdges, ganttRange, undatedToggleKey} from '../../model/gantt';
+import {type GanttIssueRow, type GanttRow, buildGanttRows, ganttEdges, ganttRange, rowSpans, undatedToggleKey} from '../../model/gantt';
 import {type GanttScale, dayX, ganttScale, padDays} from '../../model/ganttScale';
 import type {BoardIssue} from '../../model/issue';
 import type {FieldEdit} from '../../model/ganttEdit';
@@ -24,7 +24,7 @@ import {GanttArrows} from './GanttArrows';
 import {GanttBars, type RowEdit} from './GanttBars';
 import {GanttDetails, GanttLegend} from './GanttDetails';
 import {GanttGrid, GanttScaleHeader} from './GanttGrid';
-import {ROW_HEIGHT, anchorBox, rowLayout} from './geometry';
+import {ROW_HEIGHT, anchorBox, revealScroll, rowLayout, spanBox} from './geometry';
 import {GanttConfirm} from './GanttConfirm';
 import {GanttControls} from './GanttControls';
 import {useGanttEdit} from './useGanttEdit';
@@ -305,6 +305,9 @@ const ChartRow: React.FC<ChartRowProps> = ({row, className, style, scale, size, 
   );
 };
 
+/** Room left beside an issue's plans when showing them. */
+const LOCATE_MARGIN = 32;
+
 /** Room between the floating chart controls and the chart's edges. */
 const CONTROLS_MARGIN = 8;
 
@@ -416,6 +419,33 @@ export const GanttView: React.FC<Props> = props => {
   const toExpand = useMemo(() => expandLevel(rows), [rows]);
   const collapseOne = useCallback(() => toCollapse.length > 0 && onSetCollapsed(toCollapse, true), [toCollapse, onSetCollapsed]);
   const expandOne = useCallback(() => toExpand.length > 0 && onSetCollapsed(toExpand, false), [toExpand, onSetCollapsed]);
+
+  /**
+   * The locate button: brings the selected issues into view, their shown plans and due dates as
+   * far as the zoom allows, and the first one's row; with nothing selected, today.
+   */
+  const showSelected = useCallback(() => {
+    const container = scrollRef.current;
+    const selected = rows.filter((row): row is GanttIssueRow => row.type === 'issue' && row.timed && selectedIds.has(row.issue.id));
+    if (selectedIds.size === 0) {
+      onToday();
+      return;
+    }
+    const boxes = selected.flatMap(row => rowSpans(row)).map(mark => spanBox(scale, mark));
+    if (!container || boxes.length === 0) {
+      return;
+    }
+    const left = Math.min(...boxes.map(box => box.left));
+    const right = Math.max(...boxes.map(box => box.left + box.width));
+    const next = revealScroll({left, width: right - left}, container.scrollLeft, container.clientWidth - listWidth, LOCATE_MARGIN);
+    if (next !== null) {
+      container.scrollLeft = next;
+    }
+    const label = container.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(selected[0].key)}"]`);
+    if (label) {
+      revealRow(container, label, undefined, listWidth);
+    }
+  }, [rows, selectedIds, onToday, scale, listWidth]);
 
   useGanttKeys({
     // The confirmation takes Enter and Escape.
@@ -587,13 +617,14 @@ export const GanttView: React.FC<Props> = props => {
         </div>
       </div>
       <GanttControls
+        hasSelection={selectedIds.size > 0}
+        onLocate={showSelected}
         pxPerDay={pxPerDay}
         collapsed={controlsCollapsed}
         onCollapsed={onControlsCollapsed}
         onPreset={onPreset}
         onZoomBy={zoomBy}
         onFit={onFit}
-        onToday={onToday}
         // Clear of the vertical scrollbar, whatever its width.
         style={{right: CONTROLS_MARGIN + (scrollElement ? scrollElement.offsetWidth - scrollElement.clientWidth : 0)}}
       />

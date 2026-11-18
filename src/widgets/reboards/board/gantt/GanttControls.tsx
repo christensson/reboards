@@ -18,7 +18,9 @@ type Props = {
   onPreset: (zoom: GanttZoom) => void;
   onZoomBy: (factor: number) => void;
   onFit: () => void;
-  onToday: () => void;
+  /** Shows the selected issues, or today with nothing selected. */
+  onLocate: () => void;
+  hasSelection: boolean;
   style: React.CSSProperties;
 };
 
@@ -29,9 +31,9 @@ const POPUP_STYLE: React.CSSProperties = {zIndex: 20};
 
 /**
  * The chart's own controls, floating over its top right corner like map controls: zoom out and
- * in, the time scale, Fit and Today. Collapsed, only zoom and Fit stay.
+ * in, the time scale, Fit, and show the selected issue (or today). Collapsed, only zoom and Fit stay.
  */
-export const GanttControls: React.FC<Props> = ({pxPerDay, collapsed, onCollapsed, onPreset, onZoomBy, onFit, onToday, style}) => {
+export const GanttControls: React.FC<Props> = ({pxPerDay, collapsed, onCollapsed, onPreset, onZoomBy, onFit, onLocate, hasSelection, style}) => {
   const tier = tierFor(pxPerDay);
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- keeps clicks from reaching the chart rows
@@ -52,7 +54,15 @@ export const GanttControls: React.FC<Props> = ({pxPerDay, collapsed, onCollapsed
       <Button className="gantt-controls__button" icon={addIcon} title="Zoom in (+, or Ctrl+scroll)" aria-label="Zoom in" onClick={() => onZoomBy(KEY_ZOOM)}/>
       <span className="gantt-controls__divider" aria-hidden="true"/>
       <Button className="gantt-controls__button" icon={fullscreenIcon} title="Zoom to show every issue" aria-label="Fit" onClick={onFit}/>
-      {!collapsed && <Button className="gantt-controls__button" icon={locateIcon} title="Scroll to today" aria-label="Today" onClick={onToday}/>}
+      {!collapsed && (
+        <Button
+          className="gantt-controls__button"
+          icon={locateIcon}
+          title={hasSelection ? 'Show the selected issue' : 'Scroll to today (select an issue to show it)'}
+          aria-label={hasSelection ? 'Show the selected issue' : 'Today'}
+          onClick={onLocate}
+        />
+      )}
       <span className="gantt-controls__divider" aria-hidden="true"/>
       <Button
         className="gantt-controls__button"

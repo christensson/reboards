@@ -126,3 +126,21 @@ export const rowLayout = (rows: GanttRow[], rowHeight: number): {tops: number[];
   });
   return {tops, heights, total};
 };
+
+/**
+ * Where to scroll so a stretch of the chart shows, keeping the zoom; null when it already shows.
+ * A stretch that fits (with `margin` on both sides) moves in just far enough; a wider one starts
+ * at the left margin, so as much as possible shows from its beginning. `scrollLeft` and the
+ * stretch are in chart pixels, `viewWidth` is the visible chart width.
+ */
+export const revealScroll = (extent: Box, scrollLeft: number, viewWidth: number, margin: number): number | null => {
+  const left = extent.left;
+  const right = extent.left + extent.width;
+  if (left >= scrollLeft && right <= scrollLeft + viewWidth) {
+    return null;
+  }
+  if (extent.width > viewWidth - 2 * margin || left < scrollLeft) {
+    return Math.max(0, left - margin);
+  }
+  return Math.max(0, right + margin - viewWidth);
+};

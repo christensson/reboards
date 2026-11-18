@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import type {GanttIssueRow} from '../../model/gantt';
 import type {BoardIssue} from '../../model/issue';
-import {levelHeight, markBottom, relationCurve, rowLayout} from './geometry';
+import {levelHeight, markBottom, relationCurve, revealScroll, rowLayout} from './geometry';
 
 const numbers = (path: string): number[] => path.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
 
@@ -76,5 +76,22 @@ describe('rowLayout', () => {
       {type: 'issue', depth: 0}
     ] as unknown as Parameters<typeof rowLayout>[0];
     expect(rowLayout(rows, 32)).toEqual({tops: [0, 32, 48], heights: [32, 16, 32], total: 80});
+  });
+});
+
+describe('revealScroll', () => {
+  // A 600 px wide view scrolled to 1000, with 32 px margins.
+  it('leaves a stretch that shows where it is', () => {
+    expect(revealScroll({left: 1100, width: 200}, 1000, 600, 32)).toBeNull();
+  });
+
+  it('moves in just far enough from either side', () => {
+    expect(revealScroll({left: 900, width: 200}, 1000, 600, 32)).toBe(868);
+    expect(revealScroll({left: 1500, width: 200}, 1000, 600, 32)).toBe(1132);
+  });
+
+  it('starts a stretch wider than the view at the left margin, never before the chart', () => {
+    expect(revealScroll({left: 1400, width: 900}, 1000, 600, 32)).toBe(1368);
+    expect(revealScroll({left: 10, width: 100}, 1000, 600, 32)).toBe(0);
   });
 });
