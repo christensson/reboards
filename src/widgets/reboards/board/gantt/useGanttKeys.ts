@@ -20,6 +20,9 @@ type Options = {
   zoomBy: (factor: number) => void;
   onToggleConnectors: () => void;
   onHelp: () => void;
+  /** C and Shift+C: collapse the deepest expanded level, or expand the shallowest collapsed one. */
+  onCollapseLevel: () => void;
+  onExpandLevel: () => void;
   /** Highlight navigation mode, when on: it takes Up and Down, and Enter and Escape finish it. */
   navMode: NavMode | null;
   scrollToRow: (key: string) => void;
@@ -37,7 +40,8 @@ const isPressable = (element: Element | null): boolean => element instanceof HTM
  * - Enter opens the issue, or shows or hides the issues of a "without time" row (Space too);
  * - P selects the parent, Shift+P goes back to the subtask or else to the first subtask;
  * - S and Shift+S go to the next and previous top-level issue;
- * - R shows or hides relations, + and − zoom, Escape clears the selection, ? lists the keys.
+ * - R shows or hides relations, + and − zoom, C and Shift+C collapse or expand one level,
+ *   Escape clears the selection, ? lists the keys.
  * Ctrl+arrows (moving cards on the board) do nothing: the chart is read-only.
  */
 export const useGanttKeys = (options: Options): void => {
@@ -182,9 +186,11 @@ export const useGanttKeys = (options: Options): void => {
 
     /** Keys that act on the view: R, ?, Escape and zoom. */
     const onViewKey = (key: string): boolean => {
-      const {onToggleConnectors, onHelp, zoomBy} = latest.current;
+      const {onToggleConnectors, onHelp, zoomBy, onCollapseLevel, onExpandLevel} = latest.current;
       if (ZOOM_KEYS[key]) {
         zoomBy(ZOOM_KEYS[key]);
+      } else if (key === 'c' || key === 'C') {
+        (key === 'c' ? onCollapseLevel : onExpandLevel)();
       } else if (key === 'r') {
         onToggleConnectors();
       } else if (key === '?') {

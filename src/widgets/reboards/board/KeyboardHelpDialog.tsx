@@ -29,6 +29,7 @@ const SHORTCUTS: Shortcut[] = [
   {keys: [['S']], text: 'Go to the next swimlane and its first card'},
   {keys: [['Shift', 'S']], text: 'Go to the previous swimlane'},
   {keys: [['R']], text: 'Show or hide relation connectors'},
+  {keys: [['C'], ['Shift', 'C']], text: 'Collapse the deepest open subtask boxes / open the shallowest collapsed ones, one level at a time'},
   {keys: [['/']], text: 'Find issues by ID or summary; Enter or ↓ goes to the next match, ↑ to the previous, Ctrl+Enter selects'},
   {keys: [['Esc']], text: 'Clear the selection'},
   {keys: [['?']], text: 'Show these shortcuts'}
@@ -44,6 +45,7 @@ const GANTT_SHORTCUTS: Shortcut[] = [
   {keys: [['S']], text: 'Go to the next top-level issue'},
   {keys: [['Shift', 'S']], text: 'Go to the previous top-level issue'},
   {keys: [['R']], text: 'Show or hide relation arrows'},
+  {keys: [['C'], ['Shift', 'C']], text: 'Collapse the deepest expanded subtask level / expand the shallowest collapsed one'},
   {keys: [['+'], ['−']], text: 'Zoom the time scale in or out; Ctrl+scroll or a pinch over the chart zooms too'},
   {keys: [['/']], text: 'Find issues by ID or summary; Enter or ↓ goes to the next match, ↑ to the previous, Ctrl+Enter selects'},
   {keys: [['Esc']], text: 'Clear the selection'},

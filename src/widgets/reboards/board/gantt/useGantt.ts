@@ -73,6 +73,12 @@ export const useGantt = (board: BoardConfig, rowMode: RowMode, prefs: UserPrefs,
       showUndated,
       todaySignal,
       fitSignal,
+      /** Collapses (or expands) several parents at once: a whole level. */
+      onSetCollapsed: (issueIds: string[], collapse: boolean) => updatePrefs(prev => {
+        const current = new Set(prev.ganttCollapsed[board.id] ?? []);
+        issueIds.forEach(id => (collapse ? current.add(id) : current.delete(id)));
+        return {ganttCollapsed: {...prev.ganttCollapsed, [board.id]: Array.from(current)}};
+      }),
       onToggleCollapsed: (issueId: string) => updatePrefs(prev => ({ganttCollapsed: toggleInBoardList(prev.ganttCollapsed, board.id, issueId)})),
       onToggleUndated: (key: string) => updatePrefs(prev => ({ganttShowUndated: toggleInBoardList(prev.ganttShowUndated, board.id, key)}))
     }

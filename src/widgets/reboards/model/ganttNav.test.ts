@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import type {GanttIssueRow, GanttRow, GanttUndatedRow} from './gantt';
 import type {BoardIssue} from './issue';
-import {currentIndex, firstChildIndex, nextRootIndex, parentRowIndex, rowIndexOf, stepIn, stepOut, stepVertical} from './ganttNav';
+import {collapseLevel, currentIndex, expandLevel, firstChildIndex, nextRootIndex, parentRowIndex, rowIndexOf, stepIn, stepOut, stepVertical} from './ganttNav';
 
 const issueRow = (id: string, depth: number, extra: Partial<GanttIssueRow> = {}): GanttIssueRow => ({
   type: 'issue',
@@ -83,5 +83,36 @@ describe('gantt keyboard navigation', () => {
     expect(nextRootIndex(rows, 2, -1)).toBe(0);
     expect(nextRootIndex(rows, -1, 1)).toBe(0);
     expect(nextRootIndex(rows, -1, -1)).toBe(5);
+  });
+});
+
+describe('collapse and expand one level', () => {
+  // A: 1 -> 2 -> 3 (three levels), B: 4 -> 5 (two levels)
+  const tree = (collapsed: string[]): GanttRow[] => {
+    const open = (id: string) => !collapsed.includes(id);
+    const list: GanttRow[] = [issueRow('1', 0, {childCount: 1, collapsed: !open('1')})];
+    if (open('1')) {
+      list.push(issueRow('2', 1, {childCount: 1, collapsed: !open('2')}));
+      if (open('2')) {
+        list.push(issueRow('3', 2));
+      }
+    }
+    list.push(issueRow('4', 0, {childCount: 1, collapsed: !open('4')}));
+    if (open('4')) {
+      list.push(issueRow('5', 1), undatedRow('4', 1, true), issueRow('6', 1, {timed: false}));
+    }
+    return list;
+  };
+
+  it('collapses the deepest expanded level each time', () => {
+    expect(collapseLevel(tree([]))).toEqual(['2']);
+    expect(collapseLevel(tree(['2']))).toEqual(['1', '4']);
+    expect(collapseLevel(tree(['1', '2', '4']))).toEqual([]);
+  });
+
+  it('expands the shallowest collapsed level each time', () => {
+    expect(expandLevel(tree(['1', '2', '4']))).toEqual(['1', '4']);
+    expect(expandLevel(tree(['2']))).toEqual(['2']);
+    expect(expandLevel(tree([]))).toEqual([]);
   });
 });

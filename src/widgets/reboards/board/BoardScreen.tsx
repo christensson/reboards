@@ -26,7 +26,7 @@ import {type LinkMode, isLinkDropData} from '../model/linkTargets';
 import {computeMatchIds} from '../model/search';
 import {type TimingFlag, type TimingNote, hasTimeOfDay, isExactTime, issueTime, timeMeaning, timingFlagOfFilter, timePreset, timingFlagsFor, timingNotes, todayPosition} from '../model/timeline';
 import {useDateFormat, useDateTimeFormat} from '../data/useDateFormat';
-import {visibleIssueIds} from '../model/visibility';
+import {collapseGroupLevel, expandGroupLevel, visibleIssueIds} from '../model/visibility';
 import {BoardContext, type BoardContextValue, type CardRegistry, type DragHighlight} from './BoardContext';
 import {BoardRows} from './BoardRows';
 import {ColumnHeaders} from './ColumnHeaders';
@@ -858,6 +858,21 @@ export const BoardScreen: React.FC<Props> = ({
 
   const [showShortcuts, setShowShortcuts] = useState(false);
   const openShortcuts = useCallback(() => setShowShortcuts(true), []);
+  /** C and Shift+C: one level of subtask boxes collapsed or opened, in every swimlane at once. */
+  const setBoxLevel = useCallback((collapse: boolean) => {
+    const state = {rows: collapsedRows, outerRows: collapsedOuterRows, groups: collapsedGroups};
+    const keys = collapse ? collapseGroupLevel(layout, state) : expandGroupLevel(layout, state);
+    if (keys.length === 0) {
+      return;
+    }
+    updatePrefs(prev => {
+      const current = new Set(prev.collapsedGroups[board.id] ?? []);
+      keys.forEach(key => (collapse ? current.add(key) : current.delete(key)));
+      return {collapsedGroups: {...prev.collapsedGroups, [board.id]: Array.from(current)}};
+    });
+  }, [layout, collapsedRows, collapsedOuterRows, collapsedGroups, updatePrefs, board.id]);
+  const collapseBoxLevel = useCallback(() => setBoxLevel(true), [setBoxLevel]);
+  const expandBoxLevel = useCallback(() => setBoxLevel(false), [setBoxLevel]);
   // "R" shows the connectors as they were last shown, or all of them.
   const lastConnectors = useRef<ConnectorsMode>('all');
   const toggleConnectors = useCallback(() => {
@@ -1020,6 +1035,8 @@ export const BoardScreen: React.FC<Props> = ({
     onSwimlane: onSwimlaneKey,
     onToggleConnectors: toggleConnectors,
     onHelp: openShortcuts,
+    onCollapseLevel: collapseBoxLevel,
+    onExpandLevel: expandBoxLevel,
     activeCardOf,
     onCardPicked,
     onCommitMove: move => {

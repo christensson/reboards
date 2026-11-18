@@ -3,6 +3,9 @@ import Button from '@jetbrains/ring-ui-built/components/button/button';
 import chevronDownIcon from '@jetbrains/icons/chevron-down';
 import chevronRightIcon from '@jetbrains/icons/chevron-right';
 import infoIcon from '@jetbrains/icons/info';
+import unfoldLessIcon from '@jetbrains/icons/unfold-less';
+import unfoldMoreIcon from '@jetbrains/icons/unfold-more';
+import {collapseLevel, expandLevel} from '../../model/ganttNav';
 import type {BoardConfig} from '@/common/model/board-config';
 import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
 import {issueUrl} from '@/common/youtrack/urls';
@@ -38,6 +41,8 @@ type Props = {
   collapsed: Set<string>;
   showUndated: Set<string>;
   onToggleCollapsed: (issueId: string) => void;
+  /** Collapses or expands several parents at once: one level of every tree. */
+  onSetCollapsed: (issueIds: string[], collapse: boolean) => void;
   onToggleUndated: (key: string) => void;
   selectedIds: Set<string>;
   /** Quick filter and find matches. */
@@ -257,7 +262,7 @@ const revealRow = (container: HTMLElement, label: HTMLElement, bar: {left: numbe
 export const GanttView: React.FC<Props> = props => {
   const {board, issues, universe, baseUrl, pxPerDay, onPxPerDay, size, connectorsMode, collapsed, showUndated, onToggleCollapsed, onToggleUndated} = props;
   const {selectedIds, matchIds, onSelect, onClearSelection, onOpen, registry, todaySignal, fitSignal} = props;
-  const {setSelectedIds, keysEnabled, onToggleConnectors, onHelp, navMode, canEdit, onSaveEdits} = props;
+  const {setSelectedIds, keysEnabled, onToggleConnectors, onHelp, navMode, canEdit, onSaveEdits, onSetCollapsed} = props;
   const [now] = useState(() => Date.now());
   const today = todayPosition(now);
   const rows = useMemo(
@@ -316,6 +321,11 @@ export const GanttView: React.FC<Props> = props => {
     }
   }, [onToggleUndated, onToggleCollapsed]);
 
+  const toCollapse = useMemo(() => collapseLevel(rows), [rows]);
+  const toExpand = useMemo(() => expandLevel(rows), [rows]);
+  const collapseOne = useCallback(() => toCollapse.length > 0 && onSetCollapsed(toCollapse, true), [toCollapse, onSetCollapsed]);
+  const expandOne = useCallback(() => toExpand.length > 0 && onSetCollapsed(toExpand, false), [toExpand, onSetCollapsed]);
+
   useGanttKeys({
     // The confirmation takes Enter and Escape.
     enabled: keysEnabled && !edit.confirm,
@@ -329,6 +339,8 @@ export const GanttView: React.FC<Props> = props => {
     zoomBy,
     onToggleConnectors,
     onHelp,
+    onCollapseLevel: collapseOne,
+    onExpandLevel: expandOne,
     navMode,
     scrollToRow
   });
@@ -385,6 +397,28 @@ export const GanttView: React.FC<Props> = props => {
           <div className="gantt__header">
             <div className="gantt__corner">
               <span className="gantt__corner-title">Issue</span>
+              <Button
+                className="gantt__level-button"
+                icon={unfoldLessIcon}
+                title="Collapse one level (C)"
+                aria-label="Collapse one level"
+                disabled={toCollapse.length === 0}
+                onClick={(event: React.MouseEvent) => {
+                  event.stopPropagation();
+                  collapseOne();
+                }}
+              />
+              <Button
+                className="gantt__level-button"
+                icon={unfoldMoreIcon}
+                title="Expand one level (Shift+C)"
+                aria-label="Expand one level"
+                disabled={toExpand.length === 0}
+                onClick={(event: React.MouseEvent) => {
+                  event.stopPropagation();
+                  expandOne();
+                }}
+              />
               <Button
                 className="gantt__legend-button"
                 icon={infoIcon}

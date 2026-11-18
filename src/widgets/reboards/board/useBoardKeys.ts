@@ -27,6 +27,9 @@ type Options = {
   onSwimlane: (direction: 'up' | 'down') => void;
   onToggleConnectors: () => void;
   onHelp: () => void;
+  /** C and Shift+C: collapse the deepest open subtask boxes, or open the shallowest collapsed ones. */
+  onCollapseLevel: () => void;
+  onExpandLevel: () => void;
   onCommitMove: (move: KeyMove) => void;
   /** The card of a selected issue the keys start from: the one the user picked when it has several. */
   activeCardOf: (issueId: string) => string;
@@ -96,7 +99,8 @@ const nextCard = (from: HTMLElement | undefined, direction: Direction): HTMLElem
  *   up to the parent, down to a subtask and sideways between subtasks until Escape;
  * - S and Shift+S go to the next or previous swimlane and start swimlane navigation mode, where
  *   Up and Down step between swimlanes until Escape,
- *   R shows or hides relations, ? lists the keys;
+ *   R shows or hides relations, C and Shift+C collapse or expand one level of subtask boxes,
+ *   ? lists the keys;
  * - Escape clears the selection.
  */
 export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
@@ -195,8 +199,26 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
       }
       return true;
     };
+    /** Keys that act on the whole board, not a card: S, C, R, ? and Escape. */
+    const onBoardKey = (key: string): boolean => {
+      const {onSwimlane, onToggleConnectors, onHelp, onCollapseLevel, onExpandLevel} = latest.current;
+      if (key === 'Escape') {
+        onEscape();
+      } else if (key === 's' || key === 'S') {
+        onSwimlane(key === 's' ? 'down' : 'up');
+      } else if (key === 'c' || key === 'C') {
+        (key === 'c' ? onCollapseLevel : onExpandLevel)();
+      } else if (key === 'r') {
+        // Plain R only: Shift+R and Ctrl+R are left to the browser.
+        onToggleConnectors();
+      } else if (key === '?') {
+        onHelp();
+      } else {
+        return false;
+      }
+      return true;
+    };
     const onKey = (event: KeyboardEvent): boolean => {
-      const {onSwimlane, onToggleConnectors, onHelp} = latest.current;
       const anchor = anchorRef.current;
       const direction = directionOf(event.key);
       if (direction) {
@@ -216,19 +238,7 @@ export const useBoardKeys = (options: Options): {keyMove: KeyMove | null} => {
       if (anchor && onCardKey(event.key, anchor)) {
         return true;
       }
-      if (event.key === 'Escape') {
-        onEscape();
-      } else if (event.key === 's' || event.key === 'S') {
-        onSwimlane(event.key === 's' ? 'down' : 'up');
-      } else if (event.key === 'r') {
-        // Plain R only: Shift+R and Ctrl+R are left to the browser.
-        onToggleConnectors();
-      } else if (event.key === '?') {
-        onHelp();
-      } else {
-        return false;
-      }
-      return true;
+      return onBoardKey(event.key);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (!latest.current.enabled || event.altKey || isTypingTarget(document.activeElement) || isDialogOpen()) {

@@ -91,3 +91,23 @@ export const nextRootIndex = (rows: GanttRow[], at: number, direction: 1 | -1): 
   }
   return -1;
 };
+
+/** Ids of the issue rows in `rows` at the greatest (or smallest) depth among them. */
+const atDepth = (rows: GanttRow[], pick: (a: number, b: number) => number): string[] => {
+  if (rows.length === 0) {
+    return [];
+  }
+  const depth = rows.map(row => row.depth).reduce((a, b) => pick(a, b));
+  return rows.flatMap(row => (row.type === 'issue' && row.depth === depth ? [row.issue.id] : []));
+};
+
+/**
+ * "Collapse one level": the expanded parents at the greatest depth, so every tree shows one level
+ * less, down to the depth of the shallowest. "Without time" rows hide with their parent.
+ */
+export const collapseLevel = (rows: GanttRow[]): string[] =>
+  atDepth(rows.filter((row, index) => row.type === 'issue' && isExpandable(row) && isExpanded(row) && rows[index + 1]?.depth > row.depth), Math.max);
+
+/** "Expand one level": the collapsed parents at the smallest depth. */
+export const expandLevel = (rows: GanttRow[]): string[] =>
+  atDepth(rows.filter(row => row.type === 'issue' && isExpandable(row) && !isExpanded(row)), Math.min);
