@@ -52,7 +52,9 @@ body {
 
 .toolbar {
   display: flex;
-  flex-wrap: wrap;
+  /* Never two lines: the toolbar folds things into menus instead (useToolbarDensity). */
+  flex-wrap: nowrap;
+  overflow: hidden;
   align-items: center;
   gap: calc(var(--ring-unit) * 2);
   padding: var(--ring-unit) calc(var(--ring-unit) * 2);
@@ -61,8 +63,20 @@ body {
 
 .toolbar__group {
   display: flex;
+  flex: none;
   align-items: center;
   gap: var(--ring-unit);
+  white-space: nowrap;
+}
+
+/* Narrow toolbars: the board, page and sprint selectors shorten with an ellipsis. */
+.toolbar_narrow .toolbar__group_board button,
+.toolbar_tight .toolbar__group_board button,
+.toolbar_narrow .toolbar__group_page button,
+.toolbar_tight .toolbar__group_page button,
+.toolbar_narrow .toolbar__group_sprint button,
+.toolbar_tight .toolbar__group_sprint button {
+  max-width: 160px;
 }
 
 /* The closed (inline) sprint selector: the name, then the dates small and secondary. */
@@ -91,8 +105,8 @@ body {
 }
 
 .toolbar__group_search {
-  flex: 1 1 240px;
-  min-width: 200px;
+  /* Grows into spare room, but never below its content, so a toolbar that is too full overflows and folds. */
+  flex: 1 0 auto;
   /* A little more room after the board buttons ("New board") before "Highlight issues". */
   margin-left: var(--ring-unit);
 }
