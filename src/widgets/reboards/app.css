@@ -2372,11 +2372,9 @@ body {
   stroke-width: 1;
 }
 
-/* Where a tree line meets a subtask's bar; the outline keeps it visible on solid bars. */
+/* Where a tree line meets a subtask's bar. */
 .gantt-tree-dot {
   fill: var(--gantt-tree);
-  stroke: var(--ring-content-background-color);
-  stroke-width: 1;
 }
 
 /* Hover details and legend */
