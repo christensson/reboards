@@ -5,7 +5,7 @@ import chevronRightIcon from '@jetbrains/icons/chevron-right';
 import infoIcon from '@jetbrains/icons/info';
 import unfoldLessIcon from '@jetbrains/icons/unfold-less';
 import unfoldMoreIcon from '@jetbrains/icons/unfold-more';
-import {collapseLevel, expandLevel} from '../../model/ganttNav';
+import {collapseLevel, expandLevel, isExpandable} from '../../model/ganttNav';
 import type {BoardConfig} from '@/common/model/board-config';
 import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
 import {issueUrl} from '@/common/youtrack/urls';
@@ -22,7 +22,7 @@ import {GanttArrows} from './GanttArrows';
 import {GanttBars, type RowEdit} from './GanttBars';
 import {GanttDetails, GanttLegend} from './GanttDetails';
 import {GanttGrid, GanttScaleHeader} from './GanttGrid';
-import {ROW_HEIGHT, anchorBox} from './geometry';
+import {ROW_HEIGHT, anchorBox, rowLayout} from './geometry';
 import {GanttConfirm} from './GanttConfirm';
 import {useGanttEdit} from './useGanttEdit';
 import {useGanttKeys} from './useGanttKeys';
@@ -149,7 +149,9 @@ const GanttLabelComponent: React.FC<LabelProps> = ({row, className, height, base
     );
   }
   const {issue} = row;
-  const hasChildren = row.childCount > 0 || row.undatedChildIds.length > 0;
+  const hasChildren = isExpandable(row);
+  const untimed = row.undatedChildIds.length;
+  const untimedText = `${untimed} ${untimed === 1 ? 'subtask' : 'subtasks'} without time: ${row.showingUndated ? 'hide' : 'show'}`;
   const estimate = row.schedule.estimate;
   return (
     <div
@@ -170,6 +172,26 @@ const GanttLabelComponent: React.FC<LabelProps> = ({row, className, height, base
         {issue.idReadable}
       </a>
       <span className="gantt-label__summary" title={issue.summary}>{issue.summary}</span>
+      {untimed > 0 && (
+        <button
+          type="button"
+          className={`gantt-label__untimed${row.showingUndated ? ' gantt-label__untimed_shown' : ''}`}
+          title={untimedText}
+          aria-label={untimedText}
+          aria-pressed={row.showingUndated}
+          onClick={event => {
+            event.stopPropagation();
+            onToggleUndated(issue.id);
+            // Shown in a collapsed parent, they would stay hidden.
+            if (!row.showingUndated && row.collapsed) {
+              onToggleCollapsed(issue.id);
+            }
+          }}
+        >
+          <span className="gantt-label__untimed-mark" aria-hidden="true"/>
+          {untimed}
+        </button>
+      )}
       {estimate !== undefined && <span className="gantt-label__estimate" title="Estimate">{formatWorkHours(estimate)}</span>}
     </div>
   );
@@ -279,7 +301,8 @@ export const GanttView: React.FC<Props> = props => {
     return connectorsMode === 'all' ? all : all.filter(edge => selectedIds.has(edge.from) || selectedIds.has(edge.to));
   }, [rows, board.linkTypes, connectorsMode, selectedIds]);
   const rowHeight = ROW_HEIGHT[size];
-  const height = rows.length * rowHeight;
+  const layout = useMemo(() => rowLayout(rows, rowHeight), [rows, rowHeight]);
+  const height = layout.total;
   const [listWidth, setListWidth] = useState(LIST_WIDTH.initial);
   const [hover, setHover] = useState<Hover | null>(null);
   const [showLegend, setShowLegend] = useState(false);
@@ -444,7 +467,7 @@ export const GanttView: React.FC<Props> = props => {
                   <GanttLabel
                     row={row}
                     className={labelClass(row, index)}
-                    height={rowHeight}
+                    height={layout.heights[index]}
                     baseUrl={baseUrl}
                     focused={row.key === cursor}
                     onToggleCollapsed={onToggleCollapsed}
@@ -461,7 +484,7 @@ export const GanttView: React.FC<Props> = props => {
                   key={row.key}
                   row={row}
                   className={`${rowClass('gantt-row', row, selectedIds, matchIds, cursor)}${startsGroup(row, index) ? ' gantt-group-start' : ''}${rowEditOf(row)?.saving ? ' gantt-row_saving' : ''}`}
-                  style={{top: index * rowHeight, height: rowHeight, ...barStyle(row, board.cardColorField?.name ?? null)}}
+                  style={{top: layout.tops[index], height: layout.heights[index], ...barStyle(row, board.cardColorField?.name ?? null)}}
                   scale={scale}
                   size={size}
                   edit={rowEditOf(row)}

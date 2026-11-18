@@ -13,6 +13,7 @@ const issueRow = (id: string, depth: number, extra: Partial<GanttIssueRow> = {})
   timed: true,
   childCount: 0,
   undatedChildIds: [],
+  showingUndated: false,
   collapsed: false,
   workload: {pastEnd: false},
   overdue: false,
@@ -32,7 +33,7 @@ const undatedRow = (parentId: string | null, depth: number, expanded: boolean): 
 //   5
 // 6 (collapsed, has subtasks)
 const rows: GanttRow[] = [
-  issueRow('1', 0, {childCount: 1, undatedChildIds: ['5']}),
+  issueRow('1', 0, {childCount: 1, undatedChildIds: ['5'], showingUndated: true}),
   issueRow('2', 1, {childCount: 1}),
   issueRow('3', 2),
   undatedRow('1', 1, true),

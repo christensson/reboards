@@ -1,5 +1,5 @@
 import type {CardSize} from '@/common/storage/prefs';
-import {type GanttIssueRow, type Span, detailedSpan} from '../../model/gantt';
+import {type GanttIssueRow, type GanttRow, type Span, detailedSpan} from '../../model/gantt';
 import {type GanttScale, dayX} from '../../model/ganttScale';
 import {MS_PER_DAY} from '../../model/workTime';
 
@@ -98,4 +98,20 @@ export const markBottom = (row: GanttIssueRow, size: CardSize): number => {
     ...(row.schedule.due === undefined ? [] : [2 * DUE_HALF[size]])
   ];
   return ROW_HEIGHT[size] / 2 + (heights.length > 0 ? Math.max(...heights) : BAR_HEIGHT[size]) / 2;
+};
+
+/**
+ * Where each row of the chart starts and how high it is: the group of top-level issues without
+ * time is half a row. It comes after every row with time, so lines between bars keep row index ×
+ * row height.
+ */
+export const rowLayout = (rows: GanttRow[], rowHeight: number): {tops: number[]; heights: number[]; total: number} => {
+  const heights = rows.map(row => (row.type === 'undated' ? rowHeight / 2 : rowHeight));
+  const tops: number[] = [];
+  let total = 0;
+  heights.forEach(height => {
+    tops.push(total);
+    total += height;
+  });
+  return {tops, heights, total};
 };

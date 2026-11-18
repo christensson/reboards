@@ -140,6 +140,8 @@ export type GanttIssueRow = {
   childCount: number;
   /** Subtasks with neither time nor an estimate, left off the chart. */
   undatedChildIds: string[];
+  /** The subtasks without time are listed (the parent's badge is pressed). */
+  showingUndated: boolean;
   collapsed: boolean;
   workload: Workload;
   /** Open and past its due date. */
@@ -153,7 +155,7 @@ export type GanttIssueRow = {
   parentSpan?: Span;
 };
 
-/** The "N without time" toggle under a parent, or the group of top-level issues without time. */
+/** The group of top-level issues without time, at the bottom; parents show theirs with a badge. */
 export type GanttUndatedRow = {type: 'undated'; key: string; parentId: string | null; depth: number; count: number; expanded: boolean};
 
 export type GanttRow = GanttIssueRow | GanttUndatedRow;
@@ -231,7 +233,7 @@ type Placed = {node: Node; borrowed?: Span};
 const compareByTime = (a: Placed, b: Placed): number =>
   sortDay(a.node, a.borrowed) - sortDay(b.node, b.borrowed) || compareIssues(a.node.issue, b.node.issue);
 
-type RowContext = {gantt: GanttConfig; collapsed: Set<string>; today: number};
+type RowContext = {gantt: GanttConfig; collapsed: Set<string>; showUndated: Set<string>; today: number};
 
 /** Facts about where an issue stands against its own plan, due date and parent. */
 const timingOf = (node: Node, parent: Node | null, today: number): Pick<GanttIssueRow, 'overdue' | 'overrun' | 'early' | 'late' | 'parentSpan'> => {
@@ -265,6 +267,7 @@ const issueRow = (context: RowContext, placed: Placed, depth: number, parent: No
     timed,
     childCount: shown.length,
     undatedChildIds: undated.map(child => child.issue.id),
+    showingUndated: undated.length > 0 && context.showUndated.has(node.issue.id),
     collapsed: context.collapsed.has(node.issue.id),
     workload: node.issue.resolved ? {pastEnd: false} : workload(node.schedule.estimate, window, node.schedule.due, context.gantt.estimationMeaning, context.today),
     ...timingOf(node, parent, context.today)
@@ -282,7 +285,7 @@ export const buildGanttRows = ({issues, gantt, universe, collapsed, showUndated,
   const onBoard = new Set(issues.map(issue => issue.id));
   const rows: GanttRow[] = [];
   const emitted = new Set<string>();
-  const context: RowContext = {gantt, collapsed, today};
+  const context: RowContext = {gantt, collapsed, showUndated, today};
 
   const visit = (placed: Placed, depth: number, parent: Node | null): void => {
     const {node, borrowed} = placed;
@@ -310,15 +313,12 @@ export const buildGanttRows = ({issues, gantt, universe, collapsed, showUndated,
       return;
     }
     shown.forEach(child => visit(child, depth + 1, node));
-    if (undated.length > 0) {
-      const expanded = showUndated.has(node.issue.id);
-      rows.push({type: 'undated', key: `undated:${node.issue.id}`, parentId: node.issue.id, depth: depth + 1, count: undated.length, expanded});
-      if (expanded) {
-        undated.forEach(child => {
-          emitted.add(child.issue.id);
-          rows.push(issueRow(context, {node: child}, depth + 1, node, false, [], []));
-        });
-      }
+    // Subtasks without time are listed after the others when the parent's badge shows them.
+    if (undated.length > 0 && showUndated.has(node.issue.id)) {
+      undated.forEach(child => {
+        emitted.add(child.issue.id);
+        rows.push(issueRow(context, {node: child}, depth + 1, node, false, [], []));
+      });
     }
   };
 

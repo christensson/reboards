@@ -102,7 +102,7 @@ describe('buildGanttRows', () => {
   const dueOnly = issue('7', {Due: date('2026-10-30')});
 
   it('orders by time, nests subtasks and lists issues without time last', () => {
-    expect(keys(rows([epic, story, early, estimateOnly, undated, loose, dueOnly]))).toEqual(['7', '1', '3', '4', '2', 'undated:1', UNDATED_ROOTS_KEY]);
+    expect(keys(rows([epic, story, early, estimateOnly, undated, loose, dueOnly]))).toEqual(['7', '1', '3', '4', '2', UNDATED_ROOTS_KEY]);
   });
 
   it('derives a parent span from its subtasks and lends it to estimate-only subtasks', () => {
@@ -115,17 +115,20 @@ describe('buildGanttRows', () => {
     expect(list.find(row => row.key === '4')?.workload.persons).toBeCloseTo(8 / (9 * 8));
   });
 
-  it('expands a group of issues without time by its toggle key', () => {
+  it('lists subtasks without time from the parent\'s badge, and keeps only the top-level group as a row', () => {
     const list = rows([epic, story, early, estimateOnly, undated, loose]);
     const groups = list.filter((row): row is Extract<GanttRow, {type: 'undated'}> => row.type === 'undated');
-    expect(groups.map(undatedToggleKey)).toEqual(['1', UNDATED_ROOTS_KEY]);
-    expect(keys(rows([epic, story, early, estimateOnly, undated, loose], gantt(), {showUndated: groups.map(undatedToggleKey)}))).toContain('5');
+    expect(groups.map(undatedToggleKey)).toEqual([UNDATED_ROOTS_KEY]);
+    expect(issueRows(list).find(row => row.key === '1')).toMatchObject({undatedChildIds: ['5'], showingUndated: false});
+    const shown = rows([epic, story, early, estimateOnly, undated, loose], gantt(), {showUndated: ['1']});
+    expect(keys(shown)).toContain('5');
+    expect(issueRows(shown).find(row => row.key === '1')?.showingUndated).toBe(true);
   });
 
   it('collapses parents and expands issues without time', () => {
     expect(keys(rows([epic, story, early, estimateOnly, undated], gantt(), {collapsed: ['1']}))).toEqual(['1']);
     const shown = rows([epic, story, early, estimateOnly, undated, loose], gantt(), {showUndated: ['1', UNDATED_ROOTS_KEY]});
-    expect(keys(shown)).toEqual(['1', '3', '4', '2', 'undated:1', '5', UNDATED_ROOTS_KEY, '6']);
+    expect(keys(shown)).toEqual(['1', '3', '4', '2', '5', UNDATED_ROOTS_KEY, '6']);
     expect(issueRows(shown).find(row => row.key === '5')?.timed).toBe(false);
   });
 

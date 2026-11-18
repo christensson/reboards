@@ -2,7 +2,8 @@ import type {GanttRow} from './gantt';
 
 /** Keyboard navigation of the Gantt chart's rows, a tree: pure functions over the visible rows. */
 
-export const isExpandable = (row: GanttRow): boolean => row.type === 'undated' || row.childCount > 0 || row.undatedChildIds.length > 0;
+/** A parent with rows to show: subtasks with time, or subtasks without time its badge lists. */
+export const isExpandable = (row: GanttRow): boolean => row.type === 'undated' || row.childCount > 0 || row.showingUndated;
 export const isExpanded = (row: GanttRow): boolean => (row.type === 'undated' ? row.expanded : !row.collapsed);
 
 /** What a key does: go to a row, expand or collapse the current one, or nothing. */

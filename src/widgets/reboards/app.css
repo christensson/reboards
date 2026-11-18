@@ -2776,3 +2776,52 @@ body {
     color-mix(in srgb, var(--ring-warning-color, #f2b200) 35%, transparent) 3px 6px
   );
 }
+
+/* Subtasks without time: a badge on the parent's label lists or hides them. */
+.gantt-label__untimed {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  box-sizing: border-box;
+  height: 16px;
+  padding: 0 5px;
+  border: 1px solid var(--ring-line-color);
+  border-radius: 8px;
+  background: none;
+  color: var(--ring-secondary-color);
+  font: inherit;
+  font-size: var(--ring-font-size-smaller);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.gantt-label__untimed:hover {
+  border-color: var(--ring-main-color);
+  color: var(--ring-main-color);
+}
+
+.gantt-label__untimed_shown {
+  border-color: var(--ring-main-color);
+  background-color: color-mix(in srgb, var(--ring-main-color) 15%, transparent);
+  color: var(--ring-main-color);
+}
+
+/* "No time": a dashed circle, an empty slot on the timeline. */
+.gantt-label__untimed-mark {
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border: 1px dashed currentColor;
+  border-radius: 50%;
+}
+
+/* The group of top-level issues without time: a half-height row. */
+.gantt-label_undated {
+  font-size: var(--ring-font-size-smaller);
+}
+
+.gantt-label_undated .gantt-label__toggle {
+  height: 16px;
+  line-height: 16px;
+}

@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import type {GanttIssueRow} from '../../model/gantt';
 import type {BoardIssue} from '../../model/issue';
-import {levelHeight, markBottom, relationCurve} from './geometry';
+import {levelHeight, markBottom, relationCurve, rowLayout} from './geometry';
 
 const numbers = (path: string): number[] => path.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
 
@@ -37,7 +37,7 @@ describe('markBottom', () => {
   const span = {start: 0, end: 1};
   const row = (extra: Partial<GanttIssueRow>): GanttIssueRow => ({
     type: 'issue', key: '1', issue: {id: '1'} as BoardIssue, depth: 0, parentId: null, schedule: {spans: [null, null]}, timed: true,
-    childCount: 1, undatedChildIds: [], collapsed: false, workload: {pastEnd: false}, overdue: false, overrun: false, early: false, late: false, ...extra
+    childCount: 1, undatedChildIds: [], showingUndated: false, collapsed: false, workload: {pastEnd: false}, overdue: false, overrun: false, early: false, late: false, ...extra
   });
 
   it('is the bottom of the tallest mark: a coarse frame, the bar, a derived span or the due diamond', () => {
@@ -47,5 +47,16 @@ describe('markBottom', () => {
     expect(markBottom(row({schedule: {spans: [null, span]}}), 'normal')).toBe(23);
     expect(markBottom(row({derived: span}), 'normal')).toBe(23);
     expect(markBottom(row({schedule: {spans: [null, null], due: 0}}), 'normal')).toBe(23);
+  });
+});
+
+describe('rowLayout', () => {
+  it('stacks rows, the group of issues without time at half height', () => {
+    const rows = [
+      {type: 'issue', depth: 0},
+      {type: 'undated', key: '__undated__', parentId: null, depth: 0, count: 2, expanded: true},
+      {type: 'issue', depth: 0}
+    ] as unknown as Parameters<typeof rowLayout>[0];
+    expect(rowLayout(rows, 32)).toEqual({tops: [0, 32, 48], heights: [32, 16, 32], total: 80});
   });
 });
