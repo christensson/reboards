@@ -1956,6 +1956,8 @@ body {
 
 .gantt__corner-title {
   flex: 1;
+  /* The height of the controls beside it, so the text is centred on them. */
+  line-height: 20px;
   color: var(--ring-secondary-color);
   font-size: var(--ring-font-size-smaller);
 }
@@ -1999,12 +2001,39 @@ body {
 /* Scale */
 .gantt-scale {
   position: relative;
+  display: flex;
   flex: none;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
+/* Two 24 px tiers at the bottom of the header, whatever its height. */
 .gantt-scale__tier {
   position: relative;
-  height: 50%;
+  flex: none;
+  height: 24px;
+}
+
+/* Planning level chips above the column title: a slightly taller header, with 4 px of air above the chips. */
+.gantt_chips {
+  --gantt-header-h: 56px;
+}
+
+.gantt_chips .gantt__corner {
+  padding-top: 4px;
+}
+
+/* The header's small controls: one 20 px line, so the chips fit above them. */
+.gantt__corner .gantt__level-button,
+.gantt__corner .gantt__legend-button {
+  height: 20px;
+  padding: 0 2px;
+  line-height: 20px;
+}
+
+/* The issue column's border is the chart's left edge: no second line next to it. */
+.gantt-scale__tick_first {
+  border-left: none;
 }
 
 .gantt-scale__tick {
@@ -2849,4 +2878,65 @@ body {
 .issue-card__due_alert {
   color: var(--ring-error-color);
   font-weight: var(--ring-font-weight-bold, 600);
+}
+
+/* Planning level chips in the Gantt header: show or hide each level, legend style. */
+.gantt__corner_chips {
+  flex-wrap: wrap;
+  align-content: flex-end;
+  row-gap: 2px;
+}
+
+.gantt-level-chips {
+  display: flex;
+  flex: 1 0 100%;
+  gap: 4px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.gantt-level-chip {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  box-sizing: border-box;
+  min-width: 0;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--ring-line-color);
+  border-radius: 10px;
+  background: var(--ring-content-background-color);
+  color: var(--ring-text-color);
+  font: inherit;
+  font-size: var(--ring-font-size-smaller);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.gantt-level-chip:hover:not(:disabled) {
+  border-color: var(--ring-main-color);
+}
+
+.gantt-level-chip:disabled {
+  cursor: default;
+}
+
+.gantt-level-chip_off {
+  color: var(--ring-secondary-color);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.gantt-level-chip .gantt-level-chip__swatch {
+  flex: none;
+  width: 14px;
+  height: 10px;
+}
+
+.gantt-level-chip_off .gantt-level-chip__swatch {
+  border-color: var(--ring-secondary-color);
+  background: none;
 }

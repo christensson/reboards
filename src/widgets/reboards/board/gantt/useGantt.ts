@@ -2,7 +2,7 @@ import {useCallback, useEffect, useMemo, useState} from 'react';
 import type {BoardConfig, RowMode} from '@/common/model/board-config';
 import {type GanttZoom, type UserPrefs, toggleInBoardList} from '@/common/storage/prefs';
 import type {FieldUniverse} from '../../model/fieldUniverse';
-import {revealFor} from '../../model/gantt';
+import {revealFor, visibleGantt} from '../../model/gantt';
 import {PX_PER_DAY, clampPxPerDay} from '../../model/ganttScale';
 import type {BoardIssue} from '../../model/issue';
 
@@ -36,9 +36,21 @@ export const useGantt = (board: BoardConfig, rowMode: RowMode, prefs: UserPrefs,
   const collapsed = useMemo(() => new Set(prefs.ganttCollapsed[board.id] ?? []), [prefs.ganttCollapsed, board.id]);
   const showUndated = useMemo(() => new Set(prefs.ganttShowUndated[board.id] ?? []), [prefs.ganttShowUndated, board.id]);
   const active = rowMode === 'gantt';
+  const hiddenLevels = useMemo(() => prefs.ganttHiddenLevels[board.id] ?? [], [prefs.ganttHiddenLevels, board.id]);
+  /** The plan with the levels this user shows; the Gantt chart works as if the board had only those. */
+  const shownGantt = useMemo(() => visibleGantt(board.gantt, hiddenLevels), [board.gantt, hiddenLevels]);
+  /** Shows or hides a planning level; the last one shown stays. */
+  const toggleLevel = useCallback((levelId: string) => updatePrefs(prev => {
+    const hidden = (prev.ganttHiddenLevels[board.id] ?? []).filter(id => board.gantt.levels.some(level => level.id === id));
+    const next = hidden.includes(levelId) ? hidden.filter(id => id !== levelId) : [...hidden, levelId];
+    if (next.length >= board.gantt.levels.length) {
+      return {};
+    }
+    return {ganttHiddenLevels: {...prev.ganttHiddenLevels, [board.id]: next}};
+  }), [board.gantt.levels, board.id, updatePrefs]);
   /** Expands the parents and the "without time" group that hide an issue. */
   const reveal = useCallback((issueId: string) => {
-    const found = revealFor({issues, gantt: board.gantt, universe, now: Date.now()}, issueId);
+    const found = revealFor({issues, gantt: shownGantt, universe, now: Date.now()}, issueId);
     if (!found || (found.expand.length === 0 && !found.showUndated)) {
       return;
     }
@@ -52,7 +64,7 @@ export const useGantt = (board: BoardConfig, rowMode: RowMode, prefs: UserPrefs,
           : prev.ganttShowUndated
       };
     });
-  }, [issues, board.gantt, board.id, universe, updatePrefs]);
+  }, [issues, shownGantt, board.id, universe, updatePrefs]);
   const toolbar = useMemo(
     () => (active ? {
       pxPerDay,
@@ -67,6 +79,9 @@ export const useGantt = (board: BoardConfig, rowMode: RowMode, prefs: UserPrefs,
     toolbar,
     reveal,
     view: {
+      shownGantt,
+      hiddenLevels,
+      onToggleLevel: toggleLevel,
       pxPerDay,
       onPxPerDay: setPxPerDay,
       collapsed,

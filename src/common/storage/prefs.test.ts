@@ -85,6 +85,7 @@ describe('gantt prefs', () => {
     expect(prefs.ganttPxPerDay).toEqual({a: 4});
     expect(prefs.ganttCollapsed).toEqual({a: ['1']});
     expect(prefs.ganttShowUndated).toEqual({});
+    expect(prefs.ganttHiddenLevels).toEqual({});
     expect(prefs.rowModeByBoard).toEqual({a: 'gantt'});
   });
 });

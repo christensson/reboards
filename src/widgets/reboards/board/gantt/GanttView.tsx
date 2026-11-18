@@ -8,7 +8,7 @@ import Icon from '@jetbrains/ring-ui-built/components/icon/icon';
 import unfoldLessIcon from '@jetbrains/icons/unfold-less';
 import unfoldMoreIcon from '@jetbrains/icons/unfold-more';
 import {collapseLevel, expandLevel, isExpandable} from '../../model/ganttNav';
-import type {BoardConfig} from '@/common/model/board-config';
+import type {BoardConfig, GanttConfig} from '@/common/model/board-config';
 import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
 import {issueUrl} from '@/common/youtrack/urls';
 import type {FieldUniverse} from '../../model/fieldUniverse';
@@ -69,6 +69,11 @@ type Props = {
   todaySignal: number;
   /** Raised to zoom so that every issue shows. */
   fitSignal: number;
+  /** The plan with the planning levels this user shows. */
+  shownGantt: GanttConfig;
+  /** Ids of the planning levels this user hides. */
+  hiddenLevels: string[];
+  onToggleLevel: (levelId: string) => void;
 };
 
 const INDENT = 16;
@@ -202,6 +207,53 @@ const GanttLabelComponent: React.FC<LabelProps> = ({row, className, height, base
 const GanttLabel = memo(GanttLabelComponent);
 
 /** The row under the pointer: where in the viewport (for the details) and on the chart (for the day marker). */
+/** The swatch of a level among `count` shown: the outer frame, a dashed middle frame, or the bar. */
+const swatchClass = (index: number, count: number): string => {
+  if (index === count - 1) {
+    return 'gantt-legend__swatch_detailed';
+  }
+  return index > 0 ? 'gantt-legend__swatch_frame gantt-legend__swatch_dashed' : 'gantt-legend__swatch_frame';
+};
+
+type LevelChipsProps = {gantt: GanttConfig; hidden: string[]; onToggle: (levelId: string) => void};
+
+/**
+ * One chip per planning level, legend style: clicking shows or hides the level. Shown levels get
+ * the swatch they are drawn with; the last one shown cannot be hidden.
+ */
+const LevelChips: React.FC<LevelChipsProps> = ({gantt, hidden, onToggle}) => {
+  const shown = gantt.levels.filter(level => !hidden.includes(level.id));
+  return (
+    <span className="gantt-level-chips" role="group" aria-label="Planning levels">
+      {gantt.levels.map(level => {
+        const on = shown.includes(level);
+        const last = on && shown.length === 1;
+        let title = `${on ? 'Hide' : 'Show'} ${level.name}`;
+        if (last) {
+          title = 'At least one planning level stays shown';
+        }
+        return (
+          <button
+            key={level.id}
+            type="button"
+            className={`gantt-level-chip${on ? '' : ' gantt-level-chip_off'}`}
+            title={title}
+            aria-pressed={on}
+            disabled={last}
+            onClick={event => {
+              event.stopPropagation();
+              onToggle(level.id);
+            }}
+          >
+            <span className={`gantt-legend__swatch gantt-level-chip__swatch ${on ? swatchClass(shown.indexOf(level), shown.length) : 'gantt-legend__swatch_frame'}`}/>
+            {level.name}
+          </button>
+        );
+      })}
+    </span>
+  );
+};
+
 type Hover = {key: string; x: number; y: number; chartX: number};
 
 /** The day under an x on the chart. */
@@ -286,12 +338,12 @@ const revealRow = (container: HTMLElement, label: HTMLElement, bar: {left: numbe
 export const GanttView: React.FC<Props> = props => {
   const {board, issues, universe, baseUrl, pxPerDay, onPxPerDay, size, connectorsMode, collapsed, showUndated, onToggleCollapsed, onToggleUndated} = props;
   const {selectedIds, matchIds, onSelect, onClearSelection, onOpen, registry, todaySignal, fitSignal} = props;
-  const {setSelectedIds, keysEnabled, onToggleConnectors, onHelp, navMode, canEdit, onSaveEdits, onSetCollapsed} = props;
+  const {setSelectedIds, keysEnabled, onToggleConnectors, onHelp, navMode, canEdit, onSaveEdits, onSetCollapsed, shownGantt, hiddenLevels, onToggleLevel} = props;
   const [now] = useState(() => Date.now());
   const today = todayPosition(now);
   const rows = useMemo(
-    () => buildGanttRows({issues, gantt: board.gantt, universe, collapsed, showUndated, now}),
-    [issues, board.gantt, universe, collapsed, showUndated, now]
+    () => buildGanttRows({issues, gantt: shownGantt, universe, collapsed, showUndated, now}),
+    [issues, shownGantt, universe, collapsed, showUndated, now]
   );
   const span = useMemo(() => ganttRange(rows, now, 0), [rows, now]);
   const scale = useMemo(() => ganttScale(ganttRange(rows, now, padDays(pxPerDay)), pxPerDay), [rows, now, pxPerDay]);
@@ -320,7 +372,7 @@ export const GanttView: React.FC<Props> = props => {
     setScrollElement(element);
   }, []);
 
-  const edit = useGanttEdit({gantt: board.gantt, rows, universe, canEdit, onSave: onSaveEdits, container: scrollElement, listWidth, pxPerDay});
+  const edit = useGanttEdit({gantt: shownGantt, rows, universe, canEdit, onSave: onSaveEdits, container: scrollElement, listWidth, pxPerDay});
   const rowEditOf = (row: GanttRow): RowEdit | undefined => (row.type === 'issue' ? edit.rowEdit(row) : undefined);
   const {zoomBy} = useGanttZoom({element: scrollElement, scale, listWidth, today, span, pxPerDay, onPxPerDay, todaySignal, fitSignal});
 
@@ -413,7 +465,7 @@ export const GanttView: React.FC<Props> = props => {
   return (
      
     <div
-      className={`gantt gantt_${size}${edit.dragging ? ' gantt_dragging' : ''}`}
+      className={`gantt gantt_${size}${edit.dragging ? ' gantt_dragging' : ''}${board.gantt.levels.length > 1 ? ' gantt_chips' : ''}`}
       style={style}
       role="treegrid"
       aria-label={`${board.name} Gantt chart`}
@@ -423,7 +475,8 @@ export const GanttView: React.FC<Props> = props => {
       <div className="gantt__scroll" ref={setScrollRef} onClick={onClearSelection} role="presentation">
         <div className="gantt__content" style={{width: listWidth + scale.width}}>
           <div className="gantt__header">
-            <div className="gantt__corner">
+            <div className={`gantt__corner${board.gantt.levels.length > 1 ? ' gantt__corner_chips' : ''}`}>
+              {board.gantt.levels.length > 1 && <LevelChips gantt={board.gantt} hidden={hiddenLevels} onToggle={onToggleLevel}/>}
               <span className="gantt__corner-title">Issue</span>
               <Button
                 className="gantt__level-button"
@@ -463,7 +516,7 @@ export const GanttView: React.FC<Props> = props => {
             </div>
             <GanttScaleHeader scale={scale} today={today}/>
           </div>
-          {showLegend && <GanttLegend gantt={board.gantt}/>}
+          {showLegend && <GanttLegend gantt={shownGantt}/>}
           <div className="gantt__body">
             <div className="gantt__list" onMouseLeave={() => setHoverKey(null)}>
               {rows.map((row, index) => (
@@ -522,7 +575,7 @@ export const GanttView: React.FC<Props> = props => {
           </div>
         </div>
       </div>
-      {hovered && hover && !edit.dragging && <GanttDetails row={hovered} gantt={board.gantt} x={hover.x} y={hover.y}/>}
+      {hovered && hover && !edit.dragging && <GanttDetails row={hovered} gantt={shownGantt} x={hover.x} y={hover.y}/>}
       {edit.dragLabel && <span className="gantt-drag-label" style={{left: edit.dragLabel.at.x + DRAG_LABEL_OFFSET, top: edit.dragLabel.at.y + DRAG_LABEL_OFFSET}}>{edit.dragLabel.text}</span>}
       {edit.confirm && <GanttConfirm {...edit.confirm}/>}
     </div>

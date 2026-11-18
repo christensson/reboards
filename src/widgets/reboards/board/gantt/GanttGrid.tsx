@@ -10,7 +10,7 @@ const GanttScaleHeaderComponent: React.FC<{scale: GanttScale; today: number}> = 
     {inScale(scale, today) && <span className="gantt-scale__today" style={{left: dayX(scale, today)}}>Today</span>}
     <div className="gantt-scale__tier gantt-scale__tier_top">
       {scale.top.map(tick => (
-        <span key={tick.start} className="gantt-scale__tick" style={{left: dayX(scale, tick.start), width: dayX(scale, tick.end) - dayX(scale, tick.start)}}>
+        <span key={tick.start} className={`gantt-scale__tick${tick.start <= scale.start ? ' gantt-scale__tick_first' : ''}`} style={{left: dayX(scale, tick.start), width: dayX(scale, tick.end) - dayX(scale, tick.start)}}>
           <span className="gantt-scale__label">{tick.label}</span>
         </span>
       ))}
@@ -19,7 +19,7 @@ const GanttScaleHeaderComponent: React.FC<{scale: GanttScale; today: number}> = 
       {scale.bottom.map(tick => (
         <span
           key={tick.start}
-          className={`gantt-scale__tick${scale.showWeekends && !isWorkday(tick.start) ? ' gantt-scale__tick_weekend' : ''}`}
+          className={`gantt-scale__tick${scale.showWeekends && !isWorkday(tick.start) ? ' gantt-scale__tick_weekend' : ''}${tick.start <= scale.start ? ' gantt-scale__tick_first' : ''}`}
           style={{left: dayX(scale, tick.start), width: dayX(scale, tick.end) - dayX(scale, tick.start)}}
         >
           <span className="gantt-scale__label">{tick.label}</span>
@@ -55,8 +55,11 @@ const GanttGridComponent: React.FC<GridProps> = ({scale, height, today}) => (
     {scale.showWeekends && weekends(scale).map(weekend => (
       <span key={weekend.start} className="gantt-grid__weekend" style={{left: dayX(scale, weekend.start), width: dayX(scale, weekend.end) - dayX(scale, weekend.start)}}/>
     ))}
-    {scale.bottom.map(tick => <span key={`b${tick.start}`} className="gantt-grid__line" style={{left: dayX(scale, tick.start)}}/>)}
-    {scale.top.map(tick => <span key={`t${tick.start}`} className="gantt-grid__line gantt-grid__line_major" style={{left: dayX(scale, tick.start)}}/>)}
+    {/* The issue column's border is the left edge: no line at the very start. */}
+    {scale.bottom.filter(tick => tick.start > scale.start).map(tick => <span key={`b${tick.start}`} className="gantt-grid__line" style={{left: dayX(scale, tick.start)}}/>)}
+    {scale.top.filter(tick => tick.start > scale.start).map(tick => (
+      <span key={`t${tick.start}`} className="gantt-grid__line gantt-grid__line_major" style={{left: dayX(scale, tick.start)}}/>
+    ))}
     {inScale(scale, today) && <span className="gantt-grid__today" style={{left: dayX(scale, today)}}/>}
   </div>
 );

@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 import {type GanttConfig, type PlanLevel, emptyGantt} from '@/common/model/board-config';
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
-import {type GanttIssueRow, type GanttRow, UNDATED_ROOTS_KEY, buildGanttRows, ganttEdges, ganttRange, issueSchedule, levelSpan, revealFor, undatedToggleKey, workload} from './gantt';
+import {type GanttIssueRow, type GanttRow, UNDATED_ROOTS_KEY, buildGanttRows, ganttEdges, ganttRange, issueSchedule, levelSpan, revealFor, undatedToggleKey, visibleGantt, workload} from './gantt';
 import type {BoardIssue, IssueLink} from './issue';
 import {fitPxPerDay, ganttScale, tierFor} from './ganttScale';
 
@@ -199,5 +199,21 @@ describe('revealFor', () => {
     expect(revealFor(input, '5')).toEqual({expand: ['1'], showUndated: '1'});
     expect(revealFor(input, '6')).toEqual({expand: [], showUndated: UNDATED_ROOTS_KEY});
     expect(revealFor(input, 'missing')).toBeNull();
+  });
+});
+
+describe('visibleGantt', () => {
+  it('keeps the shown levels, never none, ignoring unknown ids', () => {
+    expect(visibleGantt(gantt(), ['l1']).levels.map(level => level.id)).toEqual(['l2']);
+    expect(visibleGantt(gantt(), ['l1', 'l2']).levels.map(level => level.id)).toEqual(['l1', 'l2']);
+    expect(visibleGantt(gantt(), ['gone'])).toEqual(gantt());
+  });
+
+  it('makes the next level the detailed bar when the finest is hidden', () => {
+    const planned = issue('1', {Start: date('2026-11-16'), End: date('2026-11-27'), Sprints: multi(['S1']), Estimation: value('2d', 960)});
+    const shown = issueRows(buildGanttRows({issues: [planned], gantt: visibleGantt(gantt(), ['l2']), universe, collapsed: new Set(), showUndated: new Set(), now: NOW}));
+    expect(shown[0].schedule.spans).toEqual([{start: day('2026-11-16'), end: day('2026-11-27')}]);
+    // Two days of work from today (Tue 17 Nov) to Fri 27 Nov: 9 working days.
+    expect(shown[0].workload.persons).toBeCloseTo(16 / (9 * 8));
   });
 });

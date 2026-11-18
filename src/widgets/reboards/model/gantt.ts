@@ -393,3 +393,12 @@ export const revealFor = (input: Omit<GanttInput, 'collapsed' | 'showUndated'>, 
   }
   return {expand, showUndated: row.timed ? null : (row.parentId ?? UNDATED_ROOTS_KEY)};
 };
+
+/**
+ * The plan with only the planning levels the user shows: the Gantt chart then works as if the
+ * board had just those. At least one level always stays; unknown ids are ignored.
+ */
+export const visibleGantt = (gantt: GanttConfig, hiddenIds: string[]): GanttConfig => {
+  const levels = gantt.levels.filter(level => !hiddenIds.includes(level.id));
+  return levels.length === gantt.levels.length || levels.length === 0 ? gantt : {...gantt, levels};
+};

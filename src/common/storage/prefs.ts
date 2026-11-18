@@ -52,6 +52,8 @@ export type UserPrefs = {
   ganttShowUndated: Record<string, string[]>;
   /** Gantt layout: the width of a day in pixels per board id. */
   ganttPxPerDay: Record<string, number>;
+  /** Gantt layout: ids of the planning levels hidden per board id. */
+  ganttHiddenLevels: Record<string, string[]>;
   /** Explicitly chosen page per board id; '' means "All" (field pages). */
   lastPageByBoard: Record<string, string>;
   /** Starred page keys per board id. */
@@ -78,6 +80,7 @@ export const defaultPrefs = (): UserPrefs => ({
   ganttCollapsed: {},
   ganttShowUndated: {},
   ganttPxPerDay: {},
+  ganttHiddenLevels: {},
   lastPageByBoard: {},
   starredPagesByBoard: {}
 });
@@ -144,7 +147,8 @@ export const loadPrefs = async (host: HostAPI): Promise<UserPrefs> => {
       // Prefs written before the Gantt layout existed lack these.
       ganttCollapsed: stringListMap(stored.ganttCollapsed),
       ganttShowUndated: stringListMap(stored.ganttShowUndated),
-      ganttPxPerDay: positiveNumberMap(stored.ganttPxPerDay)
+      ganttPxPerDay: positiveNumberMap(stored.ganttPxPerDay),
+      ganttHiddenLevels: stringListMap(stored.ganttHiddenLevels)
     };
   } catch {
     return defaultPrefs();

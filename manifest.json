@@ -4,7 +4,7 @@
   "title": "ReBoards",
   "description": "Revamped agile boards: work with relations, group subtasks under their parent, use multiple swimlane levels and plan in time.",
   "version": "1.4.0",
-  "changeNotes": "Version 1.4.0:<br/>- One Time &amp; planning setup for the time and Gantt layouts; boards from 1.3.0 are converted automatically.<br/>- Time rows per sprint, day, week, month or quarter, with the issue count, work and persons needed per row, and due dates on cards.<br/>- Add a Gantt layout next to the time layout: planning levels from high-level to detailed, due dates, persons needed from the estimate, subtask trees and relation arrows; reschedule by dragging bars, edges and due dates, plan unscheduled issues by drawing on their row, and add missing planning levels with +.<br/>- Support float fields.",
+  "changeNotes": "Version 1.4.0:<br/>- One Time &amp; planning setup for the time and Gantt layouts; boards from 1.3.0 are converted automatically.<br/>- Time rows per sprint, day, week, month or quarter, with the issue count, work and persons needed per row, and due dates on cards.<br/>- Add a Gantt layout next to the time layout: planning levels from high-level to detailed, due dates, persons needed from the estimate, subtask trees and relation arrows; reschedule by dragging bars, edges and due dates, plan unscheduled issues by drawing on their row, and add missing planning levels with +; chips in the Gantt header show or hide planning levels.<br/>- Support float fields.",
   "minYouTrackVersion": "2026.2.0",
   "aiToolPrefix": "reboards",
   "vendor": {
