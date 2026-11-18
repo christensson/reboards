@@ -394,9 +394,16 @@ export type Reveal = {expand: string[]; showUndated: string | null};
  * What to expand to show an issue: its ancestors on the chart, and, for an issue without time,
  * the "without time" group of its parent (or of the top level). Null when it is not on the chart.
  */
+/** The rows with every parent expanded and every "without time" group listed. */
+const expandedRows = (input: Omit<GanttInput, 'collapsed' | 'showUndated'>): GanttRow[] =>
+  buildGanttRows({...input, collapsed: new Set(), showUndated: new Set([UNDATED_ROOTS_KEY, ...input.issues.map(issue => issue.id)])});
+
+/** The issues in the order the chart lists them with everything expanded: the order find steps through. */
+export const findOrder = (input: Omit<GanttInput, 'collapsed' | 'showUndated'>): string[] =>
+  expandedRows(input).flatMap(row => (row.type === 'issue' ? [row.issue.id] : []));
+
 export const revealFor = (input: Omit<GanttInput, 'collapsed' | 'showUndated'>, issueId: string): Reveal | null => {
-  const everyKey = new Set([UNDATED_ROOTS_KEY, ...input.issues.map(issue => issue.id)]);
-  const rows = buildGanttRows({...input, collapsed: new Set(), showUndated: everyKey});
+  const rows = expandedRows(input);
   const byId = new Map(rows.flatMap(row => (row.type === 'issue' ? [[row.issue.id, row] as const] : [])));
   const row = byId.get(issueId);
   if (!row) {

@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 import {type GanttConfig, type PlanLevel, emptyGantt} from '@/common/model/board-config';
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
-import {type GanttIssueRow, type GanttRow, UNDATED_ROOTS_KEY, buildGanttRows, ganttEdges, ganttRange, issueSchedule, levelSpan, revealFor, undatedToggleKey, visibleGantt, workload} from './gantt';
+import {type GanttIssueRow, type GanttRow, UNDATED_ROOTS_KEY, buildGanttRows, ganttEdges, ganttRange, issueSchedule, levelSpan, findOrder, revealFor, undatedToggleKey, visibleGantt, workload} from './gantt';
 import type {BoardIssue, IssueLink} from './issue';
 import {fitPxPerDay, ganttScale, tierFor} from './ganttScale';
 
@@ -196,6 +196,10 @@ describe('revealFor', () => {
   const untimed = issue('5', {}, {parentIds: ['1']});
   const loose = issue('6', {});
   const input = {issues: [epic, story, task, untimed, loose], gantt: gantt(), universe, now: NOW};
+
+  it('orders issues as the fully expanded chart lists them, for find', () => {
+    expect(findOrder(input)).toEqual(['1', '2', '3', '5', '6']);
+  });
 
   it('expands the ancestors of a nested subtask', () => {
     expect(revealFor(input, '3')).toEqual({expand: ['2', '1'], showUndated: null});

@@ -110,9 +110,10 @@ const navBanner = (modes: BannerMode[]): React.ComponentProps<typeof NavModeBann
   return {title: mode.title, status: mode.status, modeName: mode.modeName, onClose: mode.exit};
 };
 
-/** 1-based position of the match cycled to, in board order; null before cycling. */
-const findPositionOf = (cursor: string | null, matchIds: Set<string>, registry: CardRegistry): number | null =>
-  cursor && matchIds.has(cursor) ? orderMatches(matchIds, registry).indexOf(cursor) + 1 : null;
+
+/** 1-based position of the match cycled to, in find's order; null before cycling. */
+const findPositionOf = (cursor: string | null, matchIds: Set<string>, order: (ids: Set<string>) => string[]): number | null =>
+  (cursor && matchIds.has(cursor) ? order(matchIds).indexOf(cursor) + 1 : null);
 
 /** A configured column field (not a dynamic one) without columns: the board has nothing to show yet. */
 const needsColumns = (board: BoardConfig, universe: FieldUniverse): boolean =>
@@ -657,6 +658,13 @@ export const BoardScreen: React.FC<Props> = ({
   const dueOf = useCallback((issueId: string) => dueChips.get(issueId) ?? null, [dueChips]);
   const locateCard = useCallback((cardId: string) => cardLocation(layout, cardId), [layout]);
 
+  const {orderMatches: ganttOrderMatches, peek: ganttPeek, unpeek: ganttUnpeek, keepPeek: ganttKeepPeek} = gantt;
+  /** Find's matches in order: the Gantt chart's fully expanded order, else their places on the board. */
+  const orderedMatches = useCallback(
+    (ids: Set<string>) => (ganttActive ? ganttOrderMatches(ids) : orderMatches(ids, registry)),
+    [ganttActive, ganttOrderMatches, registry]
+  );
+
   /** Selects the current matches, expands what hides them and scrolls to the first; returns whether anything was selected. */
   const selectMatches = useCallback((): boolean => {
     const ids = Array.from(matchIds);
@@ -674,7 +682,7 @@ export const BoardScreen: React.FC<Props> = ({
 
   /** Find: Enter goes to the next match (or back), selecting it and scrolling it into view. */
   const stepFind = useCallback((direction: 1 | -1) => {
-    const ordered = orderMatches(matchIds, registry);
+    const ordered = orderedMatches(matchIds);
     if (ordered.length === 0) {
       return;
     }
@@ -682,19 +690,27 @@ export const BoardScreen: React.FC<Props> = ({
     const next = at === -1 ? ordered[direction > 0 ? 0 : ordered.length - 1] : ordered[(at + direction + ordered.length) % ordered.length];
     setFindCursor(next);
     setSelectedIds(new Set([next]));
+    if (ganttActive) {
+      // Shown only while it is the current match; the chart scrolls to it once drawn.
+      ganttPeek(next);
+      return;
+    }
     expandFor(next);
     const SCROLL_DELAY = 50;
     window.setTimeout(() => registry.get(next)?.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'smooth'}), SCROLL_DELAY);
-  }, [matchIds, registry, findCursor, expandFor]);
+  }, [matchIds, registry, findCursor, expandFor, orderedMatches, ganttActive, ganttPeek]);
 
-  /** Find: Ctrl+Enter selects the match cycled to, or every match before cycling. */
+  /** Find: Ctrl+Enter selects the match cycled to (keeping what shows it expanded), or every match before cycling. */
   const commitFind = useCallback((): boolean => {
     if (findCursor && matchIds.has(findCursor)) {
       setSelectedIds(new Set([findCursor]));
+      if (ganttActive) {
+        ganttKeepPeek(findCursor);
+      }
       return true;
     }
     return selectMatches();
-  }, [findCursor, matchIds, selectMatches]);
+  }, [findCursor, matchIds, selectMatches, ganttActive, ganttKeepPeek]);
 
   // Typing on: the match cycled to stays current only while it still matches.
   useEffect(() => {
@@ -704,12 +720,14 @@ export const BoardScreen: React.FC<Props> = ({
   }, [findCursor, matchIds]);
 
   // "2 of 5": where the match cycled to is among the matches, in board order.
-  const findPosition = findPositionOf(findCursor, matchIds, registry);
+  const findPosition = findPositionOf(findCursor, matchIds, orderedMatches);
 
+  // Closing find folds again what only showed the match; the selection stays.
   const closeFind = useCallback(() => {
     setQuickFindTerm(null);
     setFindCursor(null);
-  }, []);
+    ganttUnpeek();
+  }, [ganttUnpeek]);
 
   // Opened from the toolbar menu: wait a tick so the closing menu's focus change can't blur the new box.
   const onOpenQuickFind = useCallback(() => {

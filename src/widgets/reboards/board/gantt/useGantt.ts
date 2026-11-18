@@ -2,7 +2,7 @@ import {useCallback, useEffect, useMemo, useState} from 'react';
 import type {BoardConfig, RowMode} from '@/common/model/board-config';
 import {type GanttZoom, type UserPrefs, toggleInBoardList} from '@/common/storage/prefs';
 import type {FieldUniverse} from '../../model/fieldUniverse';
-import {revealFor, visibleGantt} from '../../model/gantt';
+import {type Reveal, findOrder, revealFor, visibleGantt} from '../../model/gantt';
 import {PX_PER_DAY, clampPxPerDay} from '../../model/ganttScale';
 import type {BoardIssue} from '../../model/issue';
 
@@ -34,8 +34,18 @@ export const useGantt = (board: BoardConfig, rowMode: RowMode, prefs: UserPrefs,
   const [todaySignal, setTodaySignal] = useState(0);
   const [fitSignal, setFitSignal] = useState(0);
   const [pxPerDay, setPxPerDay] = usePxPerDay(board.id, prefs, updatePrefs);
-  const collapsed = useMemo(() => new Set(prefs.ganttCollapsed[board.id] ?? []), [prefs.ganttCollapsed, board.id]);
-  const showUndated = useMemo(() => new Set(prefs.ganttShowUndated[board.id] ?? []), [prefs.ganttShowUndated, board.id]);
+  /** Find: what is expanded only while it shows the current match; not saved. */
+  const [peeked, setPeeked] = useState<Reveal | null>(null);
+  /** Find: the match to scroll to once it is drawn, with a count so the same one can be asked again. */
+  const [revealRequest, setRevealRequest] = useState<{issueId: string; seq: number} | null>(null);
+  const collapsed = useMemo(() => {
+    const stored = prefs.ganttCollapsed[board.id] ?? [];
+    return new Set(peeked ? stored.filter(id => !peeked.expand.includes(id)) : stored);
+  }, [prefs.ganttCollapsed, board.id, peeked]);
+  const showUndated = useMemo(() => {
+    const stored = prefs.ganttShowUndated[board.id] ?? [];
+    return new Set(peeked?.showUndated ? [...stored, peeked.showUndated] : stored);
+  }, [prefs.ganttShowUndated, board.id, peeked]);
   const active = rowMode === 'gantt';
   const hiddenLevels = useMemo(() => prefs.ganttHiddenLevels[board.id] ?? [], [prefs.ganttHiddenLevels, board.id]);
   /** The plan with the levels this user shows; the Gantt chart works as if the board had only those. */
@@ -66,6 +76,23 @@ export const useGantt = (board: BoardConfig, rowMode: RowMode, prefs: UserPrefs,
       };
     });
   }, [issues, shownGantt, board.id, universe, updatePrefs]);
+  const input = useMemo(() => ({issues, gantt: shownGantt, universe, now: Date.now()}), [issues, shownGantt, universe]);
+  const order = useMemo(() => new Map(findOrder(input).map((id, index) => [id, index])), [input]);
+  /** Find: matches in the order the fully expanded chart lists them, whatever is collapsed now. */
+  const orderMatches = useCallback((ids: Set<string>): string[] =>
+    Array.from(ids).sort((a, b) => (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER)), [order]);
+  /** Find: shows a match by expanding what hides it until the next one (or until find closes), and scrolls to it. */
+  const peek = useCallback((issueId: string) => {
+    setPeeked(revealFor(input, issueId));
+    setRevealRequest(prev => ({issueId, seq: (prev?.seq ?? 0) + 1}));
+  }, [input]);
+  /** Find closed: what only showed the match folds again. */
+  const unpeek = useCallback(() => setPeeked(null), []);
+  /** Find focused the match: what shows it stays expanded. */
+  const keepPeek = useCallback((issueId: string) => {
+    reveal(issueId);
+    setPeeked(null);
+  }, [reveal]);
   const onPreset = useCallback((zoom: GanttZoom) => setPxPerDay(PX_PER_DAY[zoom]), [setPxPerDay]);
   const onFit = useCallback(() => setFitSignal(value => value + 1), []);
   const onToday = useCallback(() => setTodaySignal(value => value + 1), []);
@@ -73,7 +100,12 @@ export const useGantt = (board: BoardConfig, rowMode: RowMode, prefs: UserPrefs,
   return {
     active,
     reveal,
+    orderMatches,
+    peek,
+    unpeek,
+    keepPeek,
     view: {
+      revealRequest,
       shownGantt,
       hiddenLevels,
       onToggleLevel: toggleLevel,

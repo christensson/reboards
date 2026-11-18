@@ -76,6 +76,8 @@ type Props = {
   /** The floating chart controls hide the time scale. */
   controlsCollapsed: boolean;
   onControlsCollapsed: (collapsed: boolean) => void;
+  /** Find: a match to scroll to once its row is drawn; the count tells a repeat apart. */
+  revealRequest: {issueId: string; seq: number} | null;
   /** The plan with the planning levels this user shows. */
   shownGantt: GanttConfig;
   /** Ids of the planning levels this user hides. */
@@ -352,7 +354,7 @@ export const GanttView: React.FC<Props> = props => {
   const {board, issues, universe, baseUrl, pxPerDay, onPxPerDay, size, connectorsMode, collapsed, showUndated, onToggleCollapsed, onToggleUndated} = props;
   const {selectedIds, matchIds, onSelect, onClearSelection, onOpen, registry, todaySignal, fitSignal} = props;
   const {setSelectedIds, keysEnabled, onToggleConnectors, onHelp, navMode, canEdit, onSaveEdits, onSetCollapsed, shownGantt, hiddenLevels, onToggleLevel} = props;
-  const {onPreset, onFit, onToday, controlsCollapsed, onControlsCollapsed} = props;
+  const {onPreset, onFit, onToday, controlsCollapsed, onControlsCollapsed, revealRequest} = props;
   const [now] = useState(() => Date.now());
   const today = todayPosition(now);
   const rows = useMemo(
@@ -447,6 +449,43 @@ export const GanttView: React.FC<Props> = props => {
     }
   }, [rows, selectedIds, onToday, scale, listWidth]);
 
+  // Find stepped to a match: scroll to it as soon as its row is drawn (expanding it takes a render).
+  const revealed = useRef(0);
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!revealRequest || revealRequest.seq === revealed.current || !container) {
+      return;
+    }
+    const row = rows.find((candidate): candidate is GanttIssueRow => candidate.type === 'issue' && candidate.issue.id === revealRequest.issueId);
+    const label = row && container.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(row.key)}"]`);
+    if (!row || !label) {
+      return;
+    }
+    revealed.current = revealRequest.seq;
+    revealRow(container, label, row.timed ? anchorBox(scale, row) : undefined, listWidth);
+  }, [revealRequest, rows, scale, listWidth]);
+
+  /** Rows standing in for selected issues they hide: the nearest shown parent of each selected issue that is not shown. */
+  const holdsSelection = useMemo(() => {
+    const shown = new Set(rows.flatMap(row => (row.type === 'issue' ? [row.issue.id] : [])));
+    const byId = new Map(issues.map(issue => [issue.id, issue]));
+    const holders = new Set<string>();
+    selectedIds.forEach(id => {
+      const seen = new Set<string>();
+      let current = shown.has(id) ? undefined : byId.get(id);
+      while (current && !seen.has(current.id)) {
+        seen.add(current.id);
+        const parentId: string | undefined = current.parentIds.find(pid => byId.has(pid));
+        if (parentId && shown.has(parentId)) {
+          holders.add(parentId);
+          return;
+        }
+        current = parentId ? byId.get(parentId) : undefined;
+      }
+    });
+    return holders;
+  }, [rows, issues, selectedIds]);
+
   useGanttKeys({
     // The confirmation takes Enter and Escape.
     enabled: keysEnabled && !edit.confirm,
@@ -496,7 +535,7 @@ export const GanttView: React.FC<Props> = props => {
   }, [rows, cursor]);
 
   const labelClass = (row: GanttRow, index: number) =>
-    `${rowClass('gantt-label', row, selectedIds, matchIds, cursor)}${startsGroup(row, index) ? ' gantt-group-start' : ''}`;
+    `${rowClass('gantt-label', row, selectedIds, matchIds, cursor)}${startsGroup(row, index) ? ' gantt-group-start' : ''}${row.type === 'issue' && holdsSelection.has(row.issue.id) ? ' gantt-label_contains-selection' : ''}`;
   const style = {'--gantt-list-w': `${listWidth}px`, '--gantt-row-h': `${rowHeight}px`} as React.CSSProperties;
 
   if (rows.length === 0) {

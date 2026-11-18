@@ -2976,3 +2976,8 @@ body {
   margin: 2px 2px;
   background-color: var(--ring-line-color);
 }
+
+/* A parent row standing in for a selected subtask it hides: a thin bar inside its left edge. */
+.gantt-label_contains-selection {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--ring-main-color) 60%, transparent);
+}
