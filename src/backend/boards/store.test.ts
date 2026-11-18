@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {createEmptyBoard} from '@/common/model/board-config';
+import {createEmptyBoard, withLegacyTimeline} from '@/common/model/board-config';
 import {canDelete, canEdit, canShare, isOwner, keepOmittedSettings, versionMatches, visibleBoards} from './store';
 
 const board = (id: string, owner: string, shared: boolean, projects = ['SAN']) => ({
@@ -90,13 +90,43 @@ describe('keepOmittedSettings', () => {
     expect(keepOmittedSettings(incoming, raw, withGantt)).toEqual({...incoming, pages: existing.pages, gantt: withGantt.gantt});
   });
 
-  it('keeps the stored time rows and plan when a 1.3.0 widget saves its time field', () => {
-    const stored = {...existing, timeline: {...existing.timeline, enabled: true, rowsBy: 'level:sp', bucket: 'sprint' as const}};
-    const {pages: _pages, gantt: _gantt, timeline: _timeline, ...rest} = incoming;
-    const raw = {...rest, timeline: {field: {name: 'Sprints', kind: 'version'}}};
-    const kept = keepOmittedSettings(incoming, raw, stored);
-    expect(kept.timeline).toEqual(stored.timeline);
-    expect(kept.gantt).toEqual(stored.gantt);
+  describe('a save from a 1.3.0 widget', () => {
+    const sprint = {id: 'sp', name: 'Sprint', source: 'version' as const, field: {name: 'Sprints', kind: 'version' as const}, endField: null, periodField: null, dateRole: 'start' as const};
+    const stored = {
+      ...existing,
+      gantt: {...existing.gantt, levels: [sprint]},
+      timeline: {...existing.timeline, enabled: true, rowsBy: 'level:sp', position: 'end' as const, bucket: 'sprint' as const},
+      defaultRowMode: 'gantt' as const
+    };
+    const old = (timeline: Record<string, unknown>, extra: Record<string, unknown> = {}) => {
+      const {pages: _pages, gantt: _gantt, timeline: _timeline, ...rest} = incoming;
+      return {...rest, timeline, defaultRowMode: 'swimlanes', ...extra};
+    };
+
+    it('keeps the stored time rows, plan and Gantt default when it sends back what it was given', () => {
+      const kept = keepOmittedSettings({...incoming, defaultRowMode: 'swimlanes'}, old({field: {name: 'Sprints', kind: 'version'}, dateRole: 'end'}), stored);
+      expect(kept.timeline).toEqual(stored.timeline);
+      expect(kept.gantt).toEqual(stored.gantt);
+      expect(kept.defaultRowMode).toBe('gantt');
+    });
+
+    it('takes a changed time field, converted onto the stored plan', () => {
+      const kept = keepOmittedSettings(incoming, old({field: {name: 'Due Date', kind: 'date'}, dateRole: 'end'}), stored);
+      expect(kept.gantt.levels.map(level => level.id)).toEqual(['time', 'sp']);
+      expect(kept.timeline).toMatchObject({enabled: true, rowsBy: 'level:time', bucket: 'day'});
+    });
+
+    it('turns the time layout off when it cleared the time field', () => {
+      const kept = keepOmittedSettings(incoming, old({field: null, dateRole: 'end'}), stored);
+      expect(kept.timeline.enabled).toBe(false);
+      expect(kept.gantt).toEqual(stored.gantt);
+    });
+  });
+
+  it('describes the time rows in 1.3.0 terms for old widgets', () => {
+    const byDue = {...existing, gantt: {...existing.gantt, dueField: {name: 'Due Date', kind: 'date' as const}}, timeline: {...existing.timeline, enabled: true, rowsBy: 'due'}};
+    expect(withLegacyTimeline(byDue).timeline).toMatchObject({field: {name: 'Due Date', kind: 'date'}, periodField: null, dateRole: 'end'});
+    expect(withLegacyTimeline(existing).timeline).toMatchObject({field: null});
   });
 
   it('takes the sent pages, even when they are none', () => {

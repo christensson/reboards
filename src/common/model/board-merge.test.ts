@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {type BoardConfig, createEmptyBoard} from './board-config';
-import {detectLostWrite, mergeBoards, resolveMerge, summarizeGroup} from './board-merge';
+import {MERGE_GROUPS, detectLostWrite, mergeBoards, resolveMerge, summarizeGroup} from './board-merge';
 
 const base: BoardConfig = {
   ...createEmptyBoard('alice'),
@@ -12,6 +12,24 @@ const base: BoardConfig = {
   version: 3,
   updatedAt: 100
 };
+
+describe('merge groups', () => {
+  it('cover every setting a user edits', () => {
+    const server = ['id', 'owner', 'ownerId', 'createdAt', 'updatedAt', 'version'];
+    const grouped: string[] = Object.values(MERGE_GROUPS).flatMap(group => [...group.keys]);
+    const settings = Object.keys(createEmptyBoard('me')).filter(key => !server.includes(key));
+    expect(settings.filter(key => !grouped.includes(key))).toEqual([]);
+  });
+
+  it('take their plan along with their time rows, which name its levels', () => {
+    const level = {id: 'r', name: 'Roadmap', source: 'date' as const, field: {name: 'Due Date', kind: 'date' as const}, endField: null, periodField: null, dateRole: 'end' as const};
+    const theirs = {...base, gantt: {...base.gantt, levels: [level]}, timeline: {...base.timeline, enabled: true, rowsBy: 'level:r'}, version: 4};
+    const {merged, theirsApplied} = mergeBoards(base, {...base, name: 'Renamed'}, theirs);
+    expect(theirsApplied).toEqual(['timeline']);
+    expect(merged.gantt.levels).toEqual([level]);
+    expect(merged.timeline.rowsBy).toBe('level:r');
+  });
+});
 
 describe('mergeBoards', () => {
   it('keeps my changes and takes theirs where only they changed something', () => {

@@ -41,8 +41,14 @@ export const GanttConfirm: React.FC<Props> = ({title, lines, at, onApply, onCanc
   }, [at]);
 
   useEffect(() => {
-    ref.current?.querySelector<HTMLButtonElement>('button')?.focus({preventScroll: true});
+    // Apply has focus, so Enter applies; Tab reaches Cancel and the levels, whose Enter is their own.
+    ref.current?.querySelector<HTMLButtonElement>('.gantt-confirm__apply')?.focus({preventScroll: true});
     const onKey = (event: KeyboardEvent) => {
+      // Enter on a focused button of the dialog (Cancel, a level) presses that button.
+      const focused = document.activeElement;
+      if (event.key === 'Enter' && focused instanceof HTMLButtonElement && ref.current?.contains(focused)) {
+        return;
+      }
       if (event.key === 'Enter' || event.key === 'Escape') {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -89,7 +95,7 @@ export const GanttConfirm: React.FC<Props> = ({title, lines, at, onApply, onCanc
         ))}
       </dl>
       <div className="gantt-confirm__actions">
-        <Button primary disabled={lines.length === 0} onClick={onApply}>Apply</Button>
+        <Button className="gantt-confirm__apply" primary disabled={lines.length === 0} onClick={onApply}>Apply</Button>
         <Button onClick={onCancel}>Cancel</Button>
       </div>
     </div>

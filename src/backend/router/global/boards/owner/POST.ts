@@ -1,5 +1,5 @@
 import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
-import type {BoardConfig} from '@/common/model/board-config';
+import {type BoardConfig, withLegacyTimeline} from '@/common/model/board-config';
 import {projectAccessFor, projectAdminFor} from '@/backend/boards/access';
 import {HTTP_BAD_REQUEST, HTTP_FORBIDDEN, HTTP_NOT_FOUND, HTTP_SERVER_ERROR, respondError} from '@/backend/boards/http';
 import {findActiveUser, loadView, writeFailure, writeView} from '@/backend/boards/owners';
@@ -65,7 +65,7 @@ function handle(ctx: CtxPost<BoardOwnerReq, BoardOwnerRes, never, 'global'>): vo
     return;
   }
   ctx.response.json({
-    board: stored,
+    board: withLegacyTimeline(stored),
     visible: isVisibleTo(stored, viewer, projectAccessFor(ctx.currentUser)),
     canEdit: canEdit(stored, viewer, isAdmin, isProjectAdmin),
     canDelete: canDelete(stored, viewer, isAdmin, isProjectAdmin)

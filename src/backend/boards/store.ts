@@ -1,4 +1,4 @@
-import type {BoardConfig, ProjectRef} from '@/common/model/board-config';
+import {type BoardConfig, type ProjectRef, legacyTimeline, normalizeBoardConfig} from '@/common/model/board-config';
 
 /** Permission key that grants edit rights on every shared board. */
 export const ADMIN_PERMISSION = 'ADMIN_UPDATE_APP';
@@ -6,28 +6,54 @@ export const ADMIN_PERMISSION = 'ADMIN_UPDATE_APP';
 /** Settings added after the first release; a save from an older widget leaves them out. */
 const LATER_SETTINGS = ['pages', 'gantt'] as const;
 
+type RawTimeline = {field?: {name?: unknown} | null; periodField?: {name?: unknown} | null; dateRole?: unknown};
+
+/** Whether a 1.3.0 widget sent back the time setup it was given: its field, period and meaning unchanged. */
+const sameLegacyTimeline = (raw: RawTimeline, existing: BoardConfig): boolean => {
+  const before = legacyTimeline(existing);
+  return (raw.field?.name ?? null) === (before.field?.name ?? null)
+    && (raw.periodField?.name ?? null) === (before.periodField?.name ?? null)
+    && (before.field === null || raw.dateRole === before.dateRole);
+};
+
+/**
+ * The time and plan settings of a save from a 1.3.0 widget, which only knows one time field: the
+ * stored ones when it sent back the time setup it was given; else its change, converted onto the
+ * stored plan as a 1.3.0 board is on load, or the time layout turned off when it cleared the field.
+ */
+const legacyTimeSettings = (raw: Record<string, unknown>, timeline: RawTimeline, existing: BoardConfig): Pick<BoardConfig, 'timeline' | 'gantt'> => {
+  if (sameLegacyTimeline(timeline, existing)) {
+    return {timeline: existing.timeline, gantt: existing.gantt};
+  }
+  if (!timeline.field) {
+    return {timeline: {...existing.timeline, enabled: false}, gantt: existing.gantt};
+  }
+  const converted = normalizeBoardConfig({...raw, gantt: existing.gantt});
+  return {timeline: converted.timeline, gantt: converted.gantt};
+};
+
 /**
  * Settings a save leaves out keep their stored value. A browser still running an older widget sends
- * boards without the settings added since (such as `pages`), which would otherwise be reset.
+ * boards without the settings added since (such as `pages`), which would otherwise be reset. A
+ * 1.3.0 widget sends a time field instead of today's time rows and plan, and cannot keep a Gantt
+ * default layout (it turns it into swimlanes).
  */
 export const keepOmittedSettings = (incoming: BoardConfig, raw: unknown, existing: BoardConfig): BoardConfig => {
   if (typeof raw !== 'object' || raw === null) {
     return incoming;
   }
-  const omitted: (keyof BoardConfig)[] = LATER_SETTINGS.filter(key => !(key in raw));
-  // A 1.3.0 widget sends its own time setup (a time field), not today's time rows.
-  const timeline = (raw as {timeline?: unknown}).timeline;
-  if (typeof timeline === 'object' && timeline !== null && !('rowsBy' in timeline)) {
-    omitted.push('timeline');
-  }
-  if (omitted.length === 0) {
-    return incoming;
-  }
   const kept: BoardConfig = {...incoming};
-  omitted.forEach(key => {
+  LATER_SETTINGS.filter(key => !(key in raw)).forEach(key => {
     Object.assign(kept, {[key]: existing[key]});
   });
-  return kept;
+  const timeline = (raw as {timeline?: unknown}).timeline;
+  if (typeof timeline === 'object' && timeline !== null && !('rowsBy' in timeline)) {
+    Object.assign(kept, legacyTimeSettings(raw as Record<string, unknown>, timeline as RawTimeline, existing));
+    if (existing.defaultRowMode === 'gantt' && kept.defaultRowMode === 'swimlanes') {
+      kept.defaultRowMode = 'gantt';
+    }
+  }
+  return JSON.stringify(kept) === JSON.stringify(incoming) ? incoming : kept;
 };
 
 /** Whether the current user can read issues in a project. */

@@ -900,6 +900,40 @@ export const placingFieldNames = (config: BoardConfig): string[] => {
   return [level?.field, level?.endField, level?.periodField].flatMap(field => (field ? [field.name] : []));
 };
 
+/** The time setup as 1.3.0 stores it: one time field, made a range by a period, meaning a start or an end. */
+export type LegacyTimeline = {field: FieldRef | null; periodField: FieldRef | null; dateRole: 'start' | 'end'};
+
+/**
+ * Today's time rows in 1.3.0's terms, so a browser still running 1.3.0 keeps showing a time
+ * layout: the placing level's (or due date's) field, with its period, and which end it places.
+ * Two dates become the date at the placing end. Nothing when Time & planning is off.
+ */
+export const legacyTimeline = (config: BoardConfig): LegacyTimeline => {
+  const {enabled, rowsBy, position} = config.timeline;
+  const off: LegacyTimeline = {field: null, periodField: null, dateRole: position};
+  if (!enabled) {
+    return off;
+  }
+  if (rowsBy === ROWS_BY_DUE) {
+    return {...off, field: config.gantt.dueField, dateRole: 'end'};
+  }
+  const level = placingLevel(config);
+  if (!level?.field) {
+    return off;
+  }
+  if (level.source === 'date-period') {
+    return {field: level.field, periodField: level.periodField, dateRole: level.dateRole};
+  }
+  if (level.source === 'dates') {
+    return {...off, field: position === 'start' ? level.field : level.endField};
+  }
+  return {...off, field: level.field};
+};
+
+/** A board as sent to browsers: today's settings, plus the time setup in 1.3.0's terms for old widgets. */
+export const withLegacyTimeline = (config: BoardConfig): BoardConfig =>
+  ({...config, timeline: {...config.timeline, ...legacyTimeline(config)}});
+
 /** Time & planning is on and has something to place issues by. */
 export const isTimeConfigured = (config: BoardConfig): boolean => config.timeline.enabled && isGanttConfigured(config.gantt);
 

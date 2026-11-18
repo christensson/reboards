@@ -1,5 +1,5 @@
 import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
-import type {BoardConfig} from '@/common/model/board-config';
+import {type BoardConfig, withLegacyTimeline} from '@/common/model/board-config';
 import {projectAccessFor, projectAdminFor} from '@/backend/boards/access';
 import {loadView} from '@/backend/boards/owners';
 import {ADMIN_PERMISSION, canDelete, canEdit, visibleBoards} from '@/backend/boards/store';
@@ -31,7 +31,8 @@ function handle(ctx: CtxGet<BoardsListRes, never, 'global'>): void {
   const isProjectAdmin = projectAdminFor(ctx.currentUser);
   const boards = visibleBoards(view.boards, viewer, projectAccessFor(ctx.currentUser));
   ctx.response.json({
-    boards,
+    // Browsers still running 1.3.0 read the time setup from its old keys.
+    boards: boards.map(withLegacyTimeline),
     editableIds: boards.filter(board => canEdit(board, viewer, isAdmin, isProjectAdmin)).map(board => board.id),
     deletableIds: boards.filter(board => canDelete(board, viewer, isAdmin, isProjectAdmin)).map(board => board.id),
     me: {login: viewer.login, isAdmin}

@@ -18,7 +18,8 @@ export const MERGE_GROUPS = {
   cardColorField: {label: 'Card color', keys: ['cardColorField']},
   linkTypes: {label: 'Connectors', keys: ['linkTypes']},
   related: {label: 'Related boards', keys: ['relatedBoards']},
-  timeline: {label: 'Time layout', keys: ['timeline', 'defaultRowMode']},
+  // The time rows name a planning level by id, so the plan and the time rows merge as one.
+  timeline: {label: 'Time & planning', keys: ['timeline', 'gantt', 'defaultRowMode']},
   pages: {label: 'Pages', keys: ['pages']}
 } as const satisfies Record<string, {label: string; keys: readonly (keyof BoardConfig)[]}>;
 
@@ -97,10 +98,13 @@ const summaries: Record<MergeGroup, (board: BoardConfig) => string> = {
   cardFields: board => list(board.cardFields),
   cardColorField: board => board.cardColorField?.name ?? 'None',
   linkTypes: board => list(board.linkTypes),
-  // Only ids are stored here; the count tells the two sides apart.
-  timeline: board => (board.timeline.enabled
-    ? `Rows by ${rowsByName(board)} per ${board.timeline.bucket}, ${board.timeline.sort === 'asc' ? 'oldest' : 'newest'} first`
-    : 'Off'),
+  timeline: board => {
+    const levels = list(board.gantt.levels.map(level => level.name));
+    const due = board.gantt.dueField ? `, due ${board.gantt.dueField.name}` : '';
+    return board.timeline.enabled
+      ? `Plan: ${levels}${due}; rows by ${rowsByName(board)} per ${board.timeline.bucket}, ${board.timeline.sort === 'asc' ? 'oldest' : 'newest'} first`
+      : 'Off';
+  },
   pages: board => {
     const {mode, field, values, pages} = board.pages;
     if (mode === 'field') {
@@ -108,6 +112,7 @@ const summaries: Record<MergeGroup, (board: BoardConfig) => string> = {
     }
     return mode === 'queries' ? list(pages.map(p => p.name)) : 'None';
   },
+  // Only ids are stored here; the count tells the two sides apart.
   related: board => (board.relatedBoards.length === 1 ? '1 related board' : `${board.relatedBoards.length || 'No'} related boards`)
 };
 

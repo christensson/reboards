@@ -1,5 +1,5 @@
 import {withPermissions} from '@jetbrains/youtrack-apps-tools/dx/runtime';
-import {type BoardConfig, generateId, normalizeBoardConfig, validateBoardConfig} from '@/common/model/board-config';
+import {type BoardConfig, generateId, normalizeBoardConfig, validateBoardConfig, withLegacyTimeline} from '@/common/model/board-config';
 import {projectAccessFor, projectAdminFor, projectUpdateFor} from '@/backend/boards/access';
 import {HTTP_BAD_REQUEST, HTTP_CONFLICT, HTTP_FORBIDDEN, HTTP_NOT_FOUND, HTTP_SERVER_ERROR, respondError} from '@/backend/boards/http';
 import {type BoardView, loadView, writeFailure, writeView} from '@/backend/boards/owners';
@@ -81,7 +81,7 @@ function updatedBoard(
     return null;
   }
   if (!versionMatches(existing, body.baseVersion)) {
-    respondError(ctx.response, HTTP_CONFLICT, 'The board was changed by someone else while you were editing', {current: existing});
+    respondError(ctx.response, HTTP_CONFLICT, 'The board was changed by someone else while you were editing', {current: withLegacyTimeline(existing)});
     return null;
   }
   // The owner's save refreshes the stored login, which may have been renamed since.
@@ -147,7 +147,7 @@ function handle(ctx: CtxPost<BoardSaveReq, BoardSaveRes, never, 'global'>): void
     return;
   }
   ctx.response.json({
-    board: stored,
+    board: withLegacyTimeline(stored),
     canEdit: canEdit(stored, viewer, isAdmin, isProjectAdmin),
     canDelete: canDelete(stored, viewer, isAdmin, isProjectAdmin)
   });
