@@ -89,10 +89,15 @@ describe('timingFlags', () => {
     expect(timingFlags(early, parent, ctx(board(level({}), {position: 'start'})))).toEqual(['planned-early']);
   });
 
-  it('flags unassigned issues that should have started, and nothing when highlights are off', () => {
-    const waiting = issue('1', {'Due Date': date(d('2026-05-01'))});
-    expect(timingFlags(waiting, undefined, ctx(board(level({}), {position: 'start'})))).toEqual(['late-start']);
-    expect(timingFlags(waiting, undefined, ctx(board(level({}), {highlights: false})))).toEqual([]);
+  it('flags unassigned issues that should have started but are not yet overdue, and nothing when highlights are off', () => {
+    // Four working weeks ending 20 May: started in April, not yet due.
+    const ranged = level({source: 'date-period', periodField: {name: 'Estimation', kind: 'period'}});
+    const noDue = (config: BoardConfig): BoardConfig => ({...config, gantt: {...config.gantt, dueField: null}});
+    const waiting = issue('1', {'Due Date': date(d('2026-05-20')), 'Estimation': period(20 * 8 * 60)});
+    expect(timingFlags(waiting, undefined, ctx(noDue(board(ranged, {position: 'start'}))))).toEqual(['late-start']);
+    expect(timingFlags(waiting, undefined, ctx(noDue(board(ranged, {highlights: false}))))).toEqual([]);
+    const overdue = issue('2', {'Due Date': date(d('2026-05-01'))});
+    expect(timingFlags(overdue, undefined, ctx(board(level({}), {position: 'start'})))).toEqual(['overdue', 'overdue-unassigned']);
   });
 });
 
@@ -100,8 +105,11 @@ describe('timingNotes', () => {
   it('explains each icon, with one overdue icon whether or not unassigned', () => {
     const notes = timingNotes(['overdue', 'overdue-unassigned', 'planned-late'], {start: 1, end: 2}, time => `day ${time}`);
     expect(notes).toEqual([
-      {icon: 'overdue', text: 'Overdue and unassigned: ended day 2 and is not resolved'},
-      {icon: 'planned-late', text: 'Planned late: ends day 2, after its parent ends'}
+      {icon: 'overdue', text: 'Overdue and unassigned: ended day 2 and not resolved'},
+      {icon: 'planned-late', text: 'Ends after its parent’s plan'}
+    ]);
+    expect(timingNotes(['overdue'], {start: 1, end: 2, due: 3}, time => `day ${time}`)).toEqual([
+      {icon: 'overdue', text: 'Overdue: due day 3 and not resolved'}
     ]);
   });
 });

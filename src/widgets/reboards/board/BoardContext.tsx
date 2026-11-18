@@ -2,7 +2,21 @@ import {createContext, useContext} from 'react';
 import type {CardSize} from '@/common/storage/prefs';
 import type {BoardIssue} from '../model/issue';
 import type {LayoutGroup} from '../model/layout';
-import type {TimingNote} from '../model/timeline';
+import type {DueInfo, TimingNote} from '../model/timeline';
+
+/** A card's due date: "◆ 24 Nov", red when overdue or planned past it, with a tooltip saying which. */
+export type DueChip = {text: string; title: string; alert: boolean};
+
+export const dueChip = (due: DueInfo, format: (day: number) => string): DueChip => {
+  const day = format(due.day);
+  let title = `Due ${day}`;
+  if (due.overdue) {
+    title = `Overdue: due ${day} and not resolved`;
+  } else if (due.overrun) {
+    title = `Due ${day}, but planned to end after it`;
+  }
+  return {text: `◆ ${day}`, title, alert: due.overdue || due.overrun};
+};
 
 export type CardRegistry = {
   register: (issueId: string, element: HTMLElement | null) => void;
@@ -57,6 +71,8 @@ export type BoardContextValue = {
   showCard: (cardId: string) => void;
   /** Time layout: the timing problems of an issue, for its card icons; empty otherwise. */
   timingNotes: (issueId: string) => TimingNote[];
+  /** Time layout with a due date field: the card's due date chip; null otherwise. */
+  dueOf: (issueId: string) => DueChip | null;
   /** A card being moved with Ctrl+arrows: the cell its shadow is in and what the move would change. */
   keyMove: {
     issueId: string;

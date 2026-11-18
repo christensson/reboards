@@ -15,7 +15,7 @@ import type {BoardIssue} from '../model/issue';
 import {searchWords, splitForHighlight} from '../model/search';
 import {LINK_CARD_PREFIX} from '../model/linkTargets';
 import type {TimingIcon, TimingNote} from '../model/timeline';
-import {useBoardContext} from './BoardContext';
+import {type DueChip, useBoardContext} from './BoardContext';
 
 type ViewProps = {
   issue: BoardIssue;
@@ -158,6 +158,7 @@ const TimingIcons: React.FC<{notes: TimingNote[]}> = ({notes}) => (
   </>
 );
 
+
 /** On a card moved with Ctrl+arrows: what the move changes on its first line, the keys on its last. */
 export const KeyMoveLabels: React.FC<{hint: string}> = ({hint}) => {
   // "Set SAN-5 State to Done." reads as "State to Done" on the card itself.
@@ -224,6 +225,20 @@ type Props = {
   isParent?: boolean;
 };
 
+/** The card's top right corner: its due date, timing icons and copies badge; nothing when it has none. */
+const cardCorner = (cardId: string, copies: string[], notes: TimingNote[], due: DueChip | null): React.ReactNode => {
+  if (copies.length <= 1 && notes.length === 0 && !due) {
+    return undefined;
+  }
+  return (
+    <span className="issue-card__corner">
+      {due && <span className={`issue-card__due${due.alert ? ' issue-card__due_alert' : ''}`} title={due.title}>{due.text}</span>}
+      <TimingIcons notes={notes}/>
+      {copies.length > 1 && <CopiesBadge cardId={cardId} copies={copies}/>}
+    </span>
+  );
+};
+
 const IssueCardComponent: React.FC<Props> = ({issueId, cardId = issueId, isParent}) => {
   const ctx = useBoardContext();
   const issue = ctx.issuesById.get(issueId);
@@ -235,7 +250,7 @@ const IssueCardComponent: React.FC<Props> = ({issueId, cardId = issueId, isParen
   const primary = cardId === issueId;
   const copies = ctx.cardCopies(issueId);
   const notes = ctx.timingNotes(issueId);
-  const hasCorner = copies.length > 1 || notes.length > 0;
+  const corner = cardCorner(cardId, copies, notes, ctx.dueOf(issueId));
 
   const setRef = useCallback(
     (element: HTMLDivElement | null) => {
@@ -287,12 +302,7 @@ const IssueCardComponent: React.FC<Props> = ({issueId, cardId = issueId, isParen
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       data-card-id={cardId}
-      corner={hasCorner ? (
-        <span className="issue-card__corner">
-          <TimingIcons notes={notes}/>
-          {copies.length > 1 && <CopiesBadge cardId={cardId} copies={copies}/>}
-        </span>
-      ) : undefined}
+      corner={corner}
       {...attributes}
       {...listeners}
     />

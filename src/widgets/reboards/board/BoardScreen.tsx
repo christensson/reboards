@@ -24,10 +24,10 @@ import {type FieldChange, type MoveTarget, type ValueChoice, applyChanges, keysA
 import {groupDragHint, issueDragHint, linkDragHint} from '../model/dragHint';
 import {type LinkMode, isLinkDropData} from '../model/linkTargets';
 import {computeMatchIds} from '../model/search';
-import {type TimingFlag, type TimingNote, issueTime, timeMeaning, timingFlagOfFilter, timePreset, timingFlagsFor, timingNotes} from '../model/timeline';
+import {ALL_TIMING_FLAGS, type TimingFlag, type TimingNote, dueInfo, issueTime, timingFlagOfFilter, timePreset, timingNotes} from '../model/timeline';
 import {useDateFormat} from '../data/useDateFormat';
 import {collapseGroupLevel, expandGroupLevel, visibleIssueIds} from '../model/visibility';
-import {BoardContext, type BoardContextValue, type CardRegistry, type DragHighlight} from './BoardContext';
+import {BoardContext, type BoardContextValue, type CardRegistry, type DragHighlight, type DueChip, dueChip} from './BoardContext';
 import {BoardRows} from './BoardRows';
 import {ColumnHeaders} from './ColumnHeaders';
 import {GROUP_DRAG_PREFIX} from './GroupBox';
@@ -632,12 +632,29 @@ export const BoardScreen: React.FC<Props> = ({
     Object.entries(layout.flagsByIssue).forEach(([id, flags]) => {
       const issue = issuesById.get(id);
       if (issue) {
-        notes[id] = timingNotes(flags, issueTime(issue, board, reference.universe), formatTime);
+        const due = dueInfo(issue, board, reference.universe, Date.now())?.day;
+        notes[id] = timingNotes(flags, {...issueTime(issue, board, reference.universe), ...(due === undefined ? {} : {due})}, formatTime);
       }
     });
     return notes;
   }, [layout.flagsByIssue, issuesById, board, reference.universe, formatTime]);
   const timingNotesOf = useCallback((issueId: string) => notesByIssue[issueId] ?? NO_NOTES, [notesByIssue]);
+  // Time layout with a due date field: each card's due date, flagged as the Gantt layout does.
+  const dueChips = useMemo(() => {
+    const chips = new Map<string, DueChip>();
+    if (layout.rowMode !== 'time' || !board.gantt.dueField) {
+      return chips;
+    }
+    const now = Date.now();
+    data.issues.forEach(issue => {
+      const due = dueInfo(issue, board, reference.universe, now);
+      if (due) {
+        chips.set(issue.id, dueChip(due, formatTime));
+      }
+    });
+    return chips;
+  }, [layout.rowMode, board, data.issues, reference.universe, formatTime]);
+  const dueOf = useCallback((issueId: string) => dueChips.get(issueId) ?? null, [dueChips]);
   const locateCard = useCallback((cardId: string) => cardLocation(layout, cardId), [layout]);
 
   /** Selects the current matches, expands what hides them and scrolls to the first; returns whether anything was selected. */
@@ -1182,9 +1199,10 @@ export const BoardScreen: React.FC<Props> = ({
       cardLocation: locateCard,
       showCard,
       timingNotes: timingNotesOf,
+      dueOf,
       keyMove: keyMoveView
     }),
-    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf, canDrag, canMoveGroup, issueIdOf, cardCopies, locateCard, showCard, timingNotesOf, keyMoveView]
+    [dragHighlight, link.highlight, issuesById, view.cardSize, board.cardFields, board.cardColorField, stateFieldNames, collapsedColumns, selectedIds, matchIds, activeTerm, onSelect, onOpen, newIssueHref, registry, columnLabelOf, canDrag, canMoveGroup, issueIdOf, cardCopies, locateCard, showCard, timingNotesOf, dueOf, keyMoveView]
   );
 
   const status = useMemo(
@@ -1265,7 +1283,7 @@ export const BoardScreen: React.FC<Props> = ({
           updatePrefs(prev => ({rowModeByBoard: {...prev.rowModeByBoard, [board.id]: mode}}));
         }}
         gantt={gantt.toolbar}
-        timingFlags={layout.rowMode === 'time' && board.timeline.highlights ? timingFlagsFor(timeMeaning(board)) : NO_FLAGS}
+        timingFlags={layout.rowMode === 'time' && board.timeline.highlights ? ALL_TIMING_FLAGS : NO_FLAGS}
         onRefresh={() => {
           reference.reload();
           data.refresh();

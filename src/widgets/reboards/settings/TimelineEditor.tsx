@@ -14,7 +14,7 @@ import {
   rowsByLevel
 } from '@/common/model/board-config';
 import type {FieldUniverse} from '../model/fieldUniverse';
-import {TIMING_FLAGS, timingFlagsFor} from '../model/timeline';
+import {ALL_TIMING_FLAGS, TIMING_FLAGS} from '../model/timeline';
 
 type Props = {
   universe: FieldUniverse;
@@ -80,8 +80,7 @@ export const TimelineEditor: React.FC<Props> = ({universe, timeline, gantt, disa
   // A single date, a due date: both ends are the same day.
   const hasEnds = Boolean(level) && level?.source !== 'date';
   const buckets = BUCKET_ITEMS.filter(item => item.key !== 'sprint' || level?.source === 'version');
-  const meaning = hasEnds ? timeline.position : 'end';
-  const flags = timingFlagsFor(meaning).map(flag => TIMING_FLAGS[flag].label.toLowerCase());
+  const flags = ALL_TIMING_FLAGS.map(flag => TIMING_FLAGS[flag].label.toLowerCase());
   return (
     <>
       <Choice

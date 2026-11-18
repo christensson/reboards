@@ -9,7 +9,8 @@ It requires YouTrack 2026.2 or later.
 - **Relations**: labelled connectors to related issues, and links created by dragging.
 - **Hierarchy**: subtasks grouped in collapsible boxes under their parent, with progress.
 - **Swimlanes**: one or two levels, such as Team → Assignee.
-- **Time**: rows by date, version or build, with overdue and late work highlighted.
+- **Time**: rows per sprint, day, week, month or quarter, placed by a planning level or the due date, with
+  the work each row holds, due dates on cards and overdue and late work highlighted.
 - **Gantt**: plans at several levels (such as roadmap dates, then sprints), due dates and the persons needed
   to finish the estimate in time, on a zoomable timeline with subtask trees and relation arrows; drag bars,
   their edges or due dates to reschedule, draw on an unscheduled issue's row to plan it, or add a

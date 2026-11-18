@@ -1,6 +1,6 @@
 import {type BoardConfig, type FieldRef, type PlanLevel, ROWS_BY_DUE, isDateKind, isPlanLevelComplete, placingLevel} from '@/common/model/board-config';
 import type {FieldUniverse} from './fieldUniverse';
-import {fieldDay, levelSpan} from './gantt';
+import {type Span, detailedSpan, fieldDay, issueSchedule, levelSpan} from './gantt';
 import type {BoardIssue} from './issue';
 import {MS_PER_DAY, localDay, utcDay} from './workTime';
 
@@ -82,17 +82,17 @@ export const hasTimeOfDay = (time: number): boolean => {
 
 export type TimingFlag = 'planned-early' | 'late-start' | 'planned-late' | 'overdue' | 'overdue-unassigned';
 
-/** Timing highlights in menu order, with what each means; severe ones are real problems, the rest inconsistencies. */
-export const TIMING_FLAGS: Record<TimingFlag, {label: string; meaning: 'start' | 'end'; severe: boolean}> = {
-  'planned-early': {label: 'Planned early', meaning: 'start', severe: false},
-  'late-start': {label: 'Late start', meaning: 'start', severe: true},
-  'planned-late': {label: 'Planned late', meaning: 'end', severe: true},
-  'overdue': {label: 'Overdue', meaning: 'end', severe: true},
-  'overdue-unassigned': {label: 'Overdue unassigned', meaning: 'end', severe: true}
+/** Timing highlights in menu order, worded as the Gantt layout words them; severe ones are real problems, the rest inconsistencies. */
+export const TIMING_FLAGS: Record<TimingFlag, {label: string; severe: boolean}> = {
+  'planned-early': {label: 'Starts before parent’s plan', severe: false},
+  'late-start': {label: 'Late start', severe: true},
+  'planned-late': {label: 'Ends after parent’s plan', severe: true},
+  'overdue': {label: 'Overdue', severe: true},
+  'overdue-unassigned': {label: 'Overdue unassigned', severe: true}
 };
 
-export const timingFlagsFor = (meaning: 'start' | 'end'): TimingFlag[] =>
-  (Object.keys(TIMING_FLAGS) as TimingFlag[]).filter(flag => TIMING_FLAGS[flag].meaning === meaning);
+/** Every timing highlight, in menu order. */
+export const ALL_TIMING_FLAGS = Object.keys(TIMING_FLAGS) as TimingFlag[];
 
 export type TimingContext = {
   config: BoardConfig;
@@ -105,54 +105,54 @@ const isUnassigned = (issue: BoardIssue, config: BoardConfig): boolean => {
   return Boolean(field) && !issue.fields[field?.name ?? ''];
 };
 
-type FlagCheck = {
-  own: IssueTime;
-  /** The parent's time; empty without a parent on the board. */
-  theirs: IssueTime;
-  past: (time: number) => boolean;
-  open: boolean;
-  unassigned: boolean;
-};
+/** The issue's own detailed plan: its finest planning level with a span. */
+const ownPlan = (issue: BoardIssue, config: BoardConfig, universe: FieldUniverse): Span | undefined =>
+  detailedSpan(issueSchedule(issue, config.gantt, universe));
 
-const startFlags = ({own, theirs, past, open, unassigned}: FlagCheck): TimingFlag[] => {
-  if (own.start === undefined) {
-    return [];
-  }
-  const early = theirs.start !== undefined && own.start < theirs.start;
-  const late = open && unassigned && past(own.start);
-  return [...(early ? ['planned-early' as const] : []), ...(late ? ['late-start' as const] : [])];
-};
-
-const endFlags = ({own, theirs, past, open, unassigned}: FlagCheck): TimingFlag[] => {
-  if (own.end === undefined) {
-    return [];
-  }
-  const late = theirs.end !== undefined && own.end > theirs.end;
-  const overdue = open && past(own.end);
-  return [
-    ...(late ? ['planned-late' as const] : []),
-    ...(overdue ? ['overdue' as const] : []),
-    ...(overdue && unassigned ? ['overdue-unassigned' as const] : [])
-  ];
-};
+/** The day work is due: the due date when the board has one, else the end of the placing plan. */
+const dueDayOf = (issue: BoardIssue, config: BoardConfig, universe: FieldUniverse): number | undefined =>
+  (config.gantt.dueField ? fieldDay(issue, config.gantt.dueField, universe) : issueTime(issue, config, universe).end);
 
 /**
- * Timing problems of an issue. `parent` is its parent on the board, if any: a subtask starting
- * before its parent is planned early, one ending after it planned late.
+ * Timing problems of an issue, by the Gantt layout's rules. `parent` is its parent on the board,
+ * if any: an issue whose own detailed plan starts before its parent's starts early, one ending
+ * after it ends late. Overdue is past the due date (or, without one, the plan's end) and not
+ * resolved; a late start is past the plan's start, not yet overdue, unassigned and not resolved.
  */
 export const timingFlags = (issue: BoardIssue, parent: BoardIssue | undefined, {config, universe, now}: TimingContext): TimingFlag[] => {
   if (!config.timeline.highlights || !timePlacing(config)) {
     return [];
   }
   const today = todayPosition(now);
-  const check: FlagCheck = {
-    own: issueTime(issue, config, universe),
-    theirs: parent ? issueTime(parent, config, universe) : {},
-    past: time => time < today,
-    open: !issue.resolved,
-    unassigned: isUnassigned(issue, config)
-  };
-  return timeMeaning(config) === 'start' ? startFlags(check) : endFlags(check);
+  const open = !issue.resolved;
+  const unassigned = isUnassigned(issue, config);
+  const own = ownPlan(issue, config, universe);
+  const theirs = parent ? ownPlan(parent, config, universe) : undefined;
+  const start = issueTime(issue, config, universe).start;
+  const due = dueDayOf(issue, config, universe);
+  const overdue = open && due !== undefined && due < today;
+  const flags: [TimingFlag, boolean][] = [
+    ['planned-early', Boolean(own && theirs && own.start < theirs.start)],
+    // Overdue says more: a late start is one that should have started and is not yet overdue.
+    ['late-start', open && unassigned && !overdue && start !== undefined && start < today],
+    ['planned-late', Boolean(own && theirs && own.end > theirs.end)],
+    ['overdue', overdue],
+    ['overdue-unassigned', overdue && unassigned]
+  ];
+  return flags.filter(([, on]) => on).map(([flag]) => flag);
+};
+
+/** The due date chip of a card: the day, and whether it is overdue or the plan ends after it. */
+export type DueInfo = {day: number; overdue: boolean; overrun: boolean};
+
+export const dueInfo = (issue: BoardIssue, config: BoardConfig, universe: FieldUniverse, now: number): DueInfo | null => {
+  const field = config.gantt.dueField;
+  const day = field ? fieldDay(issue, field, universe) : undefined;
+  if (day === undefined) {
+    return null;
+  }
+  const planEnd = ownPlan(issue, config, universe)?.end;
+  return {day, overdue: !issue.resolved && day < todayPosition(now), overrun: planEnd !== undefined && planEnd > day};
 };
 
 /** Quick filter keys of the timing highlights; other quick filters are field names. */
@@ -169,22 +169,23 @@ export type TimingIcon = 'overdue' | 'late-start' | 'planned-late' | 'planned-ea
 
 export type TimingNote = {icon: TimingIcon; text: string};
 
-/** Why each icon is on a card, with the dates involved formatted by `format`. */
-export const timingNotes = (flags: TimingFlag[], time: IssueTime, format: (time: number) => string): TimingNote[] => {
+/** Why each icon is on a card, with the dates involved formatted by `format`, in the Gantt layout's words. */
+export const timingNotes = (flags: TimingFlag[], time: IssueTime & {due?: number}, format: (time: number) => string): TimingNote[] => {
   const when = (value: number | undefined): string => (value === undefined ? '' : format(value));
   const notes: TimingNote[] = [];
   if (flags.includes('overdue')) {
     const who = flags.includes('overdue-unassigned') ? ' and unassigned' : '';
-    notes.push({icon: 'overdue', text: `Overdue${who}: ended ${when(time.end)} and is not resolved`});
+    const what = time.due === undefined ? `ended ${when(time.end)}` : `due ${when(time.due)}`;
+    notes.push({icon: 'overdue', text: `Overdue${who}: ${what} and not resolved`});
   }
   if (flags.includes('late-start')) {
     notes.push({icon: 'late-start', text: `Late start: should have started ${when(time.start)}, but is unassigned and not resolved`});
   }
   if (flags.includes('planned-late')) {
-    notes.push({icon: 'planned-late', text: `Planned late: ends ${when(time.end)}, after its parent ends`});
+    notes.push({icon: 'planned-late', text: 'Ends after its parent’s plan'});
   }
   if (flags.includes('planned-early')) {
-    notes.push({icon: 'planned-early', text: `Planned early: starts ${when(time.start)}, before its parent starts`});
+    notes.push({icon: 'planned-early', text: 'Starts before its parent’s plan'});
   }
   return notes;
 };

@@ -2840,3 +2840,15 @@ body {
   color: var(--ring-secondary-color);
   font-weight: normal;
 }
+
+/* Time layout: the card's due date, red when overdue or planned past it. */
+.issue-card__due {
+  color: var(--ring-secondary-color);
+  font-size: var(--ring-font-size-smaller);
+  white-space: nowrap;
+}
+
+.issue-card__due_alert {
+  color: var(--ring-error-color);
+  font-weight: var(--ring-font-weight-bold, 600);
+}
