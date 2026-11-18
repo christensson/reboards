@@ -10,7 +10,9 @@ import {Directions} from '@jetbrains/ring-ui-built/components/popup/popup.consts
 import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/select/select';
 import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
 import addIcon from '@jetbrains/icons/add';
+import fullscreenIcon from '@jetbrains/icons/fullscreen';
 import linkIcon from '@jetbrains/icons/link';
+import locateIcon from '@jetbrains/icons/locate';
 import moreOptionsIcon from '@jetbrains/icons/more-options';
 import searchIcon from '@jetbrains/icons/search';
 import settingsIcon from '@jetbrains/icons/settings';
@@ -271,8 +273,8 @@ const GanttControls: React.FC<GanttControlsProps> = ({density, gantt}) => {
           ))}
         </ButtonGroup>
       )}
-      <Button title="Zoom to show every issue" onClick={gantt.onFit}>Fit</Button>
-      <Button title="Scroll to today" onClick={gantt.onToday}>Today</Button>
+      <Button icon={fullscreenIcon} title="Zoom to show every issue" aria-label="Fit" onClick={gantt.onFit}/>
+      <Button icon={locateIcon} title="Scroll to today" aria-label="Today" onClick={gantt.onToday}/>
     </>
   );
 };
