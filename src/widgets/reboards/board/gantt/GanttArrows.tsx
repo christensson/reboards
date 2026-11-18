@@ -42,7 +42,7 @@ const treeLine = (parent: Placed, child: Placed, scale: GanttScale, size: CardSi
   }
   const x = treeX(from);
   const dot = {x: treeX(to), y: centerY(child.index, size)};
-  const top = parent.index * ROW_HEIGHT[size] + markBottom(parent.row, size);
+  const top = parent.index * ROW_HEIGHT[size] + markBottom(parent.row, size, scale, x);
   return {key: child.row.issue.id, d: `M ${x} ${top} V ${dot.y} H ${dot.x}`, dot};
 };
 

@@ -34,19 +34,28 @@ describe('levelHeight', () => {
 });
 
 describe('markBottom', () => {
-  const span = {start: 0, end: 1};
+  const day = 86_400_000;
+  // 10 px per day from day 0.
+  const scale = {start: 0, end: 30 * day, pxPerDay: 10, width: 300, top: [], bottom: [], showWeekends: false};
+  const wide = {start: 0, end: 19 * day};
+  const late = {start: 10 * day, end: 14 * day};
   const row = (extra: Partial<GanttIssueRow>): GanttIssueRow => ({
-    type: 'issue', key: '1', issue: {id: '1'} as BoardIssue, depth: 0, parentId: null, schedule: {spans: [null, null]}, timed: true,
-    childCount: 1, undatedChildIds: [], showingUndated: false, collapsed: false, workload: {pastEnd: false}, overdue: false, overrun: false, early: false, late: false, ...extra
+    type: 'issue', key: '1', issue: {id: '1'} as BoardIssue, depth: 0, parentId: null, schedule: {spans: [null, null]}, timed: true, childCount: 1,
+    undatedChildIds: [], showingUndated: false, collapsed: false, workload: {pastEnd: false}, overdue: false, overrun: false, early: false, late: false, ...extra
   });
 
-  it('is the bottom of the tallest mark: a coarse frame, the bar, a derived span or the due diamond', () => {
+  it('is the bottom of the tallest mark covering x', () => {
     // Row 32 px high, centre 16: the coarse frame is 24 px, the bar 14 px, the diamond 14 px.
-    expect(markBottom(row({schedule: {spans: [span, null]}}), 'normal')).toBe(28);
-    expect(markBottom(row({schedule: {spans: [span, span]}}), 'normal')).toBe(28);
-    expect(markBottom(row({schedule: {spans: [null, span]}}), 'normal')).toBe(23);
-    expect(markBottom(row({derived: span}), 'normal')).toBe(23);
-    expect(markBottom(row({schedule: {spans: [null, null], due: 0}}), 'normal')).toBe(23);
+    expect(markBottom(row({schedule: {spans: [wide, null]}}), 'normal', scale, 6)).toBe(28);
+    expect(markBottom(row({schedule: {spans: [wide, wide]}}), 'normal', scale, 6)).toBe(28);
+    expect(markBottom(row({schedule: {spans: [null, wide]}}), 'normal', scale, 6)).toBe(23);
+    expect(markBottom(row({derived: wide}), 'normal', scale, 6)).toBe(23);
+    expect(markBottom(row({schedule: {spans: [null, null], due: 0}}), 'normal', scale, 10)).toBe(23);
+  });
+
+  it('leaves out a coarse frame that starts later than x', () => {
+    expect(markBottom(row({schedule: {spans: [late, wide]}}), 'normal', scale, 6)).toBe(23);
+    expect(markBottom(row({schedule: {spans: [late, wide]}}), 'normal', scale, 120)).toBe(28);
   });
 });
 

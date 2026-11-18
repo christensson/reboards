@@ -86,16 +86,21 @@ export const relationCurve = (from: Point, to: Point): RelationCurve => {
 const DUE_HALF: Record<CardSize, number> = {normal: 7, small: 6};
 
 /**
- * The y, within its row, of the bottom of the tallest mark a row draws: its coarsest plan's
- * frame, its bar, the span derived from or borrowed for it, or its due diamond. Tree lines to
- * subtasks start there, so they never cross the parent's own marks.
+ * The y, within its row, of the bottom of the tallest mark a row draws at `x`: its coarsest plan's
+ * frame, its bar, the span derived from or borrowed for it, or its due diamond, whichever cover
+ * that x. Tree lines to subtasks start there, so they never cross the parent's own marks nor
+ * leave a gap below them. Without any mark at x, the bottom of the bar.
  */
-export const markBottom = (row: GanttIssueRow, size: CardSize): number => {
-  const {spans} = row.schedule;
+export const markBottom = (row: GanttIssueRow, size: CardSize, scale: GanttScale, x: number): number => {
+  const covers = (span: Span) => {
+    const box = spanBox(scale, span);
+    return box.left <= x && x <= box.left + box.width;
+  };
+  const {spans, due} = row.schedule;
   const heights = [
-    ...spans.flatMap((span, index) => (span ? [levelHeight(index, spans.length, size)] : [])),
-    ...(row.derived || row.borrowed ? [BAR_HEIGHT[size]] : []),
-    ...(row.schedule.due === undefined ? [] : [2 * DUE_HALF[size]])
+    ...spans.flatMap((span, index) => (span && covers(span) ? [levelHeight(index, spans.length, size)] : [])),
+    ...[row.derived, row.borrowed].flatMap(span => (span && covers(span) ? [BAR_HEIGHT[size]] : [])),
+    ...(due !== undefined && Math.abs(dayEndX(scale, due) - x) <= DUE_HALF[size] ? [2 * DUE_HALF[size]] : [])
   ];
   return ROW_HEIGHT[size] / 2 + (heights.length > 0 ? Math.max(...heights) : BAR_HEIGHT[size]) / 2;
 };

@@ -1893,7 +1893,11 @@ body {
   --bar-color: var(--ring-main-color);
   --gantt-header-h: 48px;
   --gantt-line: var(--ring-line-color);
-  --gantt-tree: color-mix(in srgb, var(--ring-secondary-color) 60%, transparent);
+  /*
+   * Subtask lines: opaque, so crossing lines keep one color; the cell dividers mixed toward the
+   * text color, which is darker than them in the light theme and lighter in the dark one.
+   */
+  --gantt-tree: color-mix(in srgb, var(--ring-line-color) 55%, var(--ring-text-color));
   position: relative;
   display: flex;
   flex: 1;
@@ -2364,7 +2368,7 @@ body {
 
 /* Where a tree line meets a subtask's bar; the outline keeps it visible on solid bars. */
 .gantt-tree-dot {
-  fill: var(--ring-secondary-color);
+  fill: var(--gantt-tree);
   stroke: var(--ring-content-background-color);
   stroke-width: 1;
 }
