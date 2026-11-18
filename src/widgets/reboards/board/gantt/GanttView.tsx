@@ -3,6 +3,8 @@ import Button from '@jetbrains/ring-ui-built/components/button/button';
 import chevronDownIcon from '@jetbrains/icons/chevron-down';
 import chevronRightIcon from '@jetbrains/icons/chevron-right';
 import infoIcon from '@jetbrains/icons/info';
+import timeIcon from '@jetbrains/icons/time-12px';
+import Icon from '@jetbrains/ring-ui-built/components/icon/icon';
 import unfoldLessIcon from '@jetbrains/icons/unfold-less';
 import unfoldMoreIcon from '@jetbrains/icons/unfold-more';
 import {collapseLevel, expandLevel, isExpandable} from '../../model/ganttNav';
@@ -188,7 +190,7 @@ const GanttLabelComponent: React.FC<LabelProps> = ({row, className, height, base
             }
           }}
         >
-          <span className="gantt-label__untimed-mark" aria-hidden="true"/>
+          <Icon glyph={timeIcon} className="gantt-label__untimed-icon" aria-hidden="true"/>
           {untimed}
         </button>
       )}

@@ -2811,13 +2811,11 @@ body {
   color: var(--ring-main-color);
 }
 
-/* "No time": a dashed circle, an empty slot on the timeline. */
-.gantt-label__untimed-mark {
-  box-sizing: border-box;
-  width: 8px;
-  height: 8px;
-  border: 1px dashed currentColor;
-  border-radius: 50%;
+/* The clock follows the pill's color, also when pressed or hovered. */
+.gantt-label__untimed-icon {
+  display: inline-flex;
+  color: inherit;
+  line-height: 0;
 }
 
 /* The group of top-level issues without time: a half-height row. */
