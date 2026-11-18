@@ -2834,3 +2834,9 @@ body {
   height: 16px;
   line-height: 16px;
 }
+
+/* Time row headers: what the row holds, after its period, quieter. */
+.time-row__stats {
+  color: var(--ring-secondary-color);
+  font-weight: normal;
+}

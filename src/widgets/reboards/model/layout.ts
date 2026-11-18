@@ -1,10 +1,13 @@
-import {type BoardConfig, type FieldRef, type RowConfig, type RowMode, UNCATEGORIZED_ROW_KEY, columnLabel, effectiveRowMode, isDynamicField, isTwoLevel} from '@/common/model/board-config';
+import {type BoardConfig, type FieldRef, type RowConfig, type RowMode, type TimeBucket, UNCATEGORIZED_ROW_KEY, columnLabel, effectiveRowMode, isDynamicField, isTwoLevel} from '@/common/model/board-config';
 import type {YtColor} from '@/common/youtrack/types';
 import {dynamicValues, noValueLabel, shownKeys} from './dynamicValues';
 import type {FieldUniverse} from './fieldUniverse';
 import {type BoardIssue, compareIssues} from './issue';
 import {orderValues} from './sorting';
-import {type TimingFlag, issueTime, placingName, timeMeaning, timingFlags, todayPosition} from './timeline';
+import {type TimingFlag, issueTime, placingName, timeMeaning, timePlacing, timingFlags, todayPosition} from './timeline';
+import {type Sprint, sprintsOf} from './ganttEdit';
+import {type Period, type TimeRowInfo, bucketPeriod} from './timeBuckets';
+import {estimateHours} from './workTime';
 
 export type ParentInfo = {
   id: string;
@@ -135,12 +138,12 @@ export type LayoutRow = {
   issueCount: number;
   /** Time rows: the position (exact time, or the calendar day), or null for the "No <field>" row. */
   time?: number | null;
-  /** Time rows: show the time of day, not only the date. */
-  withTime?: boolean;
   /** Time rows shown as a date: the calendar day to show (a UTC day, like dates are stored on). */
   day?: number;
   /** Time rows: names of the versions or builds at this position. */
   timeNames?: string[];
+  /** Time rows: the row's period and what it holds, for its header. */
+  timeInfo?: TimeRowInfo;
   /** Time rows: index of the rightmost column with a card or box; the row's line ends at its left edge. */
   lastIndex?: number;
 };
@@ -542,9 +545,14 @@ const comparePositions = (a: number | undefined, b: number | undefined, directio
 type TimePlan = {
   /** Row of each issue: its own time, or the time of the top of its box. */
   rowKeyOf: Map<string, string>;
-  /** Each issue's own position. */
+  /** Each issue's own position: the start of the period it falls in. */
   positionOf: Map<string, number | undefined>;
   namesOf: Map<string, string | undefined>;
+  /** The period of each row, by its start. */
+  periods: Map<number, Period>;
+  /** Each issue's estimated work, in working hours. */
+  hoursOf: Map<string, number>;
+  bucket: TimeBucket;
   direction: number;
   compare: (a: BoardIssue, b: BoardIssue) => number;
 };
@@ -567,8 +575,20 @@ const topOfBoxes = (issue: BoardIssue, issuesById: Map<string, BoardIssue>): Boa
   }
 };
 
+/** The sprint (version value) of a name, when rows are per sprint of a version level. */
+const sprintLookup = (config: BoardConfig, universe: FieldUniverse): ((name: string | undefined) => Sprint | undefined) => {
+  const placing = timePlacing(config);
+  const field = config.timeline.bucket === 'sprint' && placing?.kind === 'level' && placing.level.source === 'version' ? placing.level.field : null;
+  if (!field) {
+    return () => undefined;
+  }
+  const all = (universe.byName.get(field.name)?.values ?? []).map(value => value.key);
+  const byName = new Map(sprintsOf(field.name, universe, all).map(sprint => [sprint.key, sprint]));
+  return name => (name === undefined ? undefined : byName.get(name));
+};
+
 /**
- * Rows of the time layout. Each distinct time is a row ("discrete time"); a subtask follows the
+ * Rows of the time layout. Each period (day, week, month, quarter or sprint) is a row ("discrete time"); a subtask follows the
  * top of its boxes, and a box whose parent is not on the board takes its first subtask's time.
  */
 const planTimeRows = (issues: BoardIssue[], config: BoardConfig, universe: FieldUniverse, groupByParent: boolean): TimePlan => {
@@ -576,10 +596,23 @@ const planTimeRows = (issues: BoardIssue[], config: BoardConfig, universe: Field
   const issuesById = new Map(issues.map(i => [i.id, i]));
   const positionOf = new Map<string, number | undefined>();
   const namesOf = new Map<string, string | undefined>();
+  const periods = new Map<number, Period>();
+  const hoursOf = new Map<string, number>();
+  const {bucket} = config.timeline;
+  const sprintOf = sprintLookup(config, universe);
   issues.forEach(issue => {
     const time = issueTime(issue, config, universe);
-    positionOf.set(issue.id, time.at);
+    hoursOf.set(issue.id, estimateHours(issue, config.gantt, universe) ?? 0);
     namesOf.set(issue.id, time.atLabel);
+    if (time.at === undefined) {
+      positionOf.set(issue.id, undefined);
+      return;
+    }
+    // Rows are periods: the issue's placing day falls in one, or in its sprint.
+    const period = bucketPeriod(time.at, bucket, sprintOf(time.atLabel));
+    positionOf.set(issue.id, period.start);
+    const known = periods.get(period.start);
+    periods.set(period.start, known && known.end > period.end ? known : period);
   });
   const keyOf = (position: number | undefined): string => (position === undefined ? NO_TIME_ROW_KEY : timeRowKey(position));
   // Tops whose parent is not on the board share a box: the earliest of them places it.
@@ -608,6 +641,9 @@ const planTimeRows = (issues: BoardIssue[], config: BoardConfig, universe: Field
     rowKeyOf,
     positionOf,
     namesOf,
+    periods,
+    hoursOf,
+    bucket,
     direction,
     compare: (a, b) => comparePositions(positionOf.get(a.id), positionOf.get(b.id), direction) || compareIssues(a, b)
   };
@@ -615,8 +651,11 @@ const planTimeRows = (issues: BoardIssue[], config: BoardConfig, universe: Field
 
 const timeRows = (config: BoardConfig, plan: TimePlan, placedIssues: BoardIssue[]): RowsResult => {
   const names = new Map<string, Set<string>>();
+  const totals = new Map<string, {count: number; hours: number}>();
   placedIssues.forEach(issue => {
     const key = plan.rowKeyOf.get(issue.id) ?? NO_TIME_ROW_KEY;
+    const total = totals.get(key) ?? {count: 0, hours: 0};
+    totals.set(key, {count: total.count + 1, hours: total.hours + (plan.hoursOf.get(issue.id) ?? 0)});
     const set = names.get(key) ?? new Set<string>();
     const name = plan.namesOf.get(issue.id);
     // Only issues placed by their own time name the row; subtasks following their box do not.
@@ -633,6 +672,8 @@ const timeRows = (config: BoardConfig, plan: TimePlan, placedIssues: BoardIssue[
       const time = timeOf(key);
       const label = time === null ? `No ${fieldName}` : '';
       const timeNames = Array.from(names.get(key) ?? []);
+      const period = time === null ? undefined : plan.periods.get(time) ?? {start: time, end: time};
+      const total = totals.get(key) ?? {count: 0, hours: 0};
       return {
         key,
         kind: 'time',
@@ -644,7 +685,8 @@ const timeRows = (config: BoardConfig, plan: TimePlan, placedIssues: BoardIssue[
         innerValue: null,
         time,
         ...(time === null ? {} : {day: time}),
-        timeNames
+        timeNames,
+        ...(period ? {timeInfo: {bucket: plan.bucket, period, names: timeNames, ...total}} : {})
       };
     }),
     outerRows: []
@@ -658,7 +700,8 @@ const todayRowIndex = (rows: RowSkeleton[], plan: TimePlan, now: number): number
     return null;
   }
   const today = todayPosition(now);
-  const index = dated.findIndex(r => (plan.direction > 0 ? (r.time ?? 0) >= today : (r.time ?? 0) <= today));
+  // Oldest first: before the first period not yet over; newest first: before the first one already begun.
+  const index = dated.findIndex(r => (plan.direction > 0 ? (r.timeInfo?.period.end ?? r.time ?? 0) >= today : (r.time ?? 0) <= today));
   return index === -1 ? dated.length : index;
 };
 

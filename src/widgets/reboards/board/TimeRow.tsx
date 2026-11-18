@@ -1,6 +1,7 @@
 import React, {memo} from 'react';
 import type {LayoutColumn, LayoutRow} from '../model/layout';
-import {useDateFormat, useDateTimeFormat} from '../data/useDateFormat';
+import {useDateFormat} from '../data/useDateFormat';
+import {periodLabel, rowStats} from '../model/timeBuckets';
 import {RowBody} from './BoardRow';
 import {useBoardContext} from './BoardContext';
 import {bandTemplate} from './tracks';
@@ -14,16 +15,23 @@ type Props = {
   onToggleGroup: (groupKey: string) => void;
 };
 
-/** "Ends 12 Mar 2026 · 2.0": the row's date (and time), plus the versions or builds placed there. */
-const useRowLabel = (row: LayoutRow, meaning: Props['meaning']): string => {
+/**
+ * The row's period ("Week 47 · 16 Nov – 22 Nov", "S4 · 17 Nov – 28 Nov", "Q4 2026"), a day row
+ * saying whether its issues start or end then ("Ends 12 Mar 2026 · 2.0"), and what the row holds
+ * ("12 issues · 3w 3d of work · 2.3 persons").
+ */
+const useRowLabel = (row: LayoutRow, meaning: Props['meaning']): {label: string; stats: string} => {
   const formatDate = useDateFormat();
-  const formatDateTime = useDateTimeFormat();
-  if (row.time === null || row.time === undefined) {
-    return row.label;
+  const info = row.timeInfo;
+  if (row.time === null || row.time === undefined || !info) {
+    return {label: row.label, stats: ''};
   }
-  const date = row.withTime ? formatDateTime(row.time) : formatDate(row.day ?? row.time);
-  const when = `${meaning === 'start' ? 'Starts' : 'Ends'} ${date}`;
-  return row.timeNames && row.timeNames.length > 0 ? `${when} · ${row.timeNames.join(', ')}` : when;
+  let label = periodLabel(info, formatDate);
+  if (info.bucket === 'day') {
+    const when = `${meaning === 'start' ? 'Starts' : 'Ends'} ${label}`;
+    label = info.names.length > 0 ? `${when} · ${info.names.join(', ')}` : when;
+  }
+  return {label, stats: rowStats(info)};
 };
 
 /**
@@ -34,12 +42,15 @@ const useRowLabel = (row: LayoutRow, meaning: Props['meaning']): string => {
 const TimeRowComponent: React.FC<Props> = ({row, meaning, columns, collapsedGroups, onToggleGroup}) => {
   const ctx = useBoardContext();
   const bandStyle: React.CSSProperties = {gridTemplateColumns: bandTemplate(columns, ctx.collapsedColumns)};
-  const label = useRowLabel(row, meaning);
+  const {label, stats} = useRowLabel(row, meaning);
   return (
     <div className={`board-row board-row_time${row.isUncategorized ? ' board-row_time-none' : ''}`} data-row-key={row.key}>
       <div className="time-row__title" style={bandStyle}>
         {columns.map(column => <span key={column.id} className="time-row__track"/>)}
-        <span className="time-row__label" title={label}>{label}</span>
+        <span className="time-row__label" title={stats ? `${label} · ${stats}` : label}>
+          {label}
+          {stats && <span className="time-row__stats">{` · ${stats}`}</span>}
+        </span>
       </div>
       <RowBody row={row} columns={columns} bandStyle={bandStyle} collapsedGroups={collapsedGroups} onToggleGroup={onToggleGroup}/>
     </div>

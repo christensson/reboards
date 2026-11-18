@@ -361,6 +361,18 @@ describe('computeLayout in the time layout', () => {
   });
   const now = new Date(2026, 4, 10, 9).getTime();
 
+  it('makes a row per week, with the issues it holds and their work', () => {
+    const weekly = {...board(), timeline: {...board().timeline, bucket: 'week' as const}};
+    const issues = [
+      due({id: '1', state: 'Open', due: '2026-05-12'}),
+      due({id: '2', state: 'Done', due: '2026-05-15'}),
+      due({id: '3', state: 'Open', due: '2026-05-04'})
+    ];
+    const layout = computeLayout({issues, config: weekly, universe: dateUniverse, parents: {}, now});
+    expect(layout.rows.map(r => r.timeInfo?.period.start)).toEqual([day('2026-05-04'), day('2026-05-11')]);
+    expect(layout.rows[1].timeInfo).toMatchObject({bucket: 'week', period: {start: day('2026-05-11'), end: day('2026-05-17')}, count: 2});
+  });
+
   it('makes a row per date across columns, sorted, with the issues without a date last', () => {
     const issues = [
       due({id: '1', state: 'Open', due: '2026-05-12'}),
