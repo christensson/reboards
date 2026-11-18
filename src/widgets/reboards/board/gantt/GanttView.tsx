@@ -73,7 +73,7 @@ type Props = {
   onPreset: (zoom: GanttZoom) => void;
   onFit: () => void;
   onToday: () => void;
-  /** The floating chart controls show only zoom and Fit. */
+  /** The floating chart controls hide the time scale. */
   controlsCollapsed: boolean;
   onControlsCollapsed: (collapsed: boolean) => void;
   /** The plan with the planning levels this user shows. */

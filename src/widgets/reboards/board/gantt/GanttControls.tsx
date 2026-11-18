@@ -31,7 +31,7 @@ const POPUP_STYLE: React.CSSProperties = {zIndex: 20};
 
 /**
  * The chart's own controls, floating over its top right corner like map controls: zoom out and
- * in, the time scale, Fit, and show the selected issue (or today). Collapsed, only zoom and Fit stay.
+ * in, the time scale, Fit, and show the selected issue (or today). Collapsed, the time scale hides.
  */
 export const GanttControls: React.FC<Props> = ({pxPerDay, collapsed, onCollapsed, onPreset, onZoomBy, onFit, onLocate, hasSelection, style}) => {
   const tier = tierFor(pxPerDay);
@@ -52,23 +52,22 @@ export const GanttControls: React.FC<Props> = ({pxPerDay, collapsed, onCollapsed
         />
       )}
       <Button className="gantt-controls__button" icon={addIcon} title="Zoom in (+, or Ctrl+scroll)" aria-label="Zoom in" onClick={() => onZoomBy(KEY_ZOOM)}/>
-      <span className="gantt-controls__divider" aria-hidden="true"/>
+      {/* Collapsed, the zoom and view buttons read as one group. */}
+      {!collapsed && <span className="gantt-controls__divider" aria-hidden="true"/>}
       <Button className="gantt-controls__button" icon={fullscreenIcon} title="Zoom to show every issue" aria-label="Fit" onClick={onFit}/>
-      {!collapsed && (
-        <Button
-          className="gantt-controls__button"
-          icon={locateIcon}
-          title={hasSelection ? 'Show the selected issue' : 'Scroll to today (select an issue to show it)'}
-          aria-label={hasSelection ? 'Show the selected issue' : 'Today'}
-          onClick={onLocate}
-        />
-      )}
+      <Button
+        className="gantt-controls__button"
+        icon={locateIcon}
+        title={hasSelection ? 'Show the selected issue' : 'Scroll to today (select an issue to show it)'}
+        aria-label={hasSelection ? 'Show the selected issue' : 'Today'}
+        onClick={onLocate}
+      />
       <span className="gantt-controls__divider" aria-hidden="true"/>
       <Button
         className="gantt-controls__button"
         icon={collapsed ? expandIcon : collapseIcon}
-        title={collapsed ? 'Show the time scale and Today' : 'Hide the time scale and Today'}
-        aria-label={collapsed ? 'Show more chart controls' : 'Show fewer chart controls'}
+        title={collapsed ? 'Show the time scale' : 'Hide the time scale'}
+        aria-label={collapsed ? 'Show the time scale' : 'Hide the time scale'}
         aria-expanded={!collapsed}
         onClick={() => onCollapsed(!collapsed)}
       />

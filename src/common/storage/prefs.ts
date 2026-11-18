@@ -54,7 +54,7 @@ export type UserPrefs = {
   ganttPxPerDay: Record<string, number>;
   /** Gantt layout: ids of the planning levels hidden per board id. */
   ganttHiddenLevels: Record<string, string[]>;
-  /** Gantt layout: the floating chart controls show only zoom and Fit. */
+  /** Gantt layout: the floating chart controls hide the time scale. */
   ganttControlsCollapsed: boolean;
   /** Explicitly chosen page per board id; '' means "All" (field pages). */
   lastPageByBoard: Record<string, string>;
