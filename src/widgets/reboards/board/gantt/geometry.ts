@@ -6,8 +6,6 @@ import {MS_PER_DAY} from '../../model/workTime';
 /** Height of a chart row, and of the detailed plan's bar in it, per card size. */
 export const ROW_HEIGHT: Record<CardSize, number> = {normal: 32, small: 24};
 export const BAR_HEIGHT: Record<CardSize, number> = {normal: 14, small: 10};
-/** Room left above and below the tallest (high-level) band. */
-const BAND_MARGIN = 4;
 /** Narrowest bar drawn, so one-day plans stay visible when zoomed out. */
 const MIN_BAR_WIDTH = 3;
 
@@ -23,16 +21,24 @@ export const spanBox = (scale: GanttScale, span: Span): Box => {
 export const dayEndX = (scale: GanttScale, day: number): number => dayX(scale, day + MS_PER_DAY);
 
 /**
- * Height of planning level `index` of `count`: the high-level band nearly fills the row, each
- * finer level is thinner, and the detailed plan is the bar.
+ * Heights of the planning levels, by how many there are (high-level first): the outer frame nearly
+ * fills the row, a middle level is a smaller dashed frame, the detailed plan is the bar, a little
+ * lower with three levels. Each height leaves an even gap to the row, so every mark sits on whole
+ * pixels, centred.
  */
+const MARKS: Record<CardSize, {frame: number; middle: number; bar: number; barOfThree: number}> = {
+  normal: {frame: 24, middle: 18, bar: 14, barOfThree: 12},
+  small: {frame: 16, middle: 12, bar: 10, barOfThree: 8}
+};
+const LEVEL_HEIGHTS: Record<CardSize, number[][]> = {
+  normal: [[MARKS.normal.bar], [MARKS.normal.frame, MARKS.normal.bar], [MARKS.normal.frame, MARKS.normal.middle, MARKS.normal.barOfThree]],
+  small: [[MARKS.small.bar], [MARKS.small.frame, MARKS.small.bar], [MARKS.small.frame, MARKS.small.middle, MARKS.small.barOfThree]]
+};
+
+/** Height of planning level `index` of `count` (at most three). */
 export const levelHeight = (index: number, count: number, size: CardSize): number => {
-  const bar = BAR_HEIGHT[size];
-  if (count <= 1) {
-    return bar;
-  }
-  const tallest = ROW_HEIGHT[size] - 2 * BAND_MARGIN;
-  return Math.round(tallest - ((tallest - bar) * index) / (count - 1));
+  const heights = LEVEL_HEIGHTS[size][Math.min(Math.max(count, 1), LEVEL_HEIGHTS[size].length) - 1];
+  return heights[Math.min(index, heights.length - 1)];
 };
 
 /** The span that stands for a row in arrows: its detailed plan, else the derived, borrowed or due day. */

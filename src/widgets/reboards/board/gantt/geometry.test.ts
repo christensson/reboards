@@ -26,10 +26,19 @@ describe('relationCurve', () => {
 });
 
 describe('levelHeight', () => {
-  it('makes the high-level band tallest and the detailed plan the bar', () => {
-    expect(levelHeight(0, 2, 'normal')).toBe(24);
-    expect(levelHeight(1, 2, 'normal')).toBe(14);
+  it('makes the high-level frame tallest, a middle frame smaller, and the detailed plan the bar', () => {
+    expect([0, 1].map(index => levelHeight(index, 2, 'normal'))).toEqual([24, 14]);
+    expect([0, 1, 2].map(index => levelHeight(index, 3, 'normal'))).toEqual([24, 18, 12]);
+    expect([0, 1, 2].map(index => levelHeight(index, 3, 'small'))).toEqual([16, 12, 8]);
     expect(levelHeight(0, 1, 'normal')).toBe(14);
+  });
+
+  it('centres every mark on whole pixels', () => {
+    [1, 2, 3].forEach(count => ['normal', 'small'].forEach(size => {
+      const row = size === 'normal' ? 32 : 24;
+      Array.from({length: count}, (_, index) => levelHeight(index, count, size as 'normal' | 'small'))
+        .forEach(height => expect((row - height) % 2).toBe(0));
+    }));
   });
 });
 

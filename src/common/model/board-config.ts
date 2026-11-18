@@ -520,7 +520,7 @@ export const BOARD_LIMITS = {
   /** Query pages, and values shown as field pages. */
   pages: 100,
   /** Planning levels of the Gantt layout. */
-  planLevels: 4
+  planLevels: 3
 } as const;
 
 const tooLong = (value: string, max: number): boolean => value.length > max;

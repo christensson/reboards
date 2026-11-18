@@ -139,7 +139,7 @@ export const GanttEditor: React.FC<Props> = ({universe, gantt, disabled, onChang
           </Button>
         </div>
         <span className="settings-field__help">
-          Order from high-level to detailed, such as a roadmap planned with dates, then sprints. The most detailed plan is the solid bar and sets the persons needed; coarser plans are frames around it. Periods count 8 hour days and 5 day weeks.
+          Up to three levels, from high-level to detailed, such as a roadmap planned with dates, then releases, then sprints. The most detailed plan is the solid bar and sets the persons needed; the high-level plan is a frame around it, and a middle level a dashed frame. Periods count 8 hour days and 5 day weeks.
         </span>
       </div>
       <div className="settings-field">

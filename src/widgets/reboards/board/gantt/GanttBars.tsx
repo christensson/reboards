@@ -57,13 +57,17 @@ const finestIndex = (spans: (Span | null)[]): number => {
   return -1;
 };
 
+/**
+ * The look of a planning level: the outer level a solid frame, a middle one (of three) a dashed
+ * frame, the detailed plan the solid bar. A frame is hatched inside when nothing finer is drawn:
+ * a rough plan rather than a committed one.
+ */
 const levelClass = (index: number, finest: number, count: number): string => {
-  if (index !== finest) {
-    return 'gantt-bar gantt-bar_frame';
+  if (index === count - 1) {
+    return 'gantt-bar gantt-bar_detailed';
   }
-  // Planned at a coarser level only: a hatched frame, a rough plan rather than a committed one.
-  const rough = count > 1 && index < count - 1;
-  return `gantt-bar ${rough ? 'gantt-bar_rough' : 'gantt-bar_detailed'}`;
+  const dashed = index > 0 ? ' gantt-bar_dashed' : '';
+  return `gantt-bar ${index === finest ? 'gantt-bar_rough' : 'gantt-bar_frame'}${dashed}`;
 };
 
 type BarProps = {row: GanttIssueRow; index: number; span: Span; className: string; style: React.CSSProperties; edit?: RowEdit};

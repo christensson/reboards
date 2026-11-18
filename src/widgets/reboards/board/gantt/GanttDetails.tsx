@@ -101,7 +101,13 @@ export const GanttLegend: React.FC<{gantt: GanttConfig}> = ({gantt}) => (
     {gantt.levels.length > 1 && (
       <div className="gantt-legend__item">
         <span className="gantt-legend__swatch gantt-legend__swatch_frame"/>
-        {`Coarser plans (${gantt.levels.slice(0, -1).map(level => level.name).join(', ')}) as frames around`}
+        {gantt.levels[0].name}
+      </div>
+    )}
+    {gantt.levels.length > 2 && (
+      <div className="gantt-legend__item">
+        <span className="gantt-legend__swatch gantt-legend__swatch_frame gantt-legend__swatch_dashed"/>
+        {gantt.levels[1].name}
       </div>
     )}
     {gantt.levels.length > 0 && (

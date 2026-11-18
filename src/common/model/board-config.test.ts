@@ -271,6 +271,7 @@ describe('gantt layout', () => {
       .toEqual(['The due date field must be a date field', 'The estimation field must be a period, integer or float field']);
     expect(messages({...emptyGantt(), levels: Array.from({length: BOARD_LIMITS.planLevels + 1}, (_, i) => ({...dates, id: String(i)}))}))
       .toContain(`A board can have at most ${BOARD_LIMITS.planLevels} planning levels`);
+    expect(BOARD_LIMITS.planLevels).toBe(3);
   });
 });
 

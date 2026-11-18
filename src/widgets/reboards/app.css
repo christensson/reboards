@@ -2230,6 +2230,12 @@ body {
   background-color: transparent;
 }
 
+/* The middle of three levels: the same frame, dashed (also when hatched as a rough plan). */
+.gantt-bar.gantt-bar_dashed,
+.gantt-legend__swatch.gantt-legend__swatch_dashed {
+  border-style: dashed;
+}
+
 /*
  * The detailed plan: solid in the issue color, edged inside (the bar keeps its size) in the same
  * color as the frames, so light colors stand out from the page and from a selected row.
