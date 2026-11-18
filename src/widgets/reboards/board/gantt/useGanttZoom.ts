@@ -23,6 +23,8 @@ const TODAY_AT = 0.3;
 const WHEEL_RATE = 0.002;
 /** Wheel deltas in lines (Firefox) as pixels. */
 const LINE_HEIGHT = 16;
+/** Pixels "Fit" leaves free, so the fitted chart never needs a horizontal scrollbar. */
+const FIT_SLACK = 4;
 /** The + and − keys zoom by this factor. */
 export const KEY_ZOOM = 1.25;
 
@@ -107,7 +109,8 @@ export const useGanttZoom = ({element, scale, listWidth, today, span, pxPerDay, 
     if (fitSignal === 0 || !element) {
       return;
     }
-    const next = fitPxPerDay((span.end - span.start) / MS_PER_DAY + 1, chartWidth(element));
+    // A few pixels to spare: the scale's rounded width and borders must not tip it into scrolling.
+    const next = fitPxPerDay((span.end - span.start) / MS_PER_DAY + 1, chartWidth(element) - FIT_SLACK);
     if (next === latest.current.pxPerDay) {
       element.scrollLeft = 0;
       return;
