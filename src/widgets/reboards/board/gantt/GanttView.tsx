@@ -307,6 +307,9 @@ export const GanttView: React.FC<Props> = props => {
   const height = layout.total;
   const [listWidth, setListWidth] = useState(LIST_WIDTH.initial);
   const [hover, setHover] = useState<Hover | null>(null);
+  /** The row under the pointer, on either side: its label and its chart row highlight together. */
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const hoverClass = (row: GanttRow, base: string) => (row.key === hoverKey ? ` ${base}_hover` : '');
   const [showLegend, setShowLegend] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -462,13 +465,18 @@ export const GanttView: React.FC<Props> = props => {
           </div>
           {showLegend && <GanttLegend gantt={board.gantt}/>}
           <div className="gantt__body">
-            <div className="gantt__list">
+            <div className="gantt__list" onMouseLeave={() => setHoverKey(null)}>
               {rows.map((row, index) => (
                 // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- the treegrid takes the keys
-                <div key={row.key} onClick={event => onRowClick(row, event)} onDoubleClick={() => row.type === 'issue' && onOpen(row.issue.id)}>
+                <div
+                  key={row.key}
+                  onClick={event => onRowClick(row, event)}
+                  onDoubleClick={() => row.type === 'issue' && onOpen(row.issue.id)}
+                  onMouseEnter={() => setHoverKey(row.key)}
+                >
                   <GanttLabel
                     row={row}
-                    className={labelClass(row, index)}
+                    className={`${labelClass(row, index)}${hoverClass(row, 'gantt-label')}`}
                     height={layout.heights[index]}
                     baseUrl={baseUrl}
                     focused={row.key === cursor}
@@ -479,13 +487,20 @@ export const GanttView: React.FC<Props> = props => {
                 </div>
               ))}
             </div>
-            <div className="gantt__chart" style={{width: scale.width, height}} onMouseLeave={() => setHover(null)}>
+            <div
+              className="gantt__chart"
+              style={{width: scale.width, height}}
+              onMouseLeave={() => {
+                setHover(null);
+                setHoverKey(null);
+              }}
+            >
               <GanttGrid scale={scale} height={height} today={today}/>
               {rows.map((row, index) => (
                 <ChartRow
                   key={row.key}
                   row={row}
-                  className={`${rowClass('gantt-row', row, selectedIds, matchIds, cursor)}${startsGroup(row, index) ? ' gantt-group-start' : ''}${rowEditOf(row)?.saving ? ' gantt-row_saving' : ''}`}
+                  className={`${rowClass('gantt-row', row, selectedIds, matchIds, cursor)}${startsGroup(row, index) ? ' gantt-group-start' : ''}${rowEditOf(row)?.saving ? ' gantt-row_saving' : ''}${hoverClass(row, 'gantt-row')}`}
                   style={{top: layout.tops[index], height: layout.heights[index], ...barStyle(row, board.cardColorField?.name ?? null)}}
                   scale={scale}
                   size={size}
@@ -493,7 +508,12 @@ export const GanttView: React.FC<Props> = props => {
                   hoverX={hover?.key === row.key ? hover.chartX : null}
                   onClick={event => onRowClick(row, event)}
                   onOpen={() => row.type === 'issue' && onOpen(row.issue.id)}
-                  onHover={(event, chartX) => row.type === 'issue' && setHover({key: row.key, x: event.clientX, y: event.clientY, chartX})}
+                  onHover={(event, chartX) => {
+                    setHoverKey(row.key);
+                    if (row.type === 'issue') {
+                      setHover({key: row.key, x: event.clientX, y: event.clientY, chartX});
+                    }
+                  }}
                   onDraw={(event, day) => row.type === 'issue' && edit.startDraw(event, row.issue.id, day)}
                 />
               ))}

@@ -2122,8 +2122,8 @@ body {
   pointer-events: none;
 }
 
-.gantt-label:hover,
-.gantt-row:hover {
+.gantt-label_hover,
+.gantt-row_hover {
   background-color: color-mix(in srgb, var(--ring-hover-background-color) 60%, transparent);
 }
 
@@ -2572,7 +2572,7 @@ body {
   content: "";
 }
 
-.gantt-row:hover .gantt-handle,
+.gantt-row_hover .gantt-handle,
 .gantt-handle:focus-visible {
   opacity: 1;
 }
@@ -2602,7 +2602,7 @@ body {
   touch-action: none;
 }
 
-.gantt-row:hover .gantt-due_editable {
+.gantt-row_hover .gantt-due_editable {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring-main-color) 45%, transparent);
 }
 
@@ -2760,7 +2760,7 @@ body {
   stroke-width: 1.5;
 }
 
-.gantt-row:hover .gantt-add,
+.gantt-row_hover .gantt-add,
 .gantt-add:focus-visible {
   opacity: 1;
 }
