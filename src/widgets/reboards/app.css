@@ -2940,3 +2940,39 @@ body {
   border-color: var(--ring-secondary-color);
   background: none;
 }
+
+/*
+ * The chart's own controls, floating over its top right corner, below the time scale: zoom out
+ * and in, the time scale, Fit and Today; collapsed, zoom and Fit.
+ */
+.gantt-controls {
+  position: absolute;
+  z-index: 6;
+  top: calc(var(--gantt-header-h) + 8px);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--ring-popup-border-color, var(--ring-line-color));
+  border-radius: 6px;
+  background-color: var(--ring-popup-background-color, var(--ring-content-background-color));
+  box-shadow: var(--ring-popup-shadow, 0 2px 8px rgba(0, 0, 0, 0.2));
+}
+
+.gantt-controls .gantt-controls__button {
+  height: 24px;
+  padding: 0 4px;
+  line-height: 24px;
+}
+
+.gantt-controls__scale {
+  margin: 0 4px;
+  font-size: var(--ring-font-size-smaller);
+}
+
+.gantt-controls__divider {
+  align-self: stretch;
+  width: 1px;
+  margin: 2px 2px;
+  background-color: var(--ring-line-color);
+}

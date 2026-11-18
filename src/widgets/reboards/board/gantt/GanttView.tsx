@@ -9,7 +9,7 @@ import unfoldLessIcon from '@jetbrains/icons/unfold-less';
 import unfoldMoreIcon from '@jetbrains/icons/unfold-more';
 import {collapseLevel, expandLevel, isExpandable} from '../../model/ganttNav';
 import type {BoardConfig, GanttConfig} from '@/common/model/board-config';
-import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
+import type {CardSize, ConnectorsMode, GanttZoom} from '@/common/storage/prefs';
 import {issueUrl} from '@/common/youtrack/urls';
 import type {FieldUniverse} from '../../model/fieldUniverse';
 import {type GanttIssueRow, type GanttRow, buildGanttRows, ganttEdges, ganttRange, undatedToggleKey} from '../../model/gantt';
@@ -26,6 +26,7 @@ import {GanttDetails, GanttLegend} from './GanttDetails';
 import {GanttGrid, GanttScaleHeader} from './GanttGrid';
 import {ROW_HEIGHT, anchorBox, rowLayout} from './geometry';
 import {GanttConfirm} from './GanttConfirm';
+import {GanttControls} from './GanttControls';
 import {useGanttEdit} from './useGanttEdit';
 import {useGanttKeys} from './useGanttKeys';
 import {useGanttZoom} from './useGanttZoom';
@@ -69,6 +70,12 @@ type Props = {
   todaySignal: number;
   /** Raised to zoom so that every issue shows. */
   fitSignal: number;
+  onPreset: (zoom: GanttZoom) => void;
+  onFit: () => void;
+  onToday: () => void;
+  /** The floating chart controls show only zoom and Fit. */
+  controlsCollapsed: boolean;
+  onControlsCollapsed: (collapsed: boolean) => void;
   /** The plan with the planning levels this user shows. */
   shownGantt: GanttConfig;
   /** Ids of the planning levels this user hides. */
@@ -298,6 +305,9 @@ const ChartRow: React.FC<ChartRowProps> = ({row, className, style, scale, size, 
   );
 };
 
+/** Room between the floating chart controls and the chart's edges. */
+const CONTROLS_MARGIN = 8;
+
 /** Where the drag label sits from the pointer. */
 const DRAG_LABEL_OFFSET = 14;
 
@@ -339,6 +349,7 @@ export const GanttView: React.FC<Props> = props => {
   const {board, issues, universe, baseUrl, pxPerDay, onPxPerDay, size, connectorsMode, collapsed, showUndated, onToggleCollapsed, onToggleUndated} = props;
   const {selectedIds, matchIds, onSelect, onClearSelection, onOpen, registry, todaySignal, fitSignal} = props;
   const {setSelectedIds, keysEnabled, onToggleConnectors, onHelp, navMode, canEdit, onSaveEdits, onSetCollapsed, shownGantt, hiddenLevels, onToggleLevel} = props;
+  const {onPreset, onFit, onToday, controlsCollapsed, onControlsCollapsed} = props;
   const [now] = useState(() => Date.now());
   const today = todayPosition(now);
   const rows = useMemo(
@@ -575,6 +586,17 @@ export const GanttView: React.FC<Props> = props => {
           </div>
         </div>
       </div>
+      <GanttControls
+        pxPerDay={pxPerDay}
+        collapsed={controlsCollapsed}
+        onCollapsed={onControlsCollapsed}
+        onPreset={onPreset}
+        onZoomBy={zoomBy}
+        onFit={onFit}
+        onToday={onToday}
+        // Clear of the vertical scrollbar, whatever its width.
+        style={{right: CONTROLS_MARGIN + (scrollElement ? scrollElement.offsetWidth - scrollElement.clientWidth : 0)}}
+      />
       {hovered && hover && !edit.dragging && <GanttDetails row={hovered} gantt={shownGantt} x={hover.x} y={hover.y}/>}
       {edit.dragLabel && <span className="gantt-drag-label" style={{left: edit.dragLabel.at.x + DRAG_LABEL_OFFSET, top: edit.dragLabel.at.y + DRAG_LABEL_OFFSET}}>{edit.dragLabel.text}</span>}
       {edit.confirm && <GanttConfirm {...edit.confirm}/>}

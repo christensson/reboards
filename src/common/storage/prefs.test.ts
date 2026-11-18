@@ -86,6 +86,7 @@ describe('gantt prefs', () => {
     expect(prefs.ganttCollapsed).toEqual({a: ['1']});
     expect(prefs.ganttShowUndated).toEqual({});
     expect(prefs.ganttHiddenLevels).toEqual({});
+    expect(prefs.ganttControlsCollapsed).toBe(false);
     expect(prefs.rowModeByBoard).toEqual({a: 'gantt'});
   });
 });

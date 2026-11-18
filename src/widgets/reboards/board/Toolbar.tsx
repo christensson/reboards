@@ -10,9 +10,7 @@ import {Directions} from '@jetbrains/ring-ui-built/components/popup/popup.consts
 import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/select/select';
 import Tag from '@jetbrains/ring-ui-built/components/tag/tag';
 import addIcon from '@jetbrains/icons/add';
-import fullscreenIcon from '@jetbrains/icons/fullscreen';
 import linkIcon from '@jetbrains/icons/link';
-import locateIcon from '@jetbrains/icons/locate';
 import moreOptionsIcon from '@jetbrains/icons/more-options';
 import searchIcon from '@jetbrains/icons/search';
 import settingsIcon from '@jetbrains/icons/settings';
@@ -20,8 +18,7 @@ import starEmptyIcon from '@jetbrains/icons/star-empty';
 import starFilledIcon from '@jetbrains/icons/star-filled';
 import updateIcon from '@jetbrains/icons/update';
 import {type BoardConfig, type RelatedBoard, type RowMode, relatedBoardsOf} from '@/common/model/board-config';
-import {type CardSize, type ConnectorsMode, GANTT_ZOOMS, type GanttZoom} from '@/common/storage/prefs';
-import {tierFor} from '../model/ganttScale';
+import type {CardSize, ConnectorsMode} from '@/common/storage/prefs';
 import {orderBoards} from '../model/boardOrder';
 import {TIMING_FLAGS, type TimingFlag, timingFilterKey, timingFlagOfFilter} from '../model/timeline';
 import type {FieldUniverse} from '../model/fieldUniverse';
@@ -142,7 +139,6 @@ const ROW_MODE_BUTTONS: {mode: Exclude<RowMode, 'none'>; label: string; title: s
   {mode: 'gantt', label: 'Gantt', title: 'Plans, due dates and workload on a timeline'}
 ];
 
-const ZOOM_LABELS: Record<GanttZoom, string> = {day: 'Days', week: 'Weeks', month: 'Months', quarter: 'Quarters'};
 
 type MoreMenuProps = {
   density: Density;
@@ -246,38 +242,6 @@ const RowModeSwitch: React.FC<RowModeProps> = ({density, rowModes, rowMode, onRo
   );
 };
 
-type GanttControlsProps = {density: Density; gantt: NonNullable<Props['gantt']>};
-
-const ZOOM_TITLE = 'Zoom freely with Ctrl+scroll (or pinch) over the chart, or + and −.';
-
-/** The Gantt time scale presets (buttons, or a dropdown on a compact toolbar), Fit and Today. */
-const GanttControls: React.FC<GanttControlsProps> = ({density, gantt}) => {
-  const tier = tierFor(gantt.pxPerDay);
-  const items: SelectItem[] = GANTT_ZOOMS.map(zoom => ({key: zoom, label: ZOOM_LABELS[zoom]}));
-  return (
-    <>
-      {folds(density, 'compact') ? (
-        <Select
-          type={Select.Type.INLINE}
-          label="Time scale"
-          data={items}
-          selected={items.find(item => item.key === tier) ?? null}
-          onChange={(item: SelectItem | null) => item && gantt.onPreset(item.key as GanttZoom)}
-        />
-      ) : (
-        <ButtonGroup>
-          {GANTT_ZOOMS.map(zoom => (
-            <Button key={zoom} active={tier === zoom} title={`Time scale in ${ZOOM_LABELS[zoom].toLowerCase()}. ${ZOOM_TITLE}`} onClick={() => gantt.onPreset(zoom)}>
-              {ZOOM_LABELS[zoom]}
-            </Button>
-          ))}
-        </ButtonGroup>
-      )}
-      <Button icon={fullscreenIcon} title="Zoom to show every issue" aria-label="Fit" onClick={gantt.onFit}/>
-      <Button icon={locateIcon} title="Scroll to today" aria-label="Today" onClick={gantt.onToday}/>
-    </>
-  );
-};
 
 type SearchGroupProps = {
   density: Density;
@@ -365,8 +329,6 @@ type Props = {
   rowModes: Exclude<RowMode, 'none'>[];
   rowMode: RowMode;
   onRowMode: (mode: Exclude<RowMode, 'none'>) => void;
-  /** Gantt layout: its zoom presets, "Fit" and "Today"; null in other layouts. */
-  gantt: {pxPerDay: number; onPreset: (zoom: GanttZoom) => void; onFit: () => void; onToday: () => void} | null;
   /** Time layout: timing problems the highlight menu offers. */
   timingFlags: TimingFlag[];
 };
@@ -532,7 +494,6 @@ export const Toolbar: React.FC<Props> = ({
   rowModes,
   rowMode,
   onRowMode,
-  gantt,
   timingFlags
 }) => {
   const boardItems = useMemo(() => buildBoardItems(boards, starredBoards, onToggleStar), [boards, starredBoards, onToggleStar]);
@@ -550,7 +511,7 @@ export const Toolbar: React.FC<Props> = ({
 
   const ref = useRef<HTMLDivElement | null>(null);
   // What changes the toolbar's width other than the window: measure afresh when it does.
-  const content = contentKey([board.id, rowModes.join(), rowMode, Boolean(gantt), pages?.length, page, sprint, quickFilter]);
+  const content = contentKey([board.id, rowModes.join(), rowMode, pages?.length, page, sprint, quickFilter]);
   const density = useToolbarDensity(ref, content);
   const narrow = folds(density, 'narrow');
 
@@ -572,11 +533,6 @@ export const Toolbar: React.FC<Props> = ({
       {rowModes.length > 1 && (
         <div className="toolbar__group">
           <RowModeSwitch density={density} rowModes={rowModes} rowMode={rowMode} onRowMode={onRowMode}/>
-        </div>
-      )}
-      {gantt && (
-        <div className="toolbar__group">
-          <GanttControls density={density} gantt={gantt}/>
         </div>
       )}
       {pages && (

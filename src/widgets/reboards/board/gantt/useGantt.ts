@@ -65,18 +65,12 @@ export const useGantt = (board: BoardConfig, rowMode: RowMode, prefs: UserPrefs,
       };
     });
   }, [issues, shownGantt, board.id, universe, updatePrefs]);
-  const toolbar = useMemo(
-    () => (active ? {
-      pxPerDay,
-      onPreset: (zoom: GanttZoom) => setPxPerDay(PX_PER_DAY[zoom]),
-      onFit: () => setFitSignal(value => value + 1),
-      onToday: () => setTodaySignal(value => value + 1)
-    } : null),
-    [active, pxPerDay, setPxPerDay]
-  );
+  const onPreset = useCallback((zoom: GanttZoom) => setPxPerDay(PX_PER_DAY[zoom]), [setPxPerDay]);
+  const onFit = useCallback(() => setFitSignal(value => value + 1), []);
+  const onToday = useCallback(() => setTodaySignal(value => value + 1), []);
+  const onControlsCollapsed = useCallback((fewer: boolean) => updatePrefs({ganttControlsCollapsed: fewer}), [updatePrefs]);
   return {
     active,
-    toolbar,
     reveal,
     view: {
       shownGantt,
@@ -84,6 +78,11 @@ export const useGantt = (board: BoardConfig, rowMode: RowMode, prefs: UserPrefs,
       onToggleLevel: toggleLevel,
       pxPerDay,
       onPxPerDay: setPxPerDay,
+      onPreset,
+      onFit,
+      onToday,
+      controlsCollapsed: prefs.ganttControlsCollapsed,
+      onControlsCollapsed,
       collapsed,
       showUndated,
       todaySignal,

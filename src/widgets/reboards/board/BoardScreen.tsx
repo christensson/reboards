@@ -1282,7 +1282,6 @@ export const BoardScreen: React.FC<Props> = ({
           }
           updatePrefs(prev => ({rowModeByBoard: {...prev.rowModeByBoard, [board.id]: mode}}));
         }}
-        gantt={gantt.toolbar}
         timingFlags={layout.rowMode === 'time' && board.timeline.highlights ? ALL_TIMING_FLAGS : NO_FLAGS}
         onRefresh={() => {
           reference.reload();
