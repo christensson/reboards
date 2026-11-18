@@ -98,8 +98,8 @@ export const GanttLegend: React.FC<{gantt: GanttConfig}> = ({gantt}) => (
   <div className="gantt-legend" role="note">
     {gantt.levels.length > 1 && (
       <div className="gantt-legend__item">
-        <span className="gantt-legend__swatch gantt-legend__swatch_band"/>
-        {`Coarser plans (${gantt.levels.slice(0, -1).map(level => level.name).join(', ')}) as bands behind`}
+        <span className="gantt-legend__swatch gantt-legend__swatch_frame"/>
+        {`Coarser plans (${gantt.levels.slice(0, -1).map(level => level.name).join(', ')}) as frames around`}
       </div>
     )}
     {gantt.levels.length > 0 && (
@@ -112,6 +112,7 @@ export const GanttLegend: React.FC<{gantt: GanttConfig}> = ({gantt}) => (
       <div className="gantt-legend__item"><span className="gantt-legend__swatch gantt-legend__swatch_rough"/>Planned at a coarser level only</div>
     )}
     <div className="gantt-legend__item"><span className="gantt-legend__swatch gantt-legend__swatch_derived"/>Spanned by its subtasks</div>
+    <div className="gantt-legend__item"><span className="gantt-legend__swatch gantt-legend__swatch_outside"/>Planned outside its parent’s plan</div>
     {gantt.estimationField && (
       <div className="gantt-legend__item"><span className="gantt-legend__swatch gantt-legend__swatch_borrowed"/>Estimate only, in its parent’s plan</div>
     )}

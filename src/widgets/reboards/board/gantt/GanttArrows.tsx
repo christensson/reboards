@@ -3,7 +3,7 @@ import type {CardSize} from '@/common/storage/prefs';
 import type {Edge} from '../../model/connectors';
 import type {GanttIssueRow, GanttRow} from '../../model/gantt';
 import type {GanttScale} from '../../model/ganttScale';
-import {BAR_HEIGHT, ROW_HEIGHT, anchorBox, relationCurve} from './geometry';
+import {ROW_HEIGHT, anchorBox, markBottom, relationCurve} from './geometry';
 
 type Props = {
   rows: GanttRow[];
@@ -42,7 +42,7 @@ const treeLine = (parent: Placed, child: Placed, scale: GanttScale, size: CardSi
   }
   const x = treeX(from);
   const dot = {x: treeX(to), y: centerY(child.index, size)};
-  const top = centerY(parent.index, size) + BAR_HEIGHT[size] / 2;
+  const top = parent.index * ROW_HEIGHT[size] + markBottom(parent.row, size);
   return {key: child.row.issue.id, d: `M ${x} ${top} V ${dot.y} H ${dot.x}`, dot};
 };
 

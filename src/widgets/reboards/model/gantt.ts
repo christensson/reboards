@@ -149,6 +149,8 @@ export type GanttIssueRow = {
   /** Planned to start before, or end after, its parent's plan. */
   early: boolean;
   late: boolean;
+  /** The parent's own detailed plan, when the issue is planned early or late against it. */
+  parentSpan?: Span;
 };
 
 /** The "N without time" toggle under a parent, or the group of top-level issues without time. */
@@ -232,16 +234,19 @@ const compareByTime = (a: Placed, b: Placed): number =>
 type RowContext = {gantt: GanttConfig; collapsed: Set<string>; today: number};
 
 /** Facts about where an issue stands against its own plan, due date and parent. */
-const timingOf = (node: Node, parent: Node | null, today: number): Pick<GanttIssueRow, 'overdue' | 'overrun' | 'early' | 'late'> => {
+const timingOf = (node: Node, parent: Node | null, today: number): Pick<GanttIssueRow, 'overdue' | 'overrun' | 'early' | 'late' | 'parentSpan'> => {
   const due = node.schedule.due;
   const planEnd = (node.own ?? node.derived)?.end;
   const theirs = parent?.own;
   const own = node.own;
+  const early = Boolean(theirs && own && own.start < theirs.start);
+  const late = Boolean(theirs && own && own.end > theirs.end);
   return {
     overdue: due !== undefined && !node.issue.resolved && due < today,
     overrun: due !== undefined && planEnd !== undefined && planEnd > due,
-    early: Boolean(theirs && own && own.start < theirs.start),
-    late: Boolean(theirs && own && own.end > theirs.end)
+    early,
+    late,
+    ...((early || late) && theirs ? {parentSpan: theirs} : {})
   };
 };
 

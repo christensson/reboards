@@ -1,5 +1,7 @@
 import {describe, expect, it} from 'vitest';
-import {levelHeight, relationCurve} from './geometry';
+import type {GanttIssueRow} from '../../model/gantt';
+import type {BoardIssue} from '../../model/issue';
+import {levelHeight, markBottom, relationCurve} from './geometry';
 
 const numbers = (path: string): number[] => path.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
 
@@ -28,5 +30,22 @@ describe('levelHeight', () => {
     expect(levelHeight(0, 2, 'normal')).toBe(24);
     expect(levelHeight(1, 2, 'normal')).toBe(14);
     expect(levelHeight(0, 1, 'normal')).toBe(14);
+  });
+});
+
+describe('markBottom', () => {
+  const span = {start: 0, end: 1};
+  const row = (extra: Partial<GanttIssueRow>): GanttIssueRow => ({
+    type: 'issue', key: '1', issue: {id: '1'} as BoardIssue, depth: 0, parentId: null, schedule: {spans: [null, null]}, timed: true,
+    childCount: 1, undatedChildIds: [], collapsed: false, workload: {pastEnd: false}, overdue: false, overrun: false, early: false, late: false, ...extra
+  });
+
+  it('is the bottom of the tallest mark: a coarse frame, the bar, a derived span or the due diamond', () => {
+    // Row 32 px high, centre 16: the coarse frame is 24 px, the bar 14 px, the diamond 14 px.
+    expect(markBottom(row({schedule: {spans: [span, null]}}), 'normal')).toBe(28);
+    expect(markBottom(row({schedule: {spans: [span, span]}}), 'normal')).toBe(28);
+    expect(markBottom(row({schedule: {spans: [null, span]}}), 'normal')).toBe(23);
+    expect(markBottom(row({derived: span}), 'normal')).toBe(23);
+    expect(markBottom(row({schedule: {spans: [null, null], due: 0}}), 'normal')).toBe(23);
   });
 });

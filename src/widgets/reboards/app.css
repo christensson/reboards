@@ -2211,21 +2211,45 @@ body {
 }
 
 /* A coarser plan behind the detailed bar: a faint band with its ends marked. */
-.gantt-bar_band {
-  border-right: 2px solid color-mix(in srgb, var(--bar-color) 55%, transparent);
-  border-left: 2px solid color-mix(in srgb, var(--bar-color) 55%, transparent);
-  background-color: color-mix(in srgb, var(--bar-color) 16%, transparent);
+/*
+ * Coarser plans: a frame around the finer bar, in the issue color mixed toward the text color:
+ * darker in the light theme, lighter in the dark one, so it shows on any issue color and on the
+ * selected row's background. Defined per row, where --bar-color is set.
+ */
+.gantt-row {
+  --frame-color: color-mix(in srgb, var(--bar-color) 60%, var(--ring-text-color));
 }
 
+.gantt-bar_frame {
+  border: 2px solid var(--frame-color);
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+/*
+ * The detailed plan: solid in the issue color, edged inside (the bar keeps its size) in the same
+ * color as the frames, so light colors stand out from the page and from a selected row.
+ */
 .gantt-bar_detailed {
   background-color: var(--bar-color);
-  box-shadow: 0 1px 2px var(--ring-popup-shadow-color, rgba(0, 0, 0, 0.12));
+  box-shadow: inset 0 0 0 1px var(--frame-color), 0 1px 2px var(--ring-popup-shadow-color, rgba(0, 0, 0, 0.12));
 }
 
 /* Planned at a coarser level only: a rough plan, outlined rather than solid. */
+/* Planned at a coarser level only: the frame, hatched with the issue color inside. */
 .gantt-bar_rough {
-  border: 2px solid var(--bar-color);
-  background-color: color-mix(in srgb, var(--bar-color) 30%, transparent);
+  border: 2px solid var(--frame-color);
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--bar-color) 40%, transparent) 0 3px,
+    transparent 3px 7px
+  );
+}
+
+.gantt-bar_frame .gantt-handle::after,
+.gantt-bar_rough .gantt-handle::after {
+  box-shadow: 0 0 0 1px var(--frame-color), 0 1px 2px var(--ring-popup-shadow-color, rgba(0, 0, 0, 0.2));
 }
 
 /* Spanned by the subtasks: a shadow of the parent's missing plan. */
@@ -2244,9 +2268,24 @@ body {
   background-color: color-mix(in srgb, var(--bar-color) 12%, transparent);
 }
 
-.gantt-bar_outside {
-  outline: 2px solid var(--ring-warning-color, #f2b200);
-  outline-offset: 1px;
+/* Days planned outside the parent's plan: a warning hatch on just those days of the bar. */
+.gantt-outside {
+  position: absolute;
+  box-sizing: border-box;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--ring-warning-color, #f2b200) 0 3px,
+    color-mix(in srgb, var(--ring-warning-color, #f2b200) 35%, transparent) 3px 6px
+  );
+  pointer-events: none;
+}
+
+.gantt-outside_early {
+  border-radius: 3px 0 0 3px;
+}
+
+.gantt-outside_late {
+  border-radius: 0 3px 3px 0;
 }
 
 .gantt-overrun {
@@ -2425,20 +2464,22 @@ body {
   border-radius: 3px;
 }
 
-.gantt-legend__swatch_band {
+.gantt-legend__swatch_frame {
   height: 16px;
-  border-right: 2px solid color-mix(in srgb, var(--ring-main-color) 55%, transparent);
-  border-left: 2px solid color-mix(in srgb, var(--ring-main-color) 55%, transparent);
-  background-color: color-mix(in srgb, var(--ring-main-color) 16%, transparent);
+  border: 2px solid color-mix(in srgb, var(--ring-main-color) 60%, var(--ring-text-color));
+  border-radius: 4px;
 }
 
 .gantt-legend__swatch_detailed {
   background-color: var(--ring-main-color);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ring-main-color) 60%, var(--ring-text-color));
 }
 
 .gantt-legend__swatch_rough {
-  border: 2px solid var(--ring-main-color);
-  background-color: color-mix(in srgb, var(--ring-main-color) 30%, transparent);
+  height: 16px;
+  border: 2px solid color-mix(in srgb, var(--ring-main-color) 60%, var(--ring-text-color));
+  border-radius: 4px;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--ring-main-color) 40%, transparent) 0 3px, transparent 3px 7px);
 }
 
 .gantt-legend__swatch_derived {
@@ -2725,4 +2766,12 @@ body {
 
 .gantt_dragging .gantt-add {
   opacity: 0;
+}
+
+.gantt-legend__swatch_outside {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--ring-warning-color, #f2b200) 0 3px,
+    color-mix(in srgb, var(--ring-warning-color, #f2b200) 35%, transparent) 3px 6px
+  );
 }

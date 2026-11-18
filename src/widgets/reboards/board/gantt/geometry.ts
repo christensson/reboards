@@ -81,3 +81,21 @@ export const relationCurve = (from: Point, to: Point): RelationCurve => {
     }
   };
 };
+
+/** Half the height of the due diamond, a square turned 45°. */
+const DUE_HALF: Record<CardSize, number> = {normal: 7, small: 6};
+
+/**
+ * The y, within its row, of the bottom of the tallest mark a row draws: its coarsest plan's
+ * frame, its bar, the span derived from or borrowed for it, or its due diamond. Tree lines to
+ * subtasks start there, so they never cross the parent's own marks.
+ */
+export const markBottom = (row: GanttIssueRow, size: CardSize): number => {
+  const {spans} = row.schedule;
+  const heights = [
+    ...spans.flatMap((span, index) => (span ? [levelHeight(index, spans.length, size)] : [])),
+    ...(row.derived || row.borrowed ? [BAR_HEIGHT[size]] : []),
+    ...(row.schedule.due === undefined ? [] : [2 * DUE_HALF[size]])
+  ];
+  return ROW_HEIGHT[size] / 2 + (heights.length > 0 ? Math.max(...heights) : BAR_HEIGHT[size]) / 2;
+};

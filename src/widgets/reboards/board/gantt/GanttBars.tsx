@@ -6,6 +6,7 @@ import type {CardSize} from '@/common/storage/prefs';
 import type {GanttIssueRow, Span} from '../../model/gantt';
 import type {DragHandle, DragTarget} from '../../model/ganttEdit';
 import type {GanttScale} from '../../model/ganttScale';
+import {MS_PER_DAY} from '../../model/workTime';
 import {BAR_HEIGHT, ROW_HEIGHT, dayEndX, levelHeight, spanBox} from './geometry';
 
 /** What can be dragged on a row, and the drag on it, if any. */
@@ -46,7 +47,7 @@ const PERSONS_DECIMALS = 1;
 
 const vertical = (height: number, size: CardSize): React.CSSProperties => ({top: (ROW_HEIGHT[size] - height) / 2, height});
 
-/** The finest level with a plan; it is the solid bar, coarser ones are bands behind it. */
+/** The finest level with a plan; it is the solid bar, coarser ones are frames around it. */
 const finestIndex = (spans: (Span | null)[]): number => {
   for (let index = spans.length - 1; index >= 0; index--) {
     if (spans[index]) {
@@ -56,14 +57,13 @@ const finestIndex = (spans: (Span | null)[]): number => {
   return -1;
 };
 
-const levelClass = (index: number, finest: number, count: number, row: GanttIssueRow): string => {
+const levelClass = (index: number, finest: number, count: number): string => {
   if (index !== finest) {
-    return 'gantt-bar gantt-bar_band';
+    return 'gantt-bar gantt-bar_frame';
   }
-  // Planned at a coarser level only: an outlined band, a rough plan rather than a committed one.
+  // Planned at a coarser level only: a hatched frame, a rough plan rather than a committed one.
   const rough = count > 1 && index < count - 1;
-  const outside = row.early || row.late ? ' gantt-bar_outside' : '';
-  return `gantt-bar ${rough ? 'gantt-bar_rough' : 'gantt-bar_detailed'}${outside}`;
+  return `gantt-bar ${rough ? 'gantt-bar_rough' : 'gantt-bar_detailed'}`;
 };
 
 type BarProps = {row: GanttIssueRow; index: number; span: Span; className: string; style: React.CSSProperties; edit?: RowEdit};
@@ -111,7 +111,7 @@ const PlanBars: React.FC<Props> = ({row, scale, size, edit}) => {
             row={row}
             index={index}
             span={span}
-            className={levelClass(index, finest, spans.length, row)}
+            className={levelClass(index, finest, spans.length)}
             style={{left: box.left, width: box.width, ...vertical(height, size)}}
             edit={edit}
           />
@@ -190,6 +190,33 @@ const Due: React.FC<Props & {due: number}> = ({row, scale, size, edit, due}) => 
   );
 };
 
+/**
+ * The days of the detailed plan outside its parent's plan: before the parent starts or after it
+ * ends, hatched in the warning color on the bar itself.
+ */
+const Outside: React.FC<Props> = ({row, scale, size}) => {
+  const {spans} = row.schedule;
+  const finest = finestIndex(spans);
+  const own = spans[finest];
+  const theirs = row.parentSpan;
+  if (!own || !theirs) {
+    return null;
+  }
+  const height = levelHeight(finest, spans.length, size);
+  const parts: {key: string; span: Span; title: string}[] = [
+    ...(row.early ? [{key: 'early', span: {start: own.start, end: Math.min(own.end, theirs.start - MS_PER_DAY)}, title: 'Starts before its parent’s plan'}] : []),
+    ...(row.late ? [{key: 'late', span: {start: Math.max(own.start, theirs.end + MS_PER_DAY), end: own.end}, title: 'Ends after its parent’s plan'}] : [])
+  ];
+  return (
+    <>
+      {parts.filter(part => part.span.end >= part.span.start).map(part => {
+        const box = spanBox(scale, part.span);
+        return <div key={part.key} className={`gantt-outside gantt-outside_${part.key}`} title={part.title} style={{left: box.left, width: box.width, ...vertical(height, size)}}/>;
+      })}
+    </>
+  );
+};
+
 /** The part of the plan past the due date. */
 const Overrun: React.FC<Props & {end: number}> = ({row, scale, size, end}) => {
   const due = row.schedule.due;
@@ -223,7 +250,7 @@ const Persons: React.FC<{row: GanttIssueRow; left: number; size: CardSize}> = ({
 };
 
 /**
- * The marks of one chart row: the planning levels (bands behind the detailed bar), the span
+ * The marks of one chart row: the planning levels (frames around the detailed bar), the span
  * derived from subtasks or borrowed from the parent, the due diamond with any overrun past it,
  * and the persons needed.
  */
@@ -241,6 +268,7 @@ const GanttBarsComponent: React.FC<Props> = ({row, scale, size, edit}) => {
       {derived && <div className="gantt-bar gantt-bar_derived" style={{left: derived.left, width: derived.width, ...vertical(BAR_HEIGHT[size], size)}}/>}
       {borrowed && row.borrowed && <Borrowed row={row} span={row.borrowed} style={{left: borrowed.left, width: borrowed.width, ...vertical(BAR_HEIGHT[size], size)}} edit={edit}/>}
       <PlanBars row={row} scale={scale} size={size} edit={edit}/>
+      <Outside row={row} scale={scale} size={size}/>
       {planEnd !== undefined && <Overrun row={row} scale={scale} size={size} end={planEnd}/>}
       {due !== undefined && <Due row={row} scale={scale} size={size} edit={edit} due={due}/>}
       <Ghost row={row} scale={scale} size={size} edit={edit}/>
