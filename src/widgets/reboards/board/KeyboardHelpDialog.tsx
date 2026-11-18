@@ -39,7 +39,7 @@ const GANTT_SHORTCUTS: Shortcut[] = [
   {keys: [['↑'], ['↓']], text: 'Select the previous or next issue'},
   {keys: [['←']], text: 'Collapse the selected issue, else select its parent'},
   {keys: [['→']], text: 'Expand the selected issue, else select its first subtask'},
-  {keys: [['Enter']], text: 'Open the selected issue in a new tab; on a "without time" row, show or hide those issues'},
+  {keys: [['Enter']], text: 'Open the selected issue in a new tab; on the "without time" row (also Space), show or hide those issues'},
   {keys: [['P']], text: 'Select the parent of the selected issue'},
   {keys: [['Shift', 'P']], text: 'Go back to the subtask you came from, else to the first subtask'},
   {keys: [['S']], text: 'Go to the next top-level issue'},
@@ -47,6 +47,7 @@ const GANTT_SHORTCUTS: Shortcut[] = [
   {keys: [['R']], text: 'Show or hide relation arrows'},
   {keys: [['C'], ['Shift', 'C']], text: 'Collapse the deepest expanded subtask level / expand the shallowest collapsed one'},
   {keys: [['+'], ['−']], text: 'Zoom the time scale in or out; Ctrl+scroll or a pinch over the chart zooms too'},
+  {keys: [['Enter'], ['Esc']], text: 'Apply or cancel a change made by dragging; Esc also cancels a drag in progress'},
   {keys: [['/']], text: 'Find issues by ID or summary; Enter or ↓ goes to the next match, ↑ to the previous, Ctrl+Enter selects'},
   {keys: [['Esc']], text: 'Clear the selection'},
   {keys: [['?']], text: 'Show these shortcuts'}
@@ -66,7 +67,7 @@ const ComboKeys: React.FC<{combo: Combo}> = ({combo}) => (
   </span>
 );
 
-/** The board's keyboard shortcuts (or the Gantt layout's), opened with "?" or from the Show menu. */
+/** The board's keyboard shortcuts (or the Gantt layout's), opened with "?" or from the ⋯ menu. */
 export const KeyboardHelpDialog: React.FC<Props> = ({show, gantt = false, onClose}) => (
   <Dialog show={show} onCloseAttempt={onClose} label="Keyboard shortcuts" trapFocus>
     <Header>Keyboard shortcuts</Header>

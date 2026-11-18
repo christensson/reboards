@@ -10,11 +10,11 @@ It requires YouTrack 2026.2 or later.
 - **Hierarchy**: subtasks grouped in collapsible boxes under their parent, with progress.
 - **Swimlanes**: one or two levels, such as Team → Assignee.
 - **Time**: rows per sprint, day, week, month or quarter, placed by a planning level or the due date, with
-  the work each row holds, due dates on cards and overdue and late work highlighted.
-- **Gantt**: plans at several levels (such as roadmap dates, then sprints), due dates and the persons needed
-  to finish the estimate in time, on a zoomable timeline with subtask trees and relation arrows; drag bars,
-  their edges or due dates to reschedule, draw on an unscheduled issue's row to plan it, or add a
-  missing planning level with the + after a bar, with a confirmation before saving.
+  the issue count, work and persons needed per row, due dates on cards and overdue and late work highlighted.
+- **Gantt**: up to three planning levels (such as roadmap dates, then sprints), due dates and the persons
+  needed to finish the estimate in time, with subtask trees and relation arrows on a zoomable timeline.
+  Drag bars, their edges or due dates to reschedule, draw on an unscheduled issue's row to plan it, or add a
+  missing level with the + after a bar; every change is confirmed before it is saved.
 - Keyboard navigation and moves, linked agile boards and sprints, personal or shared boards, and read-only
   MCP tools for AI assistants.
 
@@ -43,12 +43,23 @@ A stored board (`BoardConfig`) holds:
 - identity and access: id, name, owner login and stable owner id (Hub id), shared flag, projects;
 - issue selection: query, linked agile board, sprint field and options;
 - layout: column field, columns, combined and ignored values, one or two swimlane levels with their sort
-  order (including the custom drag-sorted order), time layout, Gantt layout (planning levels, due date and
-  estimation fields) and default row mode;
+  order (including the custom drag-sorted order), the Time & planning setup and the default layout
+  (swimlanes, time or Gantt). Time & planning is stored in two parts: `gantt` holds up to three planning
+  levels (from start and end dates, a date and a period, a single date, a version or a build field), the due
+  date field, and the estimation field with its unit and meaning; `timeline` holds whether it is on, what
+  places the time rows (`rowsBy`: a level id or the due date), which end of the plan places them, the row
+  size (sprint, day, week, month or quarter), the sort order, the highlights and the assignee field;
 - card fields, card color field, connector link types and related boards;
 - `createdAt`, `updatedAt` and a `version` that the server raises on every write;
 - `movedAt` only on the copy a move leaves at its source (see below). A tombstone (`id`, `version`, `at`)
   records a deletion for 30 days.
+
+Boards saved by 1.3.0 have a single time field (`timeline.field`, `periodField`, `dateRole`).
+`normalizeBoardConfig` turns it into a planning level that places the time rows whenever such a board is read.
+For browsers still running 1.3.0, every board the backend returns also carries the time rows in those old
+keys (`withLegacyTimeline`). When such a browser saves, `keepOmittedSettings` (`store.ts`) keeps the stored
+plan and time rows unless it changed its time field, which is then converted onto the stored plan, and keeps
+a Gantt default layout it cannot represent. Concurrent edits merge the plan and the time rows as one group.
 
 Only the backend routes under `src/backend/router/global/boards/` read or write boards, and they check access
 first (`store.ts` and `access.ts`). Each owner may have at most 100 boards, and each property may hold at most
@@ -73,12 +84,15 @@ under the key `reboards.prefs.v1`. It goes in the host's `host.storage` app stor
 and in `window.localStorage` otherwise (`src/common/storage/prefs.ts`). It holds the last board, the chosen
 sprint per board, view settings per board (card size, connector mode, "+" links, grouping by parent),
 starred boards, collapsed rows, columns, swimlanes and subtask groups, swapped swimlane levels, the columns
-picked for dynamic column fields, the chosen swimlanes, time or Gantt layout, and per board the Gantt time
-  scale, collapsed Gantt parents and listed issues without time. Nothing here is shared, and it does
-not follow the user to another browser.
+picked for dynamic column fields, the chosen layout (swimlanes, time or Gantt), the last and starred pages
+per board, and for the Gantt layout per board the zoom (day width), collapsed parents, the issues without
+time that are listed and the hidden planning levels, plus whether its floating controls are collapsed.
+Nothing here is shared, and it does not follow the user to another browser.
 
-**Issues.** Dragging a card, moving it with the keyboard or creating a link changes the issue itself through
-the YouTrack REST API: custom field values, and subtask or other issue links. These requests run with the
+**Issues.** Dragging a card, moving it with the keyboard, creating a link, or rescheduling in the Gantt chart
+(dragging a bar, its edges or a due date, drawing a plan, adding a level, each after a confirmation) changes
+the issue itself through the YouTrack REST API: custom field values (dates, periods, versions, builds and any
+column or row field), and subtask or other issue links. These requests run with the
 user's own permissions. The "+" in a cell opens YouTrack's new-issue page with the cell's values set, so
 YouTrack creates the issue. ReBoards keeps no other copy of issue data.
 
@@ -197,10 +211,12 @@ src/
                        FieldSelect, ProjectsSelect, ValuePill
   widgets/reboards/
     model/             pure board logic: issue normalization, field universe, layout, grouping, sorting,
-                       connectors, search, drag/drop planning (all unit-tested with vitest)
+                       connectors, search, drag/drop planning, time rows and buckets, Gantt plans,
+                       scale, navigation and edits, working time (all unit-tested with vitest)
     data/              hooks that load boards, reference data and issues
     hooks/             UI hooks such as per-user preferences
     board/             board screen, toolbar, rows, cells, cards, group boxes, connectors overlay
+      gantt/           the Gantt layout: chart, bars, arrows, floating controls, drag edits and keys
     settings/          board settings screen and editors
 ```
 

@@ -1,5 +1,5 @@
 import {type ToolContext, fieldInfo, findBoard, lanesFromValues, layoutsOf, pagesOf, sprintsOf} from '@/backend/boards/tools';
-import {type BoardConfig, type RowConfig, columnLabel, isTimeConfigured, ownSprintField, placingFieldNames, rowsByName} from '@/common/model/board-config';
+import {type BoardConfig, ROWS_BY_DUE, type RowConfig, columnLabel, isTimeConfigured, ownSprintField, placingFieldNames, rowsByName} from '@/common/model/board-config';
 
 const columnsOf = (board: BoardConfig) => {
   const field = board.columnField;
@@ -58,7 +58,8 @@ const howToMove = (board: BoardConfig): string[] => {
   }
   const placing = placingFieldNames(board);
   if (placing.length > 0) {
-    steps.push(`In the time layout, rows follow ${rowsByName(board)} (${placing.join(', ')}); set its ${board.timeline.position} to move an issue to another time row.`);
+    const what = board.timeline.rowsBy === ROWS_BY_DUE ? 'it' : `its ${board.timeline.position}`;
+    steps.push(`In the time layout, rows follow ${rowsByName(board)} (${placing.join(', ')}); set ${what} to move an issue to another time row.`);
   }
   return steps;
 };

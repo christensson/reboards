@@ -42,7 +42,7 @@ const isPressable = (element: Element | null): boolean => element instanceof HTM
  * - S and Shift+S go to the next and previous top-level issue;
  * - R shows or hides relations, + and − zoom, C and Shift+C collapse or expand one level,
  *   Escape clears the selection, ? lists the keys.
- * Ctrl+arrows (moving cards on the board) do nothing: the chart is read-only.
+ * Ctrl+arrows (moving cards on the board) do nothing: the chart is rescheduled by dragging, not by keys.
  */
 export const useGanttKeys = (options: Options): void => {
   const latest = useRef(options);
