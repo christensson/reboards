@@ -66,7 +66,7 @@ const pickerChoices = (config: BoardConfig, fromRow: LayoutRow, toRow: LayoutRow
 
 /** Moving between rows of the time layout sets the time field to the target row's time. */
 const timeMoveChanges = (config: BoardConfig, fromRow: LayoutRow | undefined, toRow: LayoutRow | undefined): FieldChange[] => {
-  const change = fromRow && toRow ? timeRowChange(config.timeline, fromRow, toRow) : null;
+  const change = fromRow && toRow ? timeRowChange(config, fromRow, toRow) : null;
   return change ? [change] : [];
 };
 

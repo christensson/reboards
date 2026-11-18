@@ -61,10 +61,16 @@ export const rowConfigSchema = z.object({
 });
 
 export const timelineConfigSchema = z.object({
-  field: fieldRefSchema.nullable(),
-  periodField: fieldRefSchema.nullable(),
-  dateRole: z.union([z.literal("start"), z.literal("end")]),
+  enabled: z.boolean(),
+  rowsBy: z.string(),
   position: z.union([z.literal("start"), z.literal("end")]),
+  bucket: z.union([
+    z.literal("sprint"),
+    z.literal("day"),
+    z.literal("week"),
+    z.literal("month"),
+    z.literal("quarter"),
+  ]),
   sort: z.union([z.literal("asc"), z.literal("desc")]),
   highlights: z.boolean(),
   assigneeField: fieldRefSchema.nullable(),
@@ -95,6 +101,8 @@ export const planLevelSchema = z.object({
     z.literal("version"),
     z.literal("dates"),
     z.literal("date-period"),
+    z.literal("date"),
+    z.literal("build"),
   ]),
   field: fieldRefSchema.nullable(),
   endField: fieldRefSchema.nullable(),

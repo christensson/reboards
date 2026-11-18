@@ -1,4 +1,4 @@
-import {type BoardConfig, columnLabel} from './board-config';
+import {type BoardConfig, columnLabel, rowsByName} from './board-config';
 
 /**
  * Three-way merge of board settings, used when someone else saved a board
@@ -98,7 +98,9 @@ const summaries: Record<MergeGroup, (board: BoardConfig) => string> = {
   cardColorField: board => board.cardColorField?.name ?? 'None',
   linkTypes: board => list(board.linkTypes),
   // Only ids are stored here; the count tells the two sides apart.
-  timeline: board => (board.timeline.field ? `${board.timeline.field.name}, ${board.timeline.sort === 'asc' ? 'oldest' : 'newest'} first` : 'Off'),
+  timeline: board => (board.timeline.enabled
+    ? `Rows by ${rowsByName(board)} per ${board.timeline.bucket}, ${board.timeline.sort === 'asc' ? 'oldest' : 'newest'} first`
+    : 'Off'),
   pages: board => {
     const {mode, field, values, pages} = board.pages;
     if (mode === 'field') {

@@ -1,7 +1,7 @@
 import React, {useRef} from 'react';
 import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/select/select';
 import Toggle from '@jetbrains/ring-ui-built/components/toggle/toggle';
-import {type BoardConfig, type FieldKind, type FieldRef, type RowConfig, TIME_FIELD_KINDS, availableRowModes} from '@/common/model/board-config';
+import {type BoardConfig, type FieldKind, type FieldRef, type GanttConfig, type PlanLevel, type RowConfig, availableRowModes, fitTimeline, newPlanLevel, rowsByLevel} from '@/common/model/board-config';
 import {type FieldUniverse, ROW_FIELD_KINDS, toFieldRef} from '../model/fieldUniverse';
 import {SwimlanesSection} from './SwimlanesSection';
 import {GanttEditor} from './GanttEditor';
@@ -28,6 +28,16 @@ const firstField = (universe: FieldUniverse, kinds: FieldKind[], exclude: string
   return field ? toFieldRef(field) : null;
 };
 
+/** A first planning level to start Time & planning with: a date field, else a version field. */
+const startLevel = (universe: FieldUniverse, exclude: string | undefined): PlanLevel | null => {
+  const date = firstField(universe, ['date', 'datetime'], exclude);
+  const version = firstField(universe, ['version'], exclude);
+  if (date) {
+    return {...newPlanLevel(0), name: date.name, source: 'date', field: date};
+  }
+  return version ? {...newPlanLevel(0), name: version.name, source: 'version', field: version} : null;
+};
+
 /**
  * Rows: swimlanes, a time layout, both or neither. With both, everyone switches between them on
  * the toolbar, starting from the default chosen here.
@@ -35,13 +45,12 @@ const firstField = (universe: FieldUniverse, kinds: FieldKind[], exclude: string
 export const RowLayoutSection: React.FC<Props> = ({draft, universe, readOnly, patch, sprintFieldName}) => {
   // What a toggle turned off, so turning it on again during this edit brings it back.
   const lastSwimlanes = useRef<{row: RowConfig; innerRow: RowConfig | null} | null>(null);
-  const lastTimeField = useRef<FieldRef | null>(null);
   const swimlanesOn = Boolean(draft.row.field);
-  const timeOn = Boolean(draft.timeline.field);
+  const timeOn = draft.timeline.enabled;
   const modes = availableRowModes(draft);
   const defaultItems = DEFAULT_ITEMS.filter(item => modes.includes(item.key as BoardConfig['defaultRowMode']));
   const rowStart = firstField(universe, ROW_FIELD_KINDS, sprintFieldName);
-  const timeStart = firstField(universe, TIME_FIELD_KINDS, sprintFieldName);
+  const timeStart = startLevel(universe, sprintFieldName);
 
   const toggleSwimlanes = (on: boolean) => {
     if (on) {
@@ -51,12 +60,18 @@ export const RowLayoutSection: React.FC<Props> = ({draft, universe, readOnly, pa
     lastSwimlanes.current = {row: draft.row, innerRow: draft.innerRow};
     patch({row: {...draft.row, field: null}, innerRow: null});
   };
+  // Turning Time & planning on starts a plan when there is none; turning it off keeps the plan for later.
   const toggleTime = (on: boolean) => {
     if (!on) {
-      lastTimeField.current = draft.timeline.field;
+      patch({timeline: {...draft.timeline, enabled: false}});
+      return;
     }
-    patch({timeline: {...draft.timeline, field: on ? (lastTimeField.current ?? timeStart) : null}});
+    const gantt: GanttConfig = draft.gantt.levels.length === 0 && timeStart ? {...draft.gantt, levels: [timeStart]} : draft.gantt;
+    const rowsBy = draft.timeline.rowsBy || (gantt.levels[0] ? rowsByLevel(gantt.levels[0].id) : '');
+    patch({gantt, timeline: fitTimeline({...draft.timeline, enabled: true, rowsBy}, gantt)});
   };
+  // Removing or changing a level keeps the time rows on something that exists.
+  const patchGantt = (gantt: GanttConfig) => patch({gantt, timeline: fitTimeline(draft.timeline, gantt)});
 
   return (
     <>
@@ -70,21 +85,15 @@ export const RowLayoutSection: React.FC<Props> = ({draft, universe, readOnly, pa
         <SwimlanesSection universe={universe} row={draft.row} innerRow={draft.innerRow} readOnly={readOnly} onChange={patch} sprintFieldName={sprintFieldName}/>
       )}
       <div className="settings-field">
-        <Toggle checked={timeOn} disabled={readOnly || (!timeOn && !timeStart && !lastTimeField.current)} onChange={event => toggleTime(event.target.checked)}>
-          Time
+        <Toggle checked={timeOn} disabled={readOnly || (!timeOn && !timeStart && draft.gantt.levels.length === 0)} onChange={event => toggleTime(event.target.checked)}>
+          Time & planning
         </Toggle>
-        <span className="settings-field__help">Rows by the date of a field, across all columns; subtasks follow their parent.</span>
+        <span className="settings-field__help">
+          When work is planned: planning levels, due date and estimate, shown as time rows across the columns and as a Gantt chart.
+        </span>
       </div>
-      {timeOn && (
-        <TimelineEditor
-          universe={universe}
-          timeline={draft.timeline}
-          disabled={readOnly}
-          excludeNames={sprintFieldName ? [sprintFieldName] : []}
-          onChange={timeline => patch({timeline})}
-        />
-      )}
-      {timeOn && <GanttEditor universe={universe} gantt={draft.gantt} disabled={readOnly} onChange={gantt => patch({gantt})}/>}
+      {timeOn && <GanttEditor universe={universe} gantt={draft.gantt} disabled={readOnly} onChange={patchGantt}/>}
+      {timeOn && <TimelineEditor universe={universe} timeline={draft.timeline} gantt={draft.gantt} disabled={readOnly} onChange={timeline => patch({timeline})}/>}
       {defaultItems.length > 1 && (
         <div className="settings-field">
           <span className="settings-field__label">Default layout</span>

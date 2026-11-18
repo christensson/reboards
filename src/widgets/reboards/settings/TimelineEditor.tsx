@@ -2,57 +2,48 @@ import React from 'react';
 import Select, {type SelectItem} from '@jetbrains/ring-ui-built/components/select/select';
 import Toggle from '@jetbrains/ring-ui-built/components/toggle/toggle';
 import {FieldSelect} from '@/common/components/FieldSelect';
-import {type FieldKind, TIME_FIELD_KINDS, type TimelineConfig, isDateKind} from '@/common/model/board-config';
+import {
+  type GanttConfig,
+  type PlanLevel,
+  ROWS_BY_DUE,
+  type TimeBucket,
+  type TimelineConfig,
+  fitTimeline,
+  isPlanLevelComplete,
+  levelIdOfRowsBy,
+  rowsByLevel
+} from '@/common/model/board-config';
 import type {FieldUniverse} from '../model/fieldUniverse';
-import {TIMING_FLAGS, hasRange, timeMeaning, timingFlagsFor} from '../model/timeline';
+import {TIMING_FLAGS, timingFlagsFor} from '../model/timeline';
 
 type Props = {
   universe: FieldUniverse;
   timeline: TimelineConfig;
+  gantt: GanttConfig;
   disabled: boolean;
-  /** Sprint field of a sprint board; it selects the issues, so it cannot be the time field. */
-  excludeNames: string[];
   onChange: (timeline: TimelineConfig) => void;
 };
 
-const ROLE_ITEMS: SelectItem[] = [
-  {key: 'start', label: 'Start date'},
-  {key: 'end', label: 'End / due date'}
-];
-
-/**
- * What the date means, in short. Alone it also decides the timing checks; with a period the
- * placement setting does, so the text only says which way the period runs.
- */
-const roleText = (timeline: TimelineConfig): string => {
-  const date = timeline.field?.name ?? 'The date';
-  const start = timeline.dateRole === 'start';
-  if (timeline.periodField) {
-    return start
-      ? `${date} is when work starts; ${timeline.periodField.name} runs forward from it.`
-      : `${date} is when work is due; ${timeline.periodField.name} runs back from it.`;
-  }
-  return start ? `${date} is when work starts; flags late starts.` : `${date} is when work is due; flags overdue work.`;
+const SOURCE_LABELS: Record<PlanLevel['source'], string> = {
+  'dates': 'start and end dates',
+  'date-period': 'date and period',
+  'date': 'a date',
+  'version': 'versions',
+  'build': 'builds'
 };
 
 const POSITION_ITEMS: SelectItem[] = [
-  {key: 'start', label: 'Start date'},
-  {key: 'end', label: 'End / due date'}
+  {key: 'start', label: 'Start'},
+  {key: 'end', label: 'End'}
 ];
 
-const POSITION_EFFECT = 'Start flags late starts; End / due date flags overdue work.';
-
-/** What the two ends of an issue's time are, in the words of the fields used. */
-const rangeText = (timeline: TimelineConfig, kind: FieldKind | 'other' | undefined): string => {
-  if (kind === 'version') {
-    return 'Versions span start to release date.';
-  }
-  const date = timeline.field?.name ?? 'the date';
-  const period = timeline.periodField?.name ?? 'the period';
-  return timeline.dateRole === 'start'
-    ? `Issues span ${date} to ${date} plus ${period}.`
-    : `Issues span ${date} minus ${period} to ${date}.`;
-};
+const BUCKET_ITEMS: SelectItem[] = [
+  {key: 'sprint', label: 'Sprint', description: 'A row per version'},
+  {key: 'day', label: 'Day'},
+  {key: 'week', label: 'Week', description: 'Monday to Sunday'},
+  {key: 'month', label: 'Month'},
+  {key: 'quarter', label: 'Quarter'}
+];
 
 const SORT_ITEMS: SelectItem[] = [
   {key: 'asc', label: 'Oldest first'},
@@ -75,72 +66,56 @@ const Choice: React.FC<ChoiceProps> = ({label, items, value, disabled, help, onC
   </div>
 );
 
-/** The time layout: which field places the cards, what its date means, and the order. */
-export const TimelineEditor: React.FC<Props> = ({universe, timeline, disabled, excludeNames, onChange}) => {
+/** The levels and due date time rows can follow. */
+const rowsByItems = (gantt: GanttConfig): SelectItem[] => [
+  ...gantt.levels.filter(isPlanLevelComplete).map(level => ({key: rowsByLevel(level.id), label: level.name || level.field?.name || 'Plan', description: SOURCE_LABELS[level.source]})),
+  ...(gantt.dueField ? [{key: ROWS_BY_DUE, label: 'Due date', description: gantt.dueField.name}] : [])
+];
+
+/** The time layout's rows: what places issues, which end of their plan, the row size and order, and the highlights. */
+export const TimelineEditor: React.FC<Props> = ({universe, timeline, gantt, disabled, onChange}) => {
   const patch = (changes: Partial<TimelineConfig>) => onChange({...timeline, ...changes});
-  const kind = timeline.field ? (universe.byName.get(timeline.field.name)?.kind ?? timeline.field.kind) : undefined;
-  const isDate = isDateKind(kind);
-  const range = Boolean(timeline.field) && hasRange(timeline, universe);
-  const flags = timingFlagsFor(timeMeaning(timeline, universe)).map(flag => TIMING_FLAGS[flag].label.toLowerCase());
+  const items = rowsByItems(gantt);
+  const level = gantt.levels.find(other => other.id === levelIdOfRowsBy(timeline.rowsBy));
+  // A single date, a due date: both ends are the same day.
+  const hasEnds = Boolean(level) && level?.source !== 'date';
+  const buckets = BUCKET_ITEMS.filter(item => item.key !== 'sprint' || level?.source === 'version');
+  const meaning = hasEnds ? timeline.position : 'end';
+  const flags = timingFlagsFor(meaning).map(flag => TIMING_FLAGS[flag].label.toLowerCase());
   return (
     <>
-      <div className="settings-field">
-        <span className="settings-field__label">Time field</span>
-        <FieldSelect
-          universe={universe}
-          kinds={TIME_FIELD_KINDS}
-          value={timeline.field}
-          disabled={disabled}
-          excludeNames={excludeNames}
-          onChange={field => patch({field, ...(isDateKind(field?.kind) ? {} : {periodField: null})})}
-        />
-        <span className="settings-field__help">
-          A date or date and time field, a version (from its start to its release date) or a build (its assembly date). Each time gets a row; issues without one come last.
-        </span>
-      </div>
-      {isDate && (
-        <div className="settings-field">
-          <span className="settings-field__label">Period field (optional)</span>
-          <FieldSelect
-            universe={universe}
-            kinds={['period']}
-            allowNone
-            noneLabel="No period"
-            value={timeline.periodField}
-            disabled={disabled}
-            onChange={periodField => patch({periodField})}
-          />
-          <span className="settings-field__help">A duration, such as an estimation, that makes the date the start or the end of a range.</span>
-        </div>
-      )}
-      {(isDate || kind === 'build') && (
+      <Choice
+        label="Time rows by"
+        items={items}
+        value={timeline.rowsBy}
+        disabled={disabled || items.length === 0}
+        help={items.length === 0 ? 'Set up a planning level or a due date first.' : 'The plan or date that puts each issue in a row.'}
+        onChange={rowsBy => onChange(fitTimeline({...timeline, rowsBy}, gantt))}
+      />
+      {hasEnds && (
         <Choice
-          label="The date is"
-          items={ROLE_ITEMS}
-          value={timeline.dateRole}
-          disabled={disabled}
-          help={roleText(timeline)}
-          onChange={key => patch({dateRole: key as TimelineConfig['dateRole']})}
-        />
-      )}
-      {range && (
-        <Choice
-          label="Place issues on timeline at their"
+          label="Place issues at their"
           items={POSITION_ITEMS}
           value={timeline.position}
           disabled={disabled}
-          help={`${rangeText(timeline, kind)} ${POSITION_EFFECT}`}
+          help={`Start flags late starts; End flags overdue work.`}
           onChange={key => patch({position: key as TimelineConfig['position']})}
         />
       )}
+      <Choice
+        label="Row size"
+        items={buckets}
+        value={timeline.bucket}
+        disabled={disabled}
+        help="Each row holds the issues placed in that period; rows without issues are left out."
+        onChange={key => patch({bucket: key as TimeBucket})}
+      />
       <Choice label="Sort" items={SORT_ITEMS} value={timeline.sort} disabled={disabled} onChange={key => patch({sort: key as TimelineConfig['sort']})}/>
       <div className="settings-field">
         <Toggle checked={timeline.highlights} disabled={disabled} onChange={event => patch({highlights: event.target.checked})}>
           Highlight timing problems
         </Toggle>
-        <span className="settings-field__help">
-          {`Cards get an icon, and the highlight menu offers: ${flags.join(', ')}. Turn off when the time means neither a start nor an end.`}
-        </span>
+        <span className="settings-field__help">{`Cards get an icon, and the highlight menu offers: ${flags.join(', ')}.`}</span>
       </div>
       <div className="settings-field">
         <span className="settings-field__label">Assignee field</span>

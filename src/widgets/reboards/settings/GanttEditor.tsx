@@ -29,7 +29,9 @@ const DATE_KINDS: FieldKind[] = ['date', 'datetime'];
 const SOURCE_ITEMS: SelectItem[] = [
   {key: 'dates', label: 'Start and end dates', description: 'Two date fields'},
   {key: 'date-period', label: 'Date and period', description: 'A date and a duration from or to it'},
-  {key: 'version', label: 'Version (sprint) field', description: 'Earliest start to latest release'}
+  {key: 'date', label: 'Single date', description: 'One date field: a day, or a deadline-like date'},
+  {key: 'version', label: 'Version (sprint) field', description: 'Earliest start to latest release'},
+  {key: 'build', label: 'Build field', description: 'Earliest to latest assembly date'}
 ];
 
 const ROLE_ITEMS: SelectItem[] = [
@@ -65,8 +67,12 @@ type LevelProps = {level: PlanLevel; universe: FieldUniverse; disabled: boolean;
 
 /** The fields of one planning level, as its source needs them. */
 const LevelFields: React.FC<LevelProps> = ({level, universe, disabled, onChange}) => {
-  if (level.source === 'version') {
-    return <FieldSelect universe={universe} kinds={['version']} label="Version field" value={level.field} disabled={disabled} onChange={field => onChange({field})}/>;
+  if (level.source === 'version' || level.source === 'build') {
+    const label = level.source === 'version' ? 'Version field' : 'Build field';
+    return <FieldSelect universe={universe} kinds={[level.source]} label={label} value={level.field} disabled={disabled} onChange={field => onChange({field})}/>;
+  }
+  if (level.source === 'date') {
+    return <FieldSelect universe={universe} kinds={DATE_KINDS} label="Date" value={level.field} disabled={disabled} onChange={field => onChange({field})}/>;
   }
   if (level.source === 'dates') {
     return (
@@ -87,7 +93,8 @@ const LevelFields: React.FC<LevelProps> = ({level, universe, disabled, onChange}
 
 /** A new source keeps a field that still fits it. */
 const switchSource = (level: PlanLevel, source: PlanSource): Partial<PlanLevel> => {
-  const fits = source === 'version' ? level.field?.kind === 'version' : level.field && DATE_KINDS.includes(level.field.kind);
+  const kind = level.field?.kind;
+  const fits = source === 'version' || source === 'build' ? kind === source : Boolean(kind && DATE_KINDS.includes(kind));
   return {source, field: fits ? level.field : null};
 };
 
@@ -105,9 +112,9 @@ export const GanttEditor: React.FC<Props> = ({universe, gantt, disabled, onChang
   return (
     <>
       <div className="settings-field">
-        <span className="settings-field__label">Gantt chart (optional)</span>
+        <span className="settings-field__label">Plan</span>
         <span className="settings-field__help">
-          A Gantt layout next to the time layout: plans as bars, due dates as diamonds, and the persons needed to finish the estimate in time.
+          Shared by the time and Gantt layouts: plans as bars, due dates as diamonds, and the persons needed to finish the estimate in time.
         </span>
       </div>
       <div className="settings-field">

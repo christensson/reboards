@@ -24,8 +24,8 @@ import {type FieldChange, type MoveTarget, type ValueChoice, applyChanges, keysA
 import {groupDragHint, issueDragHint, linkDragHint} from '../model/dragHint';
 import {type LinkMode, isLinkDropData} from '../model/linkTargets';
 import {computeMatchIds} from '../model/search';
-import {type TimingFlag, type TimingNote, hasTimeOfDay, isExactTime, issueTime, timeMeaning, timingFlagOfFilter, timePreset, timingFlagsFor, timingNotes, todayPosition} from '../model/timeline';
-import {useDateFormat, useDateTimeFormat} from '../data/useDateFormat';
+import {type TimingFlag, type TimingNote, issueTime, timeMeaning, timingFlagOfFilter, timePreset, timingFlagsFor, timingNotes} from '../model/timeline';
+import {useDateFormat} from '../data/useDateFormat';
 import {collapseGroupLevel, expandGroupLevel, visibleIssueIds} from '../model/visibility';
 import {BoardContext, type BoardContextValue, type CardRegistry, type DragHighlight} from './BoardContext';
 import {BoardRows} from './BoardRows';
@@ -120,9 +120,9 @@ const needsColumns = (board: BoardConfig, universe: FieldUniverse): boolean =>
   && !isDynamicField(universe.byName.get(board.columnField?.name ?? '')?.kind ?? board.columnField?.kind, board.columnOptions);
 
 /** Field values that put a new issue in a row: its swimlane values, or the date, version or build of a time row. */
-const rowPresets = (board: BoardConfig, row: BoardLayout['rows'][number] | undefined, universe: FieldUniverse): {field: string; value: string}[] => {
+const rowPresets = (board: BoardConfig, row: BoardLayout['rows'][number] | undefined): {field: string; value: string}[] => {
   if (row?.kind === 'time') {
-    const time = timePreset(row, board.timeline, universe);
+    const time = timePreset(row, board);
     return time ? [time] : [];
   }
   return [
@@ -131,19 +131,6 @@ const rowPresets = (board: BoardConfig, row: BoardLayout['rows'][number] | undef
   ];
 };
 const NO_FLAGS: TimingFlag[] = [];
-
-/** Formats a time of the board's time field: with the time of day for "date and time" fields that have one. */
-const useTimeFormat = (timeline: BoardConfig['timeline'], universe: FieldUniverse): ((time: number) => string) => {
-  const formatDate = useDateFormat();
-  const formatDateTime = useDateTimeFormat();
-  const exact = isExactTime(timeline, universe);
-  return useCallback((time: number) => {
-    if (!exact) {
-      return formatDate(time);
-    }
-    return hasTimeOfDay(time) ? formatDateTime(time) : formatDate(todayPosition(time));
-  }, [exact, formatDate, formatDateTime]);
-};
 
 const subtaskIdsOf = (group: LayoutGroup): string[] =>
   Object.values(group.allIdsByColumn).flat().filter(id => id !== group.parentId);
@@ -569,12 +556,12 @@ export const BoardScreen: React.FC<Props> = ({
       }
       const value = column.values[0];
       const presets = [
-        ...rowPresets(board, layout.rowsByKey[rowKey], reference.universe),
+        ...rowPresets(board, layout.rowsByKey[rowKey]),
         ...(value === undefined || !board.columnField ? [] : [{field: board.columnField.name, value}])
       ];
       return newIssueUrl(baseUrl, project.shortName, presets, parentIdReadable ? [`subtask of ${parentIdReadable}`] : []);
     },
-    [board, baseUrl, layout.columns, layout.rowsByKey, view.showNewIssue, reference.universe]
+    [board, baseUrl, layout.columns, layout.rowsByKey, view.showNewIssue]
   );
 
   /** Expands the swimlanes, column and boxes that hide a card at this placement. */
@@ -638,17 +625,18 @@ export const BoardScreen: React.FC<Props> = ({
     [layout.cards, layout.placement, expandPlacement]
   );
   const cardCopies = useCallback((issueId: string) => layout.copiesByIssue[issueId] ?? [], [layout.copiesByIssue]);
-  const formatTime = useTimeFormat(board.timeline, reference.universe);
+  // Times are calendar days (UTC days), formatted in the user's date format.
+  const formatTime = useDateFormat();
   const notesByIssue = useMemo(() => {
     const notes: Record<string, TimingNote[]> = {};
     Object.entries(layout.flagsByIssue).forEach(([id, flags]) => {
       const issue = issuesById.get(id);
       if (issue) {
-        notes[id] = timingNotes(flags, issueTime(issue, board.timeline, reference.universe), formatTime);
+        notes[id] = timingNotes(flags, issueTime(issue, board, reference.universe), formatTime);
       }
     });
     return notes;
-  }, [layout.flagsByIssue, issuesById, board.timeline, reference.universe, formatTime]);
+  }, [layout.flagsByIssue, issuesById, board, reference.universe, formatTime]);
   const timingNotesOf = useCallback((issueId: string) => notesByIssue[issueId] ?? NO_NOTES, [notesByIssue]);
   const locateCard = useCallback((cardId: string) => cardLocation(layout, cardId), [layout]);
 
@@ -1277,7 +1265,7 @@ export const BoardScreen: React.FC<Props> = ({
           updatePrefs(prev => ({rowModeByBoard: {...prev.rowModeByBoard, [board.id]: mode}}));
         }}
         gantt={gantt.toolbar}
-        timingFlags={layout.rowMode === 'time' && board.timeline.highlights ? timingFlagsFor(timeMeaning(board.timeline, reference.universe)) : NO_FLAGS}
+        timingFlags={layout.rowMode === 'time' && board.timeline.highlights ? timingFlagsFor(timeMeaning(board)) : NO_FLAGS}
         onRefresh={() => {
           reference.reload();
           data.refresh();

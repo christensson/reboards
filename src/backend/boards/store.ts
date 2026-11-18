@@ -14,7 +14,12 @@ export const keepOmittedSettings = (incoming: BoardConfig, raw: unknown, existin
   if (typeof raw !== 'object' || raw === null) {
     return incoming;
   }
-  const omitted = LATER_SETTINGS.filter(key => !(key in raw));
+  const omitted: (keyof BoardConfig)[] = LATER_SETTINGS.filter(key => !(key in raw));
+  // A 1.3.0 widget sends its own time setup (a time field), not today's time rows.
+  const timeline = (raw as {timeline?: unknown}).timeline;
+  if (typeof timeline === 'object' && timeline !== null && !('rowsBy' in timeline)) {
+    omitted.push('timeline');
+  }
   if (omitted.length === 0) {
     return incoming;
   }

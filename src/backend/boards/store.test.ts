@@ -90,6 +90,15 @@ describe('keepOmittedSettings', () => {
     expect(keepOmittedSettings(incoming, raw, withGantt)).toEqual({...incoming, pages: existing.pages, gantt: withGantt.gantt});
   });
 
+  it('keeps the stored time rows and plan when a 1.3.0 widget saves its time field', () => {
+    const stored = {...existing, timeline: {...existing.timeline, enabled: true, rowsBy: 'level:sp', bucket: 'sprint' as const}};
+    const {pages: _pages, gantt: _gantt, timeline: _timeline, ...rest} = incoming;
+    const raw = {...rest, timeline: {field: {name: 'Sprints', kind: 'version'}}};
+    const kept = keepOmittedSettings(incoming, raw, stored);
+    expect(kept.timeline).toEqual(stored.timeline);
+    expect(kept.gantt).toEqual(stored.gantt);
+  });
+
   it('takes the sent pages, even when they are none', () => {
     expect(keepOmittedSettings(incoming, incoming, existing)).toBe(incoming);
   });

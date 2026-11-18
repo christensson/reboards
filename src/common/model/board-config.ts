@@ -92,24 +92,28 @@ export type AgileSourceRef = {
   name: string;
 };
 
-// Time mode: rows ordered by a time field instead of swimlanes. The field is a date or
-// "date and time" field (optionally made a range by a period field), a version (start to
-// release date) or a build (assembly date). `dateRole` tells whether a date is a start or an
-// end/due date, `position` which end of a range places the card, and `highlights` false
-// ignores the meaning: no timing highlights or card icons.
+// Time & planning: the planning levels, due date and estimate of the Gantt layout, and the time
+// layout's rows, which are periods (sprints, days, weeks, months or quarters) placed by one level
+// or the due date. `highlights` false turns off the timing highlights and card icons.
 /**
  * @zod-to-schema
  */
 export type TimelineConfig = {
-  field: FieldRef | null;
-  periodField: FieldRef | null;
-  dateRole: 'start' | 'end';
+  /** Time & planning is set up: the time and Gantt layouts are offered. */
+  enabled: boolean;
+  /** What places issues in time rows: "level:<id>" or "due". */
+  rowsBy: string;
+  /** Which end of the level's span places them. */
   position: 'start' | 'end';
+  /** How long a time row is; "sprint" for version levels only. */
+  bucket: 'sprint' | 'day' | 'week' | 'month' | 'quarter';
   sort: 'asc' | 'desc';
   highlights: boolean;
   /** User field for the "unassigned" checks. */
   assigneeField: FieldRef | null;
 };
+
+export type TimeBucket = TimelineConfig['bucket'];
 
 // A planning level of the Gantt layout: where an issue is planned to start and end. Levels go
 // from high-level (a roadmap) to detailed (sprints), as in rolling-wave planning. The source is a
@@ -122,8 +126,8 @@ export type PlanLevel = {
   /** Stable id; collapse state and keys refer to it. */
   id: string;
   name: string;
-  source: 'version' | 'dates' | 'date-period';
-  /** The version field, the start date field, or the date of a date and period. */
+  source: 'version' | 'dates' | 'date-period' | 'date' | 'build';
+  /** The version field, the start date field, the date of a date and period, the single date, or the build field. */
   field: FieldRef | null;
   /** Start and end dates: the end date field. */
   endField: FieldRef | null;
@@ -234,6 +238,8 @@ export type BoardConfig = {
 };
 
 export const UNCATEGORIZED_ROW_KEY = '__uncategorized__';
+/** At most this many planning levels: high-level, middle and detailed. */
+const MAX_PLAN_LEVELS = 3;
 export const DEFAULT_LINK_TYPES = ['Subtask'];
 export const DEFAULT_CARD_FIELDS = ['Assignee', 'Type', 'Estimation'];
 
@@ -250,14 +256,23 @@ export const DEFAULT_MAX_COLUMNS = 5;
 export const defaultDynamicOptions = (): DynamicOptions => ({sort: 'alphabetical', asDynamic: false, showReleased: true, showArchived: false, maxColumns: DEFAULT_MAX_COLUMNS});
 
 export const emptyTimeline = (): TimelineConfig => ({
-  field: null,
-  periodField: null,
-  dateRole: 'end',
+  enabled: false,
+  rowsBy: '',
   position: 'end',
+  bucket: 'week',
   sort: 'asc',
   highlights: true,
   assigneeField: {name: 'Assignee', kind: 'user'}
 });
+
+/** Time rows by the due date, rather than a planning level. */
+export const ROWS_BY_DUE = 'due';
+const LEVEL_PREFIX = 'level:';
+
+export const rowsByLevel = (levelId: string): string => `${LEVEL_PREFIX}${levelId}`;
+
+/** The id of the level `rowsBy` names, or null for the due date or nothing. */
+export const levelIdOfRowsBy = (rowsBy: string): string | null => (rowsBy.startsWith(LEVEL_PREFIX) ? rowsBy.slice(LEVEL_PREFIX.length) : null);
 
 export const emptyGantt = (): GanttConfig => ({
   levels: [],
@@ -325,6 +340,8 @@ export const createEmptyBoard = (owner: string): BoardConfig => ({
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+const str = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback);
+
 const stringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 
@@ -386,17 +403,59 @@ const normalizeRow = (value: unknown, fallback: RowConfig): RowConfig => {
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
   allowed.includes(value as T) ? (value as T) : fallback;
 
+const BUCKETS: TimeBucket[] = ['sprint', 'day', 'week', 'month', 'quarter'];
+
 const normalizeTimeline = (value: unknown): TimelineConfig => {
   const input = isRecord(value) ? value : {};
   const base = emptyTimeline();
   return {
-    field: fieldRef(input.field),
-    periodField: fieldRef(input.periodField),
-    dateRole: oneOf(input.dateRole, ['start', 'end'] as const, base.dateRole),
+    enabled: input.enabled === true,
+    rowsBy: str(input.rowsBy),
     position: oneOf(input.position, ['start', 'end'] as const, base.position),
+    bucket: oneOf(input.bucket, BUCKETS, base.bucket),
     sort: oneOf(input.sort, ['asc', 'desc'] as const, base.sort),
     highlights: typeof input.highlights === 'boolean' ? input.highlights : base.highlights,
     assigneeField: 'assigneeField' in input ? fieldRef(input.assigneeField) : base.assigneeField
+  };
+};
+
+/** Id of the planning level a 1.3.0 time field becomes. */
+export const LEGACY_TIME_LEVEL_ID = 'time';
+
+/** The planning level of a 1.3.0 time setup: its field, period and the meaning of its date. */
+const legacyLevel = (input: Record<string, unknown>, field: FieldRef): PlanLevel => {
+  const periodField = fieldRef(input.periodField);
+  const dateRole = oneOf(input.dateRole, ['start', 'end'] as const, 'end');
+  let source: PlanSource = 'date';
+  if (field.kind === 'version' || field.kind === 'build') {
+    source = field.kind;
+  } else if (periodField) {
+    source = 'date-period';
+  }
+  return {id: LEGACY_TIME_LEVEL_ID, name: field.name, source, field, endField: null, periodField: source === 'date-period' ? periodField : null, dateRole};
+};
+
+/**
+ * A 1.3.0 board's time setup (a time field, made a range by a period) in today's shape: a planning
+ * level, used as is when one has the same field and source, and time rows placed by it with rows
+ * as close as possible to before: a row per sprint for versions, else a row per day.
+ */
+const migrateTimeline = (raw: unknown, timeline: TimelineConfig, gantt: GanttConfig): {timeline: TimelineConfig; gantt: GanttConfig} => {
+  const input = isRecord(raw) ? raw : {};
+  const field = fieldRef(input.field);
+  if (!field || typeof input.rowsBy === 'string') {
+    return {timeline, gantt};
+  }
+  const level = legacyLevel(input, field);
+  const same = gantt.levels.find(other => other.source === level.source && other.field?.name === field.name && other.periodField?.name === level.periodField?.name);
+  const levels = same || gantt.levels.length >= MAX_PLAN_LEVELS ? gantt.levels : [level, ...gantt.levels];
+  const placing = same ?? level;
+  // Before, a range placed cards by `position` and a single date by what it meant.
+  const range = level.source === 'version' || level.source === 'build' || level.source === 'date-period';
+  const position = range ? timeline.position : level.dateRole;
+  return {
+    timeline: {...timeline, enabled: true, rowsBy: rowsByLevel(placing.id), position, bucket: level.source === 'version' ? 'sprint' : 'day'},
+    gantt: {...gantt, levels}
   };
 };
 
@@ -405,7 +464,7 @@ const normalizePlanLevels = (value: unknown): PlanLevel[] =>
     ? value.filter(isRecord).map((level, index) => ({
       id: typeof level.id === 'string' && level.id ? level.id : `level-${index}`,
       name: typeof level.name === 'string' ? level.name : '',
-      source: oneOf(level.source, ['version', 'dates', 'date-period'] as const, 'dates'),
+      source: oneOf(level.source, ['version', 'dates', 'date-period', 'date', 'build'] as const, 'dates'),
       field: fieldRef(level.field),
       endField: fieldRef(level.endField),
       periodField: fieldRef(level.periodField),
@@ -431,7 +490,6 @@ const normalizeSprints = (value: unknown): SprintConfig => {
   return {enabled: sprints.enabled === true, field: fieldRef(sprints.field)};
 };
 
-const str = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback);
 
 const normalizePageQueries = (value: unknown): PageQuery[] =>
   Array.isArray(value)
@@ -484,8 +542,7 @@ export const normalizeBoardConfig = (raw: unknown, fallbackOwner = ''): BoardCon
     linkTypes: 'linkTypes' in input ? stringArray(input.linkTypes) : base.linkTypes,
     cardColorField: 'cardColorField' in input ? fieldRef(input.cardColorField) : base.cardColorField,
     relatedBoards: Array.from(new Set(stringArray(input.relatedBoards))).filter(id => id && id !== str(input.id)),
-    timeline: normalizeTimeline(input.timeline),
-    gantt: normalizeGantt(input.gantt),
+    ...migrateTimeline(input.timeline, normalizeTimeline(input.timeline), normalizeGantt(input.gantt)),
     defaultRowMode: oneOf(input.defaultRowMode, ['swimlanes', 'time', 'gantt'] as const, base.defaultRowMode),
     pages: normalizePages(input.pages),
     createdAt: num(input.createdAt),
@@ -520,7 +577,7 @@ export const BOARD_LIMITS = {
   /** Query pages, and values shown as field pages. */
   pages: 100,
   /** Planning levels of the Gantt layout. */
-  planLevels: 3
+  planLevels: MAX_PLAN_LEVELS
 } as const;
 
 const tooLong = (value: string, max: number): boolean => value.length > max;
@@ -547,8 +604,6 @@ const allTexts = (config: BoardConfig): string[] => [
     config.row.field,
     config.innerRow?.field,
     config.sprints.field,
-    config.timeline.field,
-    config.timeline.periodField,
     config.timeline.assigneeField,
     config.cardColorField,
     config.pages.field,
@@ -707,23 +762,6 @@ export const TIME_FIELD_KINDS: FieldKind[] = ['date', 'datetime', 'version', 'bu
 /** Date and "date and time" fields: their single date can be made a range by a period field. */
 export const isDateKind = (kind: FieldKind | 'other' | undefined): boolean => kind === 'date' || kind === 'datetime';
 
-const validateTimeline = (config: BoardConfig): ValidationIssue[] => {
-  const {field, periodField} = config.timeline;
-  if (!field) {
-    return [];
-  }
-  const issues: ValidationIssue[] = [];
-  if (!TIME_FIELD_KINDS.includes(field.kind)) {
-    issues.push({field: 'timeline', message: 'The time field must be a date, version or build field'});
-  }
-  if (periodField && (periodField.kind !== 'period' || !isDateKind(field.kind))) {
-    issues.push({field: 'timeline', message: 'A period field can only be combined with a date field'});
-  }
-  if (ownSprintField(config)?.name === field.name) {
-    issues.push({field: 'timeline', message: `The sprint field ${field.name} cannot also be the time field`});
-  }
-  return issues;
-};
 
 /** Kinds of a Gantt estimation field; numbers need a unit. */
 export const ESTIMATION_FIELD_KINDS: FieldKind[] = ['period', 'integer', 'float'];
@@ -745,13 +783,45 @@ export const isPlanLevelComplete = (level: PlanLevel): boolean => {
 /** Whether the Gantt layout has anything to draw: a complete planning level or a due date. */
 export const isGanttConfigured = (gantt: GanttConfig): boolean => gantt.levels.some(isPlanLevelComplete) || Boolean(gantt.dueField);
 
+/** The planning level the time rows are placed by, or null for the due date or nothing set. */
+export const placingLevel = (config: BoardConfig): PlanLevel | null => {
+  const id = levelIdOfRowsBy(config.timeline.rowsBy);
+  return id === null ? null : config.gantt.levels.find(level => level.id === id) ?? null;
+};
+
+const validateTimeline = (config: BoardConfig): ValidationIssue[] => {
+  const {enabled, rowsBy, bucket} = config.timeline;
+  if (!enabled) {
+    return [];
+  }
+  const issue = (message: string): ValidationIssue[] => [{field: 'timeline', message}];
+  if (!isGanttConfigured(config.gantt)) {
+    return issue('Time & planning needs a planning level or a due date');
+  }
+  if (rowsBy === ROWS_BY_DUE) {
+    return config.gantt.dueField ? [] : issue('Time rows by the due date need a due date field');
+  }
+  const level = placingLevel(config);
+  if (!level) {
+    return issue('Select what places issues in time rows');
+  }
+  if (bucket === 'sprint' && level.source !== 'version') {
+    return issue('Rows per sprint need time rows by a version level');
+  }
+  const sprintField = ownSprintField(config)?.name;
+  return sprintField && level.field?.name === sprintField ? issue(`The sprint field ${sprintField} cannot also place the time rows`) : [];
+};
+
 const levelFieldIssues = (level: PlanLevel, label: string): string[] => {
   const {source, field, endField, periodField} = level;
   if (!field) {
     return [`${label}: select a field`];
   }
-  if (source === 'version') {
-    return field.kind === 'version' ? [] : [`${label}: the field must be a version field`];
+  if (source === 'version' || source === 'build') {
+    return field.kind === source ? [] : [`${label}: the field must be a ${source} field`];
+  }
+  if (source === 'date') {
+    return isDateKind(field.kind) ? [] : [`${label}: the date must be a date field`];
   }
   const problems: string[] = isDateKind(field.kind) ? [] : [`${label}: the date must be a date field`];
   if (source === 'dates') {
@@ -792,6 +862,47 @@ const validateGantt = (config: BoardConfig): ValidationIssue[] => {
   return messages.map(message => ({field: 'gantt', message}));
 };
 
+/** The values `rowsBy` can take with this plan: its complete levels, then the due date. */
+export const rowsByOptions = (gantt: GanttConfig): string[] => [
+  ...gantt.levels.filter(isPlanLevelComplete).map(level => rowsByLevel(level.id)),
+  ...(gantt.dueField ? [ROWS_BY_DUE] : [])
+];
+
+/**
+ * Keeps the time rows valid after the plan changes: rows by a level that is gone (or incomplete)
+ * follow the first complete level (else the due date), and rows per sprint need a version level.
+ */
+export const fitTimeline = (timeline: TimelineConfig, gantt: GanttConfig): TimelineConfig => {
+  const options = rowsByOptions(gantt);
+  const rowsBy = options.includes(timeline.rowsBy) ? timeline.rowsBy : options[0] ?? '';
+  const level = gantt.levels.find(other => other.id === levelIdOfRowsBy(rowsBy));
+  const bucket: TimeBucket = timeline.bucket === 'sprint' && level?.source !== 'version' ? 'week' : timeline.bucket;
+  return rowsBy === timeline.rowsBy && bucket === timeline.bucket ? timeline : {...timeline, rowsBy, bucket};
+};
+
+/** What places the time rows, by name: the planning level's name, or the due date field's. */
+export const rowsByName = (config: BoardConfig): string => {
+  if (config.timeline.rowsBy === ROWS_BY_DUE) {
+    return config.gantt.dueField?.name ?? 'Due date';
+  }
+  return placingLevel(config)?.name ?? 'Plan';
+};
+
+/** The fields that place an issue in a time row: the placing level's fields, or the due date field. */
+export const placingFieldNames = (config: BoardConfig): string[] => {
+  if (!config.timeline.enabled) {
+    return [];
+  }
+  if (config.timeline.rowsBy === ROWS_BY_DUE) {
+    return config.gantt.dueField ? [config.gantt.dueField.name] : [];
+  }
+  const level = placingLevel(config);
+  return [level?.field, level?.endField, level?.periodField].flatMap(field => (field ? [field.name] : []));
+};
+
+/** Time & planning is on and has something to place issues by. */
+export const isTimeConfigured = (config: BoardConfig): boolean => config.timeline.enabled && isGanttConfigured(config.gantt);
+
 /** Validates a config before saving. Returns an empty array when valid. */
 export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
   const issues: ValidationIssue[] = [...validateBoardSize(config)];
@@ -807,8 +918,7 @@ export const validateBoardConfig = (config: BoardConfig): ValidationIssue[] => {
 /** The row layouts a board has set up. */
 export const availableRowModes = (config: BoardConfig): Exclude<RowMode, 'none'>[] => [
   ...(config.row.field ? ['swimlanes' as const] : []),
-  ...(config.timeline.field ? ['time' as const] : []),
-  ...(config.timeline.field && isGanttConfigured(config.gantt) ? ['gantt' as const] : [])
+  ...(isTimeConfigured(config) ? ['time' as const, 'gantt' as const] : [])
 ];
 
 /** The layout to use: the user's pick when the board has it, else the board's default, else its only one. */

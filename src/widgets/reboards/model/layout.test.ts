@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {type BoardConfig, UNCATEGORIZED_ROW_KEY, createEmptyBoard, defaultDynamicOptions} from '@/common/model/board-config';
+import {type BoardConfig, UNCATEGORIZED_ROW_KEY, createEmptyBoard, defaultDynamicOptions, normalizeBoardConfig} from '@/common/model/board-config';
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
@@ -353,9 +353,10 @@ describe('computeLayout in the time layout', () => {
     const time = spec.due ? String(day(spec.due) + 12 * 3_600_000) : null;
     return {...base, fields: {...base.fields, 'Due Date': time ? {$type: 'DateIssueCustomField', key: time, label: time, labels: [time], keys: [time]} : null}};
   };
-  const board = (sort: 'asc' | 'desc' = 'asc'): BoardConfig => ({
+  // A 1.3.0 time setup, converted on load: rows by the due date, a row per day.
+  const board = (sort: 'asc' | 'desc' = 'asc'): BoardConfig => normalizeBoardConfig({
     ...config(),
-    timeline: {...config().timeline, field: {name: 'Due Date', kind: 'date'}, sort},
+    timeline: {field: {name: 'Due Date', kind: 'date'}, sort},
     defaultRowMode: 'time'
   });
   const now = new Date(2026, 4, 10, 9).getTime();

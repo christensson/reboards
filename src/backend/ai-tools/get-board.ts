@@ -1,5 +1,5 @@
 import {type ToolContext, fieldInfo, findBoard, lanesFromValues, layoutsOf, pagesOf, sprintsOf} from '@/backend/boards/tools';
-import {type BoardConfig, type RowConfig, columnLabel, isGanttConfigured, ownSprintField} from '@/common/model/board-config';
+import {type BoardConfig, type RowConfig, columnLabel, isTimeConfigured, ownSprintField, placingFieldNames, rowsByName} from '@/common/model/board-config';
 
 const columnsOf = (board: BoardConfig) => {
   const field = board.columnField;
@@ -56,8 +56,9 @@ const howToMove = (board: BoardConfig): string[] => {
   } else if (board.agileSource) {
     steps.push(`Sprints come from the agile board ${board.agileSource.name}; change an issue's sprint with the YouTrack command "Board ${board.agileSource.name} <sprint name>".`);
   }
-  if (board.timeline.field) {
-    steps.push(`In the time layout, rows follow ${board.timeline.field.name}; set it to move an issue to another time row.`);
+  const placing = placingFieldNames(board);
+  if (placing.length > 0) {
+    steps.push(`In the time layout, rows follow ${rowsByName(board)} (${placing.join(', ')}); set its ${board.timeline.position} to move an issue to another time row.`);
   }
   return steps;
 };
@@ -65,7 +66,7 @@ const howToMove = (board: BoardConfig): string[] => {
 /** The Gantt layout: planning levels from high-level to detailed, due date and estimate. */
 const ganttOf = (board: BoardConfig) => {
   const {levels, dueField, estimationField, estimationUnit, estimationMeaning} = board.gantt;
-  if (!board.timeline.field || !isGanttConfigured(board.gantt)) {
+  if (!isTimeConfigured(board)) {
     return null;
   }
   return {
@@ -106,12 +107,12 @@ exports.aiTool = {
       columns: columnsOf(board),
       swimlanes: board.row.field ? [laneOf(board, board.row), laneOf(board, board.innerRow)].filter(Boolean) : [],
       layouts: layoutsOf(board),
-      time: board.timeline.field
+      time: isTimeConfigured(board)
         ? {
-          field: fieldInfo(board, board.timeline.field),
-          periodField: board.timeline.periodField?.name ?? null,
-          dateIs: board.timeline.dateRole,
+          rowsBy: rowsByName(board),
+          fields: placingFieldNames(board),
           placeAt: board.timeline.position,
+          rowSize: board.timeline.bucket,
           sort: board.timeline.sort
         }
         : null,

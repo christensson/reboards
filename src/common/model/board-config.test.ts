@@ -201,10 +201,15 @@ describe('relatedBoards', () => {
 });
 
 describe('row modes', () => {
-  const both = (): BoardConfig => ({...createEmptyBoard('me'), timeline: {...emptyTimeline(), field: {name: 'Due Date', kind: 'date'}}});
+  const due = {...newPlanLevel(0), id: 'd', name: 'Due', source: 'date' as const, field: {name: 'Due Date', kind: 'date' as const}};
+  const both = (): BoardConfig => ({
+    ...createEmptyBoard('me'),
+    gantt: {...emptyGantt(), levels: [due]},
+    timeline: {...emptyTimeline(), enabled: true, rowsBy: 'level:d', bucket: 'day'}
+  });
 
   it('offers the layouts the board has set up and picks the user\'s, else the default', () => {
-    expect(availableRowModes(both())).toEqual(['swimlanes', 'time']);
+    expect(availableRowModes(both())).toEqual(['swimlanes', 'time', 'gantt']);
     expect(effectiveRowMode(both(), undefined)).toBe('swimlanes');
     expect(effectiveRowMode({...both(), defaultRowMode: 'time'}, undefined)).toBe('time');
     expect(effectiveRowMode(both(), 'time')).toBe('time');
@@ -213,15 +218,44 @@ describe('row modes', () => {
     expect(effectiveRowMode({...timeOnly, timeline: emptyTimeline()}, undefined)).toBe('none');
   });
 
-  it('normalizes and validates the time layout', () => {
+  it('normalizes and validates the time rows', () => {
     expect(normalizeBoardConfig({}).timeline).toEqual(emptyTimeline());
-    expect(normalizeBoardConfig({timeline: {field: {name: 'Due Date', kind: 'date'}, sort: 'desc', dateRole: 'odd'}}).timeline)
-      .toMatchObject({field: {name: 'Due Date', kind: 'date'}, sort: 'desc', dateRole: 'end'});
     const board = {...both(), name: 'B', projects: [{id: '1', shortName: 'SAN'}], columns: [{id: 'c', values: ['Open']}]};
     expect(validateBoardConfig(board)).toEqual([]);
-    expect(validateBoardConfig({...board, timeline: {...board.timeline, field: {name: 'Type', kind: 'enum'}}}).map(i => i.field)).toEqual(['timeline']);
-    expect(validateBoardConfig({...board, timeline: {...board.timeline, field: {name: 'Fix versions', kind: 'version'}, periodField: {name: 'Estimation', kind: 'period'}}}).map(i => i.field))
-      .toEqual(['timeline']);
+    const messages = (timeline: Partial<BoardConfig['timeline']>) => validateBoardConfig({...board, timeline: {...board.timeline, ...timeline}}).map(i => i.message);
+    expect(messages({rowsBy: 'level:gone'})).toEqual(['Select what places issues in time rows']);
+    expect(messages({bucket: 'sprint'})).toEqual(['Rows per sprint need time rows by a version level']);
+    expect(messages({rowsBy: 'due'})).toEqual(['Time rows by the due date need a due date field']);
+    expect(validateBoardConfig({...board, gantt: emptyGantt()}).map(i => i.message)).toEqual(['Time & planning needs a planning level or a due date']);
+  });
+});
+
+describe('1.3.0 time setups', () => {
+  const load = (timeline: Record<string, unknown>, gantt?: unknown) => normalizeBoardConfig({timeline, ...(gantt ? {gantt} : {})});
+
+  it('become a planning level placing the time rows, a row per day', () => {
+    const board = load({field: {name: 'Due Date', kind: 'date'}, dateRole: 'end', sort: 'desc', highlights: false});
+    expect(board.gantt.levels).toEqual([{id: 'time', name: 'Due Date', source: 'date', field: {name: 'Due Date', kind: 'date'}, endField: null, periodField: null, dateRole: 'end'}]);
+    expect(board.timeline).toMatchObject({enabled: true, rowsBy: 'level:time', position: 'end', bucket: 'day', sort: 'desc', highlights: false});
+    expect(availableRowModes(board)).toEqual(['swimlanes', 'time', 'gantt']);
+  });
+
+  it('keep a date and period, placed by the configured end, and rows per sprint for versions', () => {
+    const ranged = load({field: {name: 'Start', kind: 'date'}, periodField: {name: 'Estimation', kind: 'period'}, dateRole: 'start', position: 'end'});
+    expect(ranged.gantt.levels[0]).toMatchObject({source: 'date-period', periodField: {name: 'Estimation', kind: 'period'}, dateRole: 'start'});
+    expect(ranged.timeline).toMatchObject({position: 'end', bucket: 'day'});
+    const sprints = load({field: {name: 'Sprints', kind: 'version'}, position: 'start'});
+    expect(sprints.gantt.levels[0]).toMatchObject({source: 'version'});
+    expect(sprints.timeline).toMatchObject({position: 'start', bucket: 'sprint'});
+    expect(load({field: {name: 'Build', kind: 'build'}}).gantt.levels[0]).toMatchObject({source: 'build'});
+  });
+
+  it('use a planning level with the same field instead of adding one, and leave new boards alone', () => {
+    const level = {id: 'sp', name: 'Sprint', source: 'version', field: {name: 'Sprints', kind: 'version'}};
+    const board = load({field: {name: 'Sprints', kind: 'version'}}, {levels: [level]});
+    expect(board.gantt.levels.map(l => l.id)).toEqual(['sp']);
+    expect(board.timeline.rowsBy).toBe('level:sp');
+    expect(load({enabled: true, rowsBy: 'level:sp', field: {name: 'Sprints', kind: 'version'}}, {levels: [level]}).gantt.levels).toHaveLength(1);
   });
 });
 
@@ -231,7 +265,7 @@ describe('gantt layout', () => {
     name: 'B',
     projects: [{id: '1', shortName: 'SAN'}],
     columns: [{id: 'c', values: ['Open']}],
-    timeline: {...emptyTimeline(), field: {name: 'Due Date', kind: 'date'}}
+    timeline: {...emptyTimeline(), enabled: true}
   });
   const dates = {...newPlanLevel(0), field: {name: 'Start', kind: 'date' as const}, endField: {name: 'End', kind: 'date' as const}};
 
@@ -251,7 +285,8 @@ describe('gantt layout', () => {
   });
 
   it('is offered with the time layout once a level or a due date is set up', () => {
-    expect(availableRowModes(timed())).toEqual(['swimlanes', 'time']);
+    // Time & planning on, but nothing to place by yet.
+    expect(availableRowModes(timed())).toEqual(['swimlanes']);
     expect(isGanttConfigured({...emptyGantt(), levels: [{...dates, endField: null}]})).toBe(false);
     const gantt = {...emptyGantt(), levels: [dates]};
     expect(availableRowModes({...timed(), gantt})).toEqual(['swimlanes', 'time', 'gantt']);
@@ -262,7 +297,8 @@ describe('gantt layout', () => {
   });
 
   it('validates the fields of each level, the due date and the estimate', () => {
-    const messages = (gantt: BoardConfig['gantt']) => validateBoardConfig({...timed(), gantt}).map(i => i.message);
+    // Time rows off: only the plan's own fields are checked.
+    const messages = (gantt: BoardConfig['gantt']) => validateBoardConfig({...timed(), timeline: emptyTimeline(), gantt}).map(i => i.message);
     expect(messages({...emptyGantt(), levels: [dates]})).toEqual([]);
     expect(messages({...emptyGantt(), levels: [{...dates, endField: dates.field}]})).toEqual(['High-level plan: the start and end date fields must be different']);
     expect(messages({...emptyGantt(), levels: [{...dates, name: ' ', source: 'version'}]})).toEqual(['Planning level 1 needs a name', 'Planning level 1: the field must be a version field']);

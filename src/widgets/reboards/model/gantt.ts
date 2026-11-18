@@ -2,8 +2,10 @@ import {type FieldRef, type GanttConfig, type PlanLevel, isPlanLevelComplete} fr
 import {computeEdges, type Edge} from './connectors';
 import type {FieldUniverse} from './fieldUniverse';
 import {type BoardIssue, SUBTASK_LINK_TYPE, compareIssues} from './issue';
-import {todayPosition, versionSpan} from './timeline';
+import {buildSpan, versionSpan} from './fieldSpans';
 import {MS_PER_DAY, addWorkDays, estimateHours, localDay, periodWorkDays, personsNeeded, utcDay, workDaysBetween} from './workTime';
+
+const todayPosition = localDay;
 
 /** Planned days of an issue, both ends included, as UTC days. Versions name the values at the ends. */
 export type Span = {start: number; end: number; startLabel?: string; endLabel?: string};
@@ -22,7 +24,7 @@ export type IssueSchedule = {
 const fieldKind = (field: FieldRef, universe: FieldUniverse) => universe.byName.get(field.name)?.kind ?? field.kind;
 
 /** The calendar day of a date field: "date and time" values on the user's local date. */
-const fieldDay = (issue: BoardIssue, field: FieldRef | null, universe: FieldUniverse): number | undefined => {
+export const fieldDay = (issue: BoardIssue, field: FieldRef | null, universe: FieldUniverse): number | undefined => {
   if (!field || !issue.fields[field.name]) {
     return undefined;
   }
@@ -36,8 +38,9 @@ const fieldDay = (issue: BoardIssue, field: FieldRef | null, universe: FieldUniv
 const ordered = (start: number, end: number, labels: Pick<Span, 'startLabel' | 'endLabel'> = {}): Span =>
   (end < start ? {start: end, end: start} : {start, end, ...labels});
 
-const versionLevelSpan = (issue: BoardIssue, field: FieldRef, universe: FieldUniverse): Span | null => {
-  const {start, end, startLabel, endLabel} = versionSpan(issue, field.name, universe);
+/** The span of a version or build field's values (their dates, or assembly dates), named by the values at its ends. */
+const valueLevelSpan = (issue: BoardIssue, field: FieldRef, universe: FieldUniverse, source: 'version' | 'build'): Span | null => {
+  const {start, end, startLabel, endLabel} = (source === 'version' ? versionSpan : buildSpan)(issue, field.name, universe);
   const first = start ?? end;
   const last = end ?? start;
   if (first === undefined || last === undefined) {
@@ -64,8 +67,12 @@ export const levelSpan = (issue: BoardIssue, level: PlanLevel, universe: FieldUn
   if (!isPlanLevelComplete(level) || !level.field) {
     return null;
   }
-  if (level.source === 'version') {
-    return versionLevelSpan(issue, level.field, universe);
+  if (level.source === 'version' || level.source === 'build') {
+    return valueLevelSpan(issue, level.field, universe, level.source);
+  }
+  if (level.source === 'date') {
+    const day = fieldDay(issue, level.field, universe);
+    return day === undefined ? null : {start: day, end: day};
   }
   if (level.source === 'date-period') {
     return periodLevelSpan(issue, level, universe);

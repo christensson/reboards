@@ -1,11 +1,10 @@
 import {describe, expect, it} from 'vitest';
-import {type TimelineConfig, emptyTimeline} from '@/common/model/board-config';
+import {type BoardConfig, type PlanLevel, ROWS_BY_DUE, type TimelineConfig, createEmptyBoard, emptyGantt, emptyTimeline, rowsByLevel} from '@/common/model/board-config';
 import type {YtProjectCustomField} from '@/common/youtrack/types';
 import {buildFieldUniverse} from './fieldUniverse';
 import type {BoardIssue} from './issue';
-import {hasTimeOfDay, issueTime, timePosition, timePreset, timingFlags, timingNotes, todayPosition} from './timeline';
+import {issueTime, timeMeaning, timePreset, timeRowChange, timingFlags, timingNotes, todayPosition} from './timeline';
 
-const DAY = 86_400_000;
 const d = (iso: string): number => Date.parse(`${iso}T12:00:00Z`);
 
 const plain = (name: string, typeId: string): YtProjectCustomField => ({id: `pf-${name}`, $type: 'X', field: {id: name, name, fieldType: {id: typeId, valueType: typeId}}});
@@ -27,60 +26,73 @@ const period = (minutes: number) => ({$type: 'PeriodIssueCustomField', key: `${m
 const multi = (keys: string[]) => ({$type: 'MultiVersionIssueCustomField', key: keys[0], label: keys[0], labels: keys, keys});
 const user = {$type: 'SingleUserIssueCustomField', key: 'ann', label: 'Ann', labels: ['Ann'], keys: ['ann']};
 
-const timeline = (changes: Partial<TimelineConfig>): TimelineConfig => ({...emptyTimeline(), field: {name: 'Due Date', kind: 'date'}, ...changes});
+const level = (changes: Partial<PlanLevel>): PlanLevel => ({id: 'l', name: 'Plan', source: 'date', field: {name: 'Due Date', kind: 'date'}, endField: null, periodField: null, dateRole: 'end', ...changes});
+
+/** A board whose time rows are placed by `placing` (a level, or the due date). */
+const board = (placing: PlanLevel | 'due', timeline: Partial<TimelineConfig> = {}): BoardConfig => {
+  const base = createEmptyBoard('me');
+  const levels = placing === 'due' ? [] : [placing];
+  return {
+    ...base,
+    gantt: {...emptyGantt(), levels, dueField: {name: 'Due Date', kind: 'date'}},
+    timeline: {...emptyTimeline(), enabled: true, rowsBy: placing === 'due' ? ROWS_BY_DUE : rowsByLevel(placing.id), ...timeline}
+  };
+};
 
 describe('issueTime', () => {
-  it('uses a date, made a range by a period from the start or back from the end', () => {
-    const due = issue('1', {'Due Date': date(d('2026-05-10')), 'Estimation': period(2 * 24 * 60)});
-    expect(issueTime(due, timeline({}), universe)).toEqual({start: d('2026-05-10'), end: d('2026-05-10'), at: d('2026-05-10')});
-    const ranged = timeline({periodField: {name: 'Estimation', kind: 'period'}});
-    expect(issueTime(due, ranged, universe)).toMatchObject({start: d('2026-05-10') - 2 * DAY, end: d('2026-05-10'), at: d('2026-05-10')});
-    expect(issueTime(due, {...ranged, dateRole: 'start', position: 'start'}, universe)).toMatchObject({start: d('2026-05-10'), end: d('2026-05-12'), at: d('2026-05-10')});
-    expect(issueTime(issue('2', {'Due Date': null}), timeline({}), universe)).toEqual({});
+  it('places by a date, a date made a range by a period, or the due date', () => {
+    const due = issue('1', {'Due Date': date(d('2026-05-15')), 'Estimation': period(2 * 8 * 60)});
+    expect(issueTime(due, board(level({})), universe)).toEqual({start: Date.UTC(2026, 4, 15), end: Date.UTC(2026, 4, 15), at: Date.UTC(2026, 4, 15)});
+    const ranged = level({source: 'date-period', periodField: {name: 'Estimation', kind: 'period'}});
+    // Two working days ending Friday 15 May: Thursday 14 May to Friday.
+    expect(issueTime(due, board(ranged, {position: 'start'}), universe)).toMatchObject({start: Date.UTC(2026, 4, 14), end: Date.UTC(2026, 4, 15), at: Date.UTC(2026, 4, 14)});
+    expect(issueTime(due, board('due'), universe)).toMatchObject({at: Date.UTC(2026, 4, 15)});
+    expect(issueTime(issue('2', {'Due Date': null}), board(level({})), universe)).toEqual({});
   });
 
   it('spans multi-value versions from the earliest start to the latest release, naming them', () => {
-    const fix = timeline({field: {name: 'Fix versions', kind: 'version'}, position: 'start'});
-    const time = issueTime(issue('1', {'Fix versions': multi(['2.0', '1.0', 'next'])}), fix, universe);
-    expect(time).toEqual({start: d('2026-01-01'), startLabel: '1.0', end: d('2026-04-01'), endLabel: '2.0', at: d('2026-01-01'), atLabel: '1.0'});
+    const fix = level({source: 'version', field: {name: 'Fix versions', kind: 'version'}});
+    const time = issueTime(issue('1', {'Fix versions': multi(['2.0', '1.0', 'next'])}), board(fix, {position: 'start'}), universe);
+    expect(time).toEqual({start: Date.UTC(2026, 0, 1), startLabel: '1.0', end: Date.UTC(2026, 3, 1), endLabel: '2.0', at: Date.UTC(2026, 0, 1), atLabel: '1.0'});
+  });
+
+  it('falls back to another level when the placing one is gone', () => {
+    const config = {...board(level({})), timeline: {...emptyTimeline(), enabled: true, rowsBy: rowsByLevel('gone')}};
+    expect(timeMeaning(config)).toBe('end');
+    expect(issueTime(issue('1', {'Due Date': date(d('2026-05-15'))}), config, universe).at).toBe(Date.UTC(2026, 4, 15));
   });
 });
 
 describe('time positions', () => {
-  it('compares calendar dates by day and exact times as they are', () => {
-    expect(timePosition(d('2026-05-10'), false)).toBe(Date.UTC(2026, 4, 10));
-    expect(timePosition(d('2026-05-10'), true)).toBe(d('2026-05-10'));
-    const now = new Date(2026, 4, 10, 15, 30).getTime();
-    expect(todayPosition(now)).toBe(Date.UTC(2026, 4, 10));
-    expect(hasTimeOfDay(new Date(2026, 4, 10).getTime())).toBe(false);
-    expect(hasTimeOfDay(now)).toBe(true);
+  it('takes today as the local calendar date', () => {
+    expect(todayPosition(new Date(2026, 4, 10, 15, 30).getTime())).toBe(Date.UTC(2026, 4, 10));
   });
 });
 
 describe('timingFlags', () => {
   const now = new Date(2026, 4, 10, 9, 0).getTime();
-  const ctx = (changes: Partial<TimelineConfig>) => ({timeline: timeline(changes), universe, now});
+  const ctx = (config: BoardConfig) => ({config, universe, now});
 
   it('flags unresolved issues past their end date, and those without an assignee too', () => {
     const late = issue('1', {'Due Date': date(d('2026-05-09')), 'Assignee': user});
-    expect(timingFlags(late, undefined, ctx({}))).toEqual(['overdue']);
-    expect(timingFlags({...late, fields: {...late.fields, Assignee: null}}, undefined, ctx({}))).toEqual(['overdue', 'overdue-unassigned']);
-    expect(timingFlags({...late, resolved: true}, undefined, ctx({}))).toEqual([]);
-    expect(timingFlags(issue('2', {'Due Date': date(d('2026-05-10'))}), undefined, ctx({}))).toEqual([]);
+    expect(timingFlags(late, undefined, ctx(board(level({}))))).toEqual(['overdue']);
+    expect(timingFlags({...late, fields: {...late.fields, Assignee: null}}, undefined, ctx(board(level({}))))).toEqual(['overdue', 'overdue-unassigned']);
+    expect(timingFlags({...late, resolved: true}, undefined, ctx(board(level({}))))).toEqual([]);
+    expect(timingFlags(issue('2', {'Due Date': date(d('2026-05-10'))}), undefined, ctx(board(level({}))))).toEqual([]);
   });
 
   it('flags subtasks ending after or starting before their parent', () => {
     const parent = issue('9', {'Due Date': date(d('2026-06-01'))});
     const child = issue('1', {'Due Date': date(d('2026-06-05')), 'Assignee': user});
-    expect(timingFlags(child, parent, ctx({}))).toEqual(['planned-late']);
+    expect(timingFlags(child, parent, ctx(board(level({}))))).toEqual(['planned-late']);
     const early = issue('2', {'Due Date': date(d('2026-05-20')), 'Assignee': user});
-    expect(timingFlags(early, parent, ctx({dateRole: 'start'}))).toEqual(['planned-early']);
+    expect(timingFlags(early, parent, ctx(board(level({}), {position: 'start'})))).toEqual(['planned-early']);
   });
 
   it('flags unassigned issues that should have started, and nothing when highlights are off', () => {
     const waiting = issue('1', {'Due Date': date(d('2026-05-01'))});
-    expect(timingFlags(waiting, undefined, ctx({dateRole: 'start'}))).toEqual(['late-start']);
-    expect(timingFlags(waiting, undefined, ctx({highlights: false}))).toEqual([]);
+    expect(timingFlags(waiting, undefined, ctx(board(level({}), {position: 'start'})))).toEqual(['late-start']);
+    expect(timingFlags(waiting, undefined, ctx(board(level({}), {highlights: false})))).toEqual([]);
   });
 });
 
@@ -94,14 +106,21 @@ describe('timingNotes', () => {
   });
 });
 
-describe('timePreset', () => {
-  it('gives the date, version or build that puts a new issue in a time row', () => {
-    expect(timePreset({time: Date.UTC(2026, 4, 10), day: Date.UTC(2026, 4, 10)}, timeline({}), universe)).toEqual({field: 'Due Date', value: '2026-05-10'});
-    const fix = timeline({field: {name: 'Fix versions', kind: 'version'}});
-    expect(timePreset({time: d('2026-04-01'), timeNames: ['2.0']}, fix, universe)).toEqual({field: 'Fix versions', value: '2.0'});
-    expect(timePreset({time: null}, timeline({}), universe)).toBeNull();
-    // The row is the end of "start date + estimation": no single date to set.
-    const ranged = timeline({periodField: {name: 'Estimation', kind: 'period'}, dateRole: 'start', position: 'end'});
-    expect(timePreset({time: d('2026-05-10')}, ranged, universe)).toBeNull();
+describe('timePreset and timeRowChange', () => {
+  it('give the date, version or build that puts an issue in a time row', () => {
+    const row = {time: Date.UTC(2026, 4, 10), day: Date.UTC(2026, 4, 10)};
+    expect(timePreset(row, board(level({})))).toEqual({field: 'Due Date', value: '2026-05-10'});
+    const fix = level({source: 'version', field: {name: 'Fix versions', kind: 'version'}});
+    expect(timePreset({time: d('2026-04-01'), timeNames: ['2.0']}, board(fix))).toEqual({field: 'Fix versions', value: '2.0'});
+    expect(timePreset({time: null}, board(level({})))).toBeNull();
+    expect(timeRowChange(board(level({})), {time: 0}, row)).toEqual({field: {name: 'Due Date', kind: 'date'}, valueKey: String(Date.UTC(2026, 4, 10, 12))});
+    expect(timeRowChange(board(fix), {time: 0, timeNames: ['1.0']}, {time: 1, timeNames: ['2.0']})).toEqual({field: {name: 'Fix versions', kind: 'version'}, valueKey: '2.0', replaceKey: '1.0'});
+  });
+
+  it('have nothing to set when the placing end comes from a period', () => {
+    const ranged = level({source: 'date-period', periodField: {name: 'Estimation', kind: 'period'}, dateRole: 'start'});
+    expect(timePreset({time: d('2026-05-10')}, board(ranged, {position: 'end'}))).toBeNull();
+    expect(timeRowChange(board(ranged, {position: 'end'}), {time: 0}, {time: 1})).toBeNull();
+    expect(timePreset({time: Date.UTC(2026, 4, 10)}, board(ranged, {position: 'start'}))).toEqual({field: 'Due Date', value: '2026-05-10'});
   });
 });

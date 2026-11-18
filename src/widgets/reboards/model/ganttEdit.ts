@@ -52,6 +52,10 @@ export const levelHandles = (level: PlanLevel, universe: FieldUniverse): DragHan
   if (!isDateKind(kind)) {
     return [];
   }
+  if (level.source === 'date') {
+    // A single day: it moves, its two ends are one.
+    return ['move'];
+  }
   if (level.source === 'dates') {
     return level.endField && isDateKind(kindOf(level.endField, universe)) ? ALL_HANDLES : [];
   }

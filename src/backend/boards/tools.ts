@@ -1,7 +1,7 @@
 import * as entities from '@jetbrains/youtrack-scripting-api/entities';
 import * as search from '@jetbrains/youtrack-scripting-api/search';
 import type {User} from '@jetbrains/youtrack-scripting-api/entities';
-import {ALL_PAGE, type BoardConfig, type FieldRef, NO_VALUE_PAGE, availableRowModes, isDynamicField, ownSprintField} from '@/common/model/board-config';
+import {ALL_PAGE, type BoardConfig, type FieldRef, NO_VALUE_PAGE, availableRowModes, isDynamicField, ownSprintField, placingFieldNames} from '@/common/model/board-config';
 import {type FieldValues, placeIssue} from '@/common/model/placement';
 import {effectiveQuery} from '@/common/youtrack/query';
 import {sprintForDate} from '@/widgets/reboards/model/sprints';
@@ -153,8 +153,7 @@ export const boardFieldNames = (board: BoardConfig): string[] =>
     board.row.field?.name,
     board.innerRow?.field?.name,
     ownSprintField(board)?.name,
-    board.timeline.field?.name,
-    board.timeline.periodField?.name,
+    ...placingFieldNames(board),
     board.pages.mode === 'field' ? board.pages.field?.name : undefined
   ].filter((name): name is string => Boolean(name))));
 

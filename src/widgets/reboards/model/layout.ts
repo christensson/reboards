@@ -4,7 +4,7 @@ import {dynamicValues, noValueLabel, shownKeys} from './dynamicValues';
 import type {FieldUniverse} from './fieldUniverse';
 import {type BoardIssue, compareIssues} from './issue';
 import {orderValues} from './sorting';
-import {type TimingFlag, hasTimeOfDay, isExactTime, issueTime, timeMeaning, timePosition, timingFlags, todayPosition} from './timeline';
+import {type TimingFlag, issueTime, placingName, timeMeaning, timingFlags, todayPosition} from './timeline';
 
 export type ParentInfo = {
   id: string;
@@ -545,7 +545,6 @@ type TimePlan = {
   /** Each issue's own position. */
   positionOf: Map<string, number | undefined>;
   namesOf: Map<string, string | undefined>;
-  exact: boolean;
   direction: number;
   compare: (a: BoardIssue, b: BoardIssue) => number;
 };
@@ -573,14 +572,13 @@ const topOfBoxes = (issue: BoardIssue, issuesById: Map<string, BoardIssue>): Boa
  * top of its boxes, and a box whose parent is not on the board takes its first subtask's time.
  */
 const planTimeRows = (issues: BoardIssue[], config: BoardConfig, universe: FieldUniverse, groupByParent: boolean): TimePlan => {
-  const exact = isExactTime(config.timeline, universe);
   const direction = config.timeline.sort === 'desc' ? -1 : 1;
   const issuesById = new Map(issues.map(i => [i.id, i]));
   const positionOf = new Map<string, number | undefined>();
   const namesOf = new Map<string, string | undefined>();
   issues.forEach(issue => {
-    const time = issueTime(issue, config.timeline, universe);
-    positionOf.set(issue.id, time.at === undefined ? undefined : timePosition(time.at, exact));
+    const time = issueTime(issue, config, universe);
+    positionOf.set(issue.id, time.at);
     namesOf.set(issue.id, time.atLabel);
   });
   const keyOf = (position: number | undefined): string => (position === undefined ? NO_TIME_ROW_KEY : timeRowKey(position));
@@ -610,7 +608,6 @@ const planTimeRows = (issues: BoardIssue[], config: BoardConfig, universe: Field
     rowKeyOf,
     positionOf,
     namesOf,
-    exact,
     direction,
     compare: (a, b) => comparePositions(positionOf.get(a.id), positionOf.get(b.id), direction) || compareIssues(a, b)
   };
@@ -630,13 +627,12 @@ const timeRows = (config: BoardConfig, plan: TimePlan, placedIssues: BoardIssue[
   });
   const timeOf = (key: string): number | null => (key === NO_TIME_ROW_KEY ? null : Number(key.slice(2)));
   const keys = Array.from(names.keys()).sort((a, b) => comparePositions(timeOf(a) ?? undefined, timeOf(b) ?? undefined, plan.direction));
-  const fieldName = config.timeline.field?.name ?? 'time';
+  const fieldName = placingName(config);
   return {
     rows: keys.map((key): RowSkeleton => {
       const time = timeOf(key);
       const label = time === null ? `No ${fieldName}` : '';
       const timeNames = Array.from(names.get(key) ?? []);
-      const withTime = time !== null && plan.exact && hasTimeOfDay(time);
       return {
         key,
         kind: 'time',
@@ -647,9 +643,7 @@ const timeRows = (config: BoardConfig, plan: TimePlan, placedIssues: BoardIssue[
         outerValue: null,
         innerValue: null,
         time,
-        withTime,
-        // A "date and time" at midnight is shown as its local date.
-        ...(time === null || withTime ? {} : {day: plan.exact ? todayPosition(time) : time}),
+        ...(time === null ? {} : {day: time}),
         timeNames
       };
     }),
@@ -663,7 +657,7 @@ const todayRowIndex = (rows: RowSkeleton[], plan: TimePlan, now: number): number
   if (dated.length === 0) {
     return null;
   }
-  const today = plan.exact ? now : todayPosition(now);
+  const today = todayPosition(now);
   const index = dated.findIndex(r => (plan.direction > 0 ? (r.time ?? 0) >= today : (r.time ?? 0) <= today));
   return index === -1 ? dated.length : index;
 };
@@ -679,7 +673,7 @@ const timingFlagsOf = (placedIssues: BoardIssue[], issuesById: Map<string, Board
   const flags: Record<string, TimingFlag[]> = {};
   placedIssues.forEach(issue => {
     const parentId = issue.parentIds.filter(id => placed.has(id)).sort(byReadable(issuesById))[0];
-    const found = timingFlags(issue, parentId ? issuesById.get(parentId) : undefined, {timeline: config.timeline, universe, now});
+    const found = timingFlags(issue, parentId ? issuesById.get(parentId) : undefined, {config, universe, now});
     if (found.length > 0) {
       flags[issue.id] = found;
     }
@@ -1021,7 +1015,7 @@ export const computeLayout = ({issues, config, universe, parents, visibleColumnI
     rowMode,
     todayIndex: rowPlan.time ? todayRowIndex(skeleton.rows, rowPlan.time, now) : null,
     flagsByIssue: rowPlan.time ? timingFlagsOf(placedIssues, issuesById, placed, config, universe, now) : {},
-    timeMeaning: timeMeaning(config.timeline, universe),
+    timeMeaning: timeMeaning(config),
     outerRows: skeleton.outerRows,
     placement: Object.fromEntries(placed),
     groupAncestors: ancestors,
